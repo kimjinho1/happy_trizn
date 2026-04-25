@@ -1,0 +1,51 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-md space-y-6">
+    <div class="text-center">
+      <h1 class="text-3xl font-bold">Admin</h1>
+      <p class="mt-2 text-sm text-base-content/70">관리자 로그인</p>
+    </div>
+
+    <div class="card bg-base-200">
+      <div class="card-body">
+        <%= if @error do %>
+          <div class="alert alert-error mb-2">
+            <span>{@error}</span>
+          </div>
+        <% end %>
+
+        <form action={~p"/admin/login"} method="post" class="space-y-3">
+          <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+
+          <label class="form-control">
+            <span class="label-text">ID</span>
+            <input
+              type="text"
+              name="admin[id]"
+              class="input input-bordered w-full"
+              required
+              autofocus
+            />
+          </label>
+
+          <label class="form-control">
+            <span class="label-text">비밀번호</span>
+            <input
+              type="password"
+              name="admin[password]"
+              class="input input-bordered w-full"
+              required
+            />
+          </label>
+
+          <button type="submit" class="btn btn-primary w-full mt-2">로그인</button>
+        </form>
+
+        <p class="text-xs text-center mt-4 text-base-content/60">
+          <.link href={~p"/"} class="link">사용자 페이지로 돌아가기</.link>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

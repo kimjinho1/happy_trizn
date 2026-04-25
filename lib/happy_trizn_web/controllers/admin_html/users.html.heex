@@ -1,0 +1,73 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="min-h-screen p-6">
+  <header class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Admin — 사용자 관리</h1>
+      <p class="text-xs text-base-content/60">로그인: <strong>{@current_admin}</strong></p>
+    </div>
+    <div class="flex gap-2">
+      <.link href={~p"/admin/users"} class="btn btn-ghost btn-sm">전체</.link>
+      <.link href={~p"/admin/users?status=active"} class="btn btn-ghost btn-sm">active</.link>
+      <.link href={~p"/admin/users?status=banned"} class="btn btn-ghost btn-sm">banned</.link>
+      <.link href={~p"/admin/logout"} method="delete" class="btn btn-outline btn-sm">로그아웃</.link>
+    </div>
+  </header>
+
+  <%= if @users == [] do %>
+    <p class="text-center text-base-content/60 py-12">사용자가 없습니다.</p>
+  <% else %>
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead>
+          <tr>
+            <th>닉네임</th>
+            <th>이메일</th>
+            <th>상태</th>
+            <th>가입일</th>
+            <th>액션</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for user <- @users do %>
+            <tr>
+              <td><strong>{user.nickname}</strong></td>
+              <td class="font-mono text-xs">{user.email}</td>
+              <td>
+                <%= if user.status == "active" do %>
+                  <span class="badge badge-success badge-sm">active</span>
+                <% else %>
+                  <span class="badge badge-error badge-sm">banned</span>
+                <% end %>
+              </td>
+              <td class="text-xs">{Calendar.strftime(user.inserted_at, "%Y-%m-%d %H:%M")}</td>
+              <td>
+                <%= if user.status == "active" do %>
+                  <form action={~p"/admin/users/#{user.id}/ban"} method="post" class="inline">
+                    <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+                    <button class="btn btn-error btn-xs" type="submit">차단</button>
+                  </form>
+                <% else %>
+                  <form action={~p"/admin/users/#{user.id}/unban"} method="post" class="inline">
+                    <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+                    <button class="btn btn-success btn-xs" type="submit">해제</button>
+                  </form>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex justify-center gap-2 mt-6">
+      <%= if @page > 1 do %>
+        <.link href={~p"/admin/users?page=#{@page - 1}&status=#{@current_status || ""}"} class="btn btn-sm">이전</.link>
+      <% end %>
+      <span class="btn btn-sm btn-ghost no-animation">{@page} 페이지</span>
+      <%= if length(@users) == @per_page do %>
+        <.link href={~p"/admin/users?page=#{@page + 1}&status=#{@current_status || ""}"} class="btn btn-sm">다음</.link>
+      <% end %>
+    </div>
+  <% end %>
+</div>

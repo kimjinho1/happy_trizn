@@ -1,0 +1,55 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="min-h-screen p-6">
+  <header class="flex items-center justify-between mb-8">
+    <h1 class="text-2xl font-bold">Happy Trizn — 로비</h1>
+    <div class="flex items-center gap-2">
+      <span class="text-sm text-base-content/70">
+        <%= if @current_user do %>
+          {@current_user.nickname}
+        <% else %>
+          (게스트) {@current_nickname}
+        <% end %>
+      </span>
+      <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-sm">로그아웃</.link>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <section class="card bg-base-200">
+      <div class="card-body">
+        <h2 class="card-title">멀티 게임</h2>
+        <ul class="list-disc list-inside text-sm text-base-content/70">
+          <li>Tetris (Sprint 3 예정)</li>
+          <li>Bomberman</li>
+          <li>Skribbl</li>
+          <li>Snake.io</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card bg-base-200">
+      <div class="card-body">
+        <h2 class="card-title">싱글 게임</h2>
+        <ul class="list-disc list-inside text-sm text-base-content/70">
+          <li>2048</li>
+          <li>Minesweeper</li>
+          <li>Pac-Man</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card bg-base-200">
+      <div class="card-body">
+        <h2 class="card-title">채팅 / 친구</h2>
+        <p class="text-sm text-base-content/70">
+          Sprint 2 에서 추가 예정. 글로벌 채팅, DM, 친구 추천 사이드바.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="mt-8 text-center text-xs text-base-content/40">
+    Sprint 1 scaffold. 본격 구현 진행 중.
+  </footer>
+</div>
