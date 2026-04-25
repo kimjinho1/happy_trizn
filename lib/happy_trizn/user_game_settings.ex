@@ -30,6 +30,118 @@ defmodule HappyTrizn.UserGameSettings do
 
   새 게임 추가 시 case 절 확장.
   """
+  def defaults("bomberman") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w"],
+        "move_down" => ["ArrowDown", "s"],
+        "move_left" => ["ArrowLeft", "a"],
+        "move_right" => ["ArrowRight", "d"],
+        "place_bomb" => [" ", "x"],
+        "kick" => ["k"],
+        "punch" => ["p"]
+      },
+      options: %{
+        "speed_sound" => true,
+        "explosion_sound" => true,
+        "grid_color" => "#1a1a1a",
+        "skin" => "default"
+      },
+      das: 133,
+      arr: 30,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("skribbl") do
+    %{
+      bindings: %{
+        "send_chat" => ["Enter"]
+      },
+      options: %{
+        "chat_sound" => true,
+        "dictionary" => "ko",
+        "round_seconds" => 80,
+        "default_pen_color" => "#000000"
+      },
+      das: 133,
+      arr: 10,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("snake_io") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"],
+        "boost" => [" "]
+      },
+      options: %{
+        "color" => "random",
+        "minimap" => true
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("games_2048") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"]
+      },
+      options: %{
+        "board_size" => 4,
+        "theme" => "light"
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("minesweeper") do
+    %{
+      bindings: %{
+        "reveal" => ["click"],
+        "flag" => ["right_click", "f"]
+      },
+      options: %{
+        "difficulty" => "medium",
+        "show_timer" => true
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("pacman") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w"],
+        "move_down" => ["ArrowDown", "s"],
+        "move_left" => ["ArrowLeft", "a"],
+        "move_right" => ["ArrowRight", "d"]
+      },
+      options: %{
+        "sound_eat" => true,
+        "sound_death" => true,
+        "sound_intro" => true
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
   def defaults("tetris") do
     %{
       bindings: %{

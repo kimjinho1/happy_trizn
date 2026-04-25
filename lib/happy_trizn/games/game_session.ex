@@ -126,15 +126,7 @@ defmodule HappyTrizn.Games.GameSession do
 
     broadcast_messages(state.room_id, broadcast)
     new_state = %{state | game_state: new_game_state}
-
-    case state.module.game_over?(new_game_state) do
-      {:yes, results} ->
-        broadcast_messages(state.room_id, [{:game_over, results}])
-        {:stop, :normal, new_state}
-
-      :no ->
-        {:noreply, new_state}
-    end
+    check_and_finish(new_state)
   end
 
   def handle_cast({:player_leave, player_id, reason}, state) do
@@ -145,10 +137,18 @@ defmodule HappyTrizn.Games.GameSession do
     broadcast_messages(state.room_id, broadcast)
     new_state = %{state | game_state: new_game_state, players: new_players}
 
-    if map_size(new_players) == 0 do
-      {:stop, :normal, new_state}
-    else
-      {:noreply, new_state}
+    case state.module.game_over?(new_game_state) do
+      {:yes, results} ->
+        maybe_record_match(new_state, results)
+        broadcast_messages(state.room_id, [{:game_over, results}])
+        {:stop, :normal, new_state}
+
+      :no ->
+        if map_size(new_players) == 0 do
+          {:stop, :normal, new_state}
+        else
+          {:noreply, new_state}
+        end
     end
   end
 
@@ -157,7 +157,8 @@ defmodule HappyTrizn.Games.GameSession do
     if function_exported?(state.module, :tick, 1) do
       {:ok, new_game_state, broadcast} = state.module.tick(state.game_state)
       broadcast_messages(state.room_id, broadcast)
-      {:noreply, %{state | game_state: new_game_state}}
+      new_state = %{state | game_state: new_game_state}
+      check_and_finish(new_state)
     else
       {:noreply, state}
     end
@@ -190,4 +191,73 @@ defmodule HappyTrizn.Games.GameSession do
   defp broadcast_messages(room_id, msgs) do
     Enum.each(msgs, &Phoenix.PubSub.broadcast(@pubsub, "game:" <> room_id, {:game_event, &1}))
   end
+
+  # game_over? 검사 후 결과 저장 + broadcast + stop. 아니면 noreply.
+  defp check_and_finish(state) do
+    case state.module.game_over?(state.game_state) do
+      {:yes, results} ->
+        maybe_record_match(state, results)
+        broadcast_messages(state.room_id, [{:game_over, results}])
+        {:stop, :normal, state}
+
+      :no ->
+        {:noreply, state}
+    end
+  end
+
+  # match_results 저장 — 멀티 게임만, room_id 있을 때.
+  # winner_id 는 results.winner (player_id) → state.players[player_id].user_id 매핑.
+  defp maybe_record_match(state, results) do
+    duration = duration_ms(results)
+    winner_user_id = winner_user_id(state, results)
+
+    HappyTrizn.MatchResults.record(%{
+      game_type: state.game_type,
+      room_id: state.room_id,
+      winner_id: winner_user_id,
+      duration_ms: duration,
+      stats: results |> stringify_keys()
+    })
+  rescue
+    e ->
+      require Logger
+      Logger.warning("[game_session] match_result save failed: #{inspect(e)}")
+      :ok
+  end
+
+  defp duration_ms(%{players: ps}) when is_map(ps) do
+    ps
+    |> Map.values()
+    |> Enum.map(fn p -> Map.get(p, :duration_ms, 0) end)
+    |> Enum.max(fn -> 0 end)
+  end
+
+  defp duration_ms(_), do: 0
+
+  defp winner_user_id(state, %{winner: w}) when is_binary(w) do
+    case Map.get(state.players, w) do
+      %{user_id: uid} -> uid
+      _ -> nil
+    end
+  end
+
+  defp winner_user_id(_, _), do: nil
+
+  # JSON 저장 시 atom key 자동 처리 안 되는 어댑터 대비.
+  defp stringify_keys(m) when is_map(m) do
+    Map.new(m, fn {k, v} ->
+      key = if is_atom(k), do: Atom.to_string(k), else: k
+      {key, stringify_value(v)}
+    end)
+  end
+
+  defp stringify_keys(other), do: other
+
+  defp stringify_value(%{} = m) when not is_struct(m), do: stringify_keys(m)
+
+  defp stringify_value(v) when is_atom(v) and not is_boolean(v) and not is_nil(v),
+    do: Atom.to_string(v)
+
+  defp stringify_value(v) when is_list(v), do: Enum.map(v, &stringify_value/1)
+  defp stringify_value(v), do: v
 end

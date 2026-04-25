@@ -186,11 +186,18 @@ defmodule HappyTrizn.Games.TetrisTest do
       assert p.hold_used
     end
 
-    test "이미 hold_used 면 noop" do
+    test "이미 hold_used 면 noop (current/hold 변동 없음, keys_pressed 만 증가)" do
       state = join2()
       {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "hold"}, state)
-      # 한 번 더 → noop
-      assert {:ok, ^s1, []} = Tetris.handle_input("p1", %{"action" => "hold"}, s1)
+      hold_before = s1.players["p1"].hold
+      cur_before = s1.players["p1"].current
+      keys_before = s1.players["p1"].keys_pressed
+
+      assert {:ok, s2, []} = Tetris.handle_input("p1", %{"action" => "hold"}, s1)
+      assert s2.players["p1"].hold == hold_before
+      assert s2.players["p1"].current == cur_before
+      # hold 시도 = key press 1회 카운트
+      assert s2.players["p1"].keys_pressed == keys_before + 1
     end
 
     test "두 번째 hold (lock 후) → swap" do
@@ -284,6 +291,137 @@ defmodule HappyTrizn.Games.TetrisTest do
 
       {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
       assert ns.players["p1"].combo == -1
+    end
+  end
+
+  describe "lock delay" do
+    test "soft_drop landed → 즉시 lock 안 함, lock_delay_ms 시작" do
+      state = join2()
+
+      # 빈 board 에 piece 가 max 까지 떨어진 상태 시뮬: O at row=20 col=4 → soft drop landed.
+      state = force_piece(state, "p1", :o, 0, {20, 4})
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      p = ns.players["p1"]
+
+      # 새 piece spawn 안 됐어야 (lock 미발생)
+      assert p.current.type == :o
+      assert p.current.origin == {20, 4}
+      assert p.lock_delay_ms == 500
+      assert p.lock_resets == 0
+    end
+
+    test "lock delay 중 회전 시 timer reset, lock_resets +1" do
+      state = join2()
+      state = force_piece(state, "p1", :t, 0, {20, 4})
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      assert s1.players["p1"].lock_delay_ms == 500
+
+      # 인공으로 시간 경과 시뮬 — lock_delay_ms 100 으로
+      s1 = put_in(s1.players["p1"].lock_delay_ms, 100)
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "rotate_cw"}, s1)
+      assert s2.players["p1"].lock_delay_ms == 500
+      assert s2.players["p1"].lock_resets == 1
+    end
+
+    test "max_lock_resets 도달 시 timer reset 안 함" do
+      state = join2()
+      state = force_piece(state, "p1", :o, 0, {20, 4})
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+
+      # lock_resets 를 max 로 강제 + delay 100
+      s1 =
+        s1
+        |> put_in([Access.key!(:players), "p1", Access.key!(:lock_resets)], 15)
+        |> put_in([Access.key!(:players), "p1", Access.key!(:lock_delay_ms)], 100)
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "left"}, s1)
+      # delay 그대로 (reset 안 됨)
+      assert s2.players["p1"].lock_delay_ms == 100
+      assert s2.players["p1"].lock_resets == 15
+    end
+
+    test "tick 으로 lock_delay 시간 경과 후 0 되면 lock_and_advance" do
+      state = join2()
+      state = force_piece(state, "p1", :o, 0, {20, 4})
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      orig_next = s1.players["p1"].next
+
+      # delay 50 으로 → 한 tick 으로 lock
+      s1 = put_in(s1.players["p1"].lock_delay_ms, 50)
+
+      {:ok, s2, _} = Tetris.tick(s1)
+      p = s2.players["p1"]
+
+      # 새 piece spawn (lock 후)
+      assert p.current.type == orig_next
+      assert p.lock_delay_ms == nil
+      assert p.lock_resets == 0
+      assert p.pieces_placed == 1
+    end
+
+    test "lock delay 중 더 이상 landed 아니게 되면 lock_delay_ms 클리어" do
+      state = join2()
+      state = force_piece(state, "p1", :o, 0, {20, 4}, lock_delay_ms: 200)
+
+      # left 이동 시 같은 row 더 갈 수 있나? 그냥 horizontal — landed 여부 변함 없을 수 있음.
+      # 더 확실: piece 를 위로 옮긴 상태에서 horizontal → not landed → clear.
+      state = force_piece(state, "p1", :o, 0, {5, 4}, lock_delay_ms: 200)
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      assert ns.players["p1"].lock_delay_ms == nil
+    end
+  end
+
+  describe "stats / public_stats" do
+    test "public_stats 에 pps/kpp/apm + 카운터들 포함" do
+      state = join2()
+      stats = Tetris.public_stats(state.players["p1"])
+
+      keys = [
+        :score,
+        :lines,
+        :level,
+        :top_out,
+        :combo,
+        :b2b,
+        :pieces_placed,
+        :keys_pressed,
+        :garbage_sent,
+        :garbage_received,
+        :garbage_wasted,
+        :hold_count,
+        :finesse_violations,
+        :duration_ms,
+        :pps,
+        :kpp,
+        :apm
+      ]
+
+      Enum.each(keys, fn k -> assert Map.has_key?(stats, k), "missing #{k}" end)
+    end
+
+    test "lock 후 pieces_placed +1, hold 후 hold_count +1" do
+      state = join2()
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      assert s1.players["p1"].pieces_placed == 1
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "hold"}, s1)
+      assert s2.players["p1"].hold_count == 1
+    end
+
+    test "input 마다 keys_pressed +1 (인식된 action 만)" do
+      state = join2()
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      assert s1.players["p1"].keys_pressed == 1
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "magic"}, s1)
+      # 인식 안 된 action 은 카운트 X
+      assert s2.players["p1"].keys_pressed == 1
     end
   end
 

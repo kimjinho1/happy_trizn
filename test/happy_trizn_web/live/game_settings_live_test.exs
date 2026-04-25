@@ -116,6 +116,55 @@ defmodule HappyTriznWeb.GameSettingsLiveTest do
     end
   end
 
+  describe "/settings/games/:game_type — non-tetris 게임 (제너릭 폼)" do
+    setup %{conn: conn} do
+      user = user_fixture(nickname: "gen_set_#{System.unique_integer([:positive])}")
+      {:ok, conn: log_in_user(conn, user), user: user}
+    end
+
+    test "bomberman 옵션 페이지 마운트", %{conn: conn} do
+      {:ok, _, html} = live(conn, ~p"/settings/games/bomberman")
+      assert html =~ "Bomberman"
+      # bindings 액션 표시
+      assert html =~ "place_bomb"
+    end
+
+    test "skribbl 옵션 폼 + chat_sound 체크박스", %{conn: conn} do
+      {:ok, _, html} = live(conn, ~p"/settings/games/skribbl")
+      assert html =~ "Skribbl"
+      assert html =~ "chat_sound"
+      assert html =~ "round_seconds"
+    end
+
+    test "snake_io binding 저장 가능", %{conn: conn, user: user} do
+      {:ok, view, _} = live(conn, ~p"/settings/games/snake_io")
+
+      view
+      |> form("form[phx-submit='save_binding']:first-of-type", %{
+        "action" => "boost",
+        "keys" => "Shift, x"
+      })
+      |> render_submit()
+
+      result = UserGameSettings.get_for(user, "snake_io")
+      assert result.bindings["boost"] == ["Shift", "x"]
+    end
+
+    test "checkbox unchecked → false 로 저장 (hidden field)", %{conn: conn, user: user} do
+      {:ok, view, _} = live(conn, ~p"/settings/games/skribbl")
+
+      # chat_sound 끄기 — hidden=false 만 보내고 checkbox value 안 보냄
+      view
+      |> form("form[phx-submit='save_options']", %{
+        "options" => %{"chat_sound" => "false"}
+      })
+      |> render_submit()
+
+      result = UserGameSettings.get_for(user, "skribbl")
+      assert result.options["chat_sound"] == false
+    end
+  end
+
   describe "/settings/games/:game_type — invalid slug" do
     setup %{conn: conn} do
       user = user_fixture(nickname: "inv_slug_#{System.unique_integer([:positive])}")

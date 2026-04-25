@@ -217,7 +217,12 @@ defmodule HappyTriznWeb.GameMultiLive do
         </div>
       <% end %>
 
-      <.game_view slug={@slug} state={@game_state} player_id={@player_id} />
+      <.game_view
+        slug={@slug}
+        state={@game_state}
+        player_id={@player_id}
+        options={@key_settings.options}
+      />
 
       <div class="mt-4 text-xs text-base-content/50">
         <%= if @slug == "tetris" do %>
@@ -236,7 +241,10 @@ defmodule HappyTriznWeb.GameMultiLive do
     other = state.players |> Enum.find(fn {id, _} -> id != me_id end)
     other_player = if other, do: elem(other, 1), else: nil
 
-    assigns = assign(assigns, me: me, other: other_player)
+    ghost? = Map.get(assigns.options, "ghost", true)
+    grid = Map.get(assigns.options, "grid", "standard")
+
+    assigns = assign(assigns, me: me, other: other_player, ghost?: ghost?, grid: grid)
 
     ~H"""
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -244,10 +252,13 @@ defmodule HappyTriznWeb.GameMultiLive do
         <h3 class="font-semibold mb-2">나 ({@player_id |> String.slice(0..7)})</h3>
         <%= if @me do %>
           <div class="flex gap-2 items-start">
-            <.tetris_board board={with_current(@me)} />
+            <.tetris_board board={with_ghost_and_current(@me, @ghost?)} grid={@grid} />
             <div class="flex flex-col gap-2">
               <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
               <.piece_preview label="다음" piece={@me.next} />
+              <%= if Map.get(@me, :lock_delay_ms) do %>
+                <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
+              <% end %>
             </div>
           </div>
           <div class="text-sm mt-2 space-y-1">
@@ -280,7 +291,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         <h3 class="font-semibold mb-2">상대</h3>
         <%= if @other do %>
           <div class="flex gap-2 items-start">
-            <.tetris_board board={with_current(@other)} />
+            <.tetris_board board={with_ghost_and_current(@other, false)} grid={@grid} />
             <div class="flex flex-col gap-2">
               <.piece_preview
                 label="홀드"
@@ -353,13 +364,36 @@ defmodule HappyTriznWeb.GameMultiLive do
     HappyTrizn.Games.Tetris.Piece.cells(type, 0)
   end
 
-  # board (player) 에 current piece overlay → 단일 grid 렌더용.
-  defp with_current(%{board: board, current: cur, top_out: false}) do
-    cells = HappyTrizn.Games.Tetris.Piece.absolute_cells(cur.type, cur.rotation, cur.origin)
+  # 1. board, 2. ghost (옵션 켜졌고 origin != landing 시), 3. current piece — 순으로 overlay.
+  defp with_ghost_and_current(%{board: board, current: cur, top_out: false} = p, ghost?) do
+    board
+    |> maybe_overlay_ghost(p, ghost?)
+    |> overlay_cells(
+      HappyTrizn.Games.Tetris.Piece.absolute_cells(cur.type, cur.rotation, cur.origin),
+      cur.type
+    )
+  end
 
+  defp with_ghost_and_current(%{board: board}, _), do: board
+
+  defp maybe_overlay_ghost(board, _, false), do: board
+
+  defp maybe_overlay_ghost(board, %{current: cur} = _p, true) do
+    landing =
+      HappyTrizn.Games.Tetris.Board.hard_drop_position(board, cur.type, cur.rotation, cur.origin)
+
+    if landing == cur.origin do
+      board
+    else
+      cells = HappyTrizn.Games.Tetris.Piece.absolute_cells(cur.type, cur.rotation, landing)
+      overlay_cells(board, cells, :ghost)
+    end
+  end
+
+  defp overlay_cells(board, cells, value) do
     Enum.reduce(cells, board, fn {r, c}, acc ->
       if r >= 0 and r < length(acc) do
-        row = Enum.at(acc, r) |> List.replace_at(c, cur.type)
+        row = Enum.at(acc, r) |> List.replace_at(c, value)
         List.replace_at(acc, r, row)
       else
         acc
@@ -367,10 +401,9 @@ defmodule HappyTriznWeb.GameMultiLive do
     end)
   end
 
-  defp with_current(%{board: board}), do: board
-
-  # 22x10 board → 20x10 (visible) 만 표시.
+  # 22x10 board → 20x10 (visible) 만 표시. grid 옵션: none / standard / partial / vertical / full.
   attr :board, :list, required: true
+  attr :grid, :string, default: "standard"
 
   defp tetris_board(assigns) do
     visible = Enum.drop(assigns.board, 2)
@@ -381,13 +414,20 @@ defmodule HappyTriznWeb.GameMultiLive do
       <%= for row <- @visible do %>
         <div class="flex">
           <%= for cell <- row do %>
-            <div class={["w-5 h-5 border border-base-100", cell_color(cell)]}></div>
+            <div class={["w-5 h-5", cell_color(cell), grid_class(@grid)]}></div>
           <% end %>
         </div>
       <% end %>
     </div>
     """
   end
+
+  defp grid_class("none"), do: ""
+  defp grid_class("standard"), do: "border border-base-100"
+  defp grid_class("partial"), do: "border-l border-t border-base-100"
+  defp grid_class("vertical"), do: "border-l border-r border-base-100/50"
+  defp grid_class("full"), do: "border border-base-100/80"
+  defp grid_class(_), do: "border border-base-100"
 
   defp cell_color(nil), do: "bg-base-100"
   defp cell_color(:i), do: "bg-cyan-400"
@@ -398,6 +438,7 @@ defmodule HappyTriznWeb.GameMultiLive do
   defp cell_color(:l), do: "bg-orange-500"
   defp cell_color(:j), do: "bg-blue-500"
   defp cell_color(:garbage), do: "bg-gray-500"
+  defp cell_color(:ghost), do: "bg-base-100 ring-1 ring-base-content/30"
   defp cell_color(_), do: "bg-base-100"
 
   defp format_result(%{winner: w}), do: "승자: #{String.slice(w, 0..7)}!"

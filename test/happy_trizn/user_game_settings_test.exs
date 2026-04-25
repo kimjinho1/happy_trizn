@@ -28,6 +28,22 @@ defmodule HappyTrizn.UserGameSettingsTest do
       assert d.options["ghost"] == true
     end
 
+    test "각 게임 별 defaults 존재" do
+      for slug <- ~w(tetris bomberman skribbl snake_io games_2048 minesweeper pacman) do
+        d = UserGameSettings.defaults(slug)
+        assert map_size(d.bindings) > 0, "#{slug} bindings empty"
+        assert is_map(d.options), "#{slug} options not a map"
+      end
+    end
+
+    test "skribbl round_seconds 80" do
+      assert UserGameSettings.defaults("skribbl").options["round_seconds"] == 80
+    end
+
+    test "games_2048 board_size 4" do
+      assert UserGameSettings.defaults("games_2048").options["board_size"] == 4
+    end
+
     test "알 수 없는 게임 → 빈 map" do
       d = UserGameSettings.defaults("unknown")
       assert d.bindings == %{}

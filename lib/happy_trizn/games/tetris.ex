@@ -34,6 +34,8 @@ defmodule HappyTrizn.Games.Tetris do
 
   @tick_ms 50
   @lines_per_level 10
+  @lock_delay_ms 500
+  @max_lock_resets 15
 
   @impl true
   def meta do
@@ -102,13 +104,25 @@ defmodule HappyTrizn.Games.Tetris do
     with %{} = player <- Map.get(state.players, player_id),
          false <- player.top_out,
          :playing <- state.status do
-      do_action(player_id, action, player, state)
+      # 키 카운터 (KPP) — 인식된 action 만 카운트, hold 가 noop 이어도 카운트.
+      if known_action?(action) do
+        bumped = %{player | keys_pressed: player.keys_pressed + 1}
+        bumped_state = put_in(state.players[player_id], bumped)
+        do_action(player_id, action, bumped, bumped_state)
+      else
+        do_action(player_id, action, player, state)
+      end
     else
       _ -> {:ok, state, []}
     end
   end
 
   def handle_input(_, _, state), do: {:ok, state, []}
+
+  @known_actions ~w(left right rotate rotate_cw rotate_ccw rotate_180 soft_drop hard_drop hold)
+
+  defp known_action?(a) when is_binary(a), do: a in @known_actions
+  defp known_action?(_), do: false
 
   defp do_action(player_id, "left", player, state),
     do: move_horizontal(player_id, player, state, -1)
@@ -138,18 +152,23 @@ defmodule HappyTrizn.Games.Tetris do
       {:ok, new_origin} ->
         new_current = %{player.current | origin: new_origin}
 
-        new_player = %{
-          player
-          | current: new_current,
-            score: player.score + 1,
-            last_was_rotate: false
-        }
+        new_player =
+          %{
+            player
+            | current: new_current,
+              score: player.score + 1,
+              last_was_rotate: false
+          }
+          |> post_action_lock_check()
 
         new_state = put_in(state.players[player_id], new_player)
         {:ok, new_state, [{:player_state, player_id, public_player(new_player)}]}
 
       :landed ->
-        lock_and_advance(player_id, player, state)
+        # 즉시 lock 안 함 — lock delay 시작/유지. 사용자 가만히 있어도 tick 에서 시간 경과 시 lock.
+        new_player = post_action_lock_check(player)
+        new_state = put_in(state.players[player_id], new_player)
+        {:ok, new_state, [{:player_state, player_id, public_player(new_player)}]}
     end
   end
 
@@ -197,7 +216,11 @@ defmodule HappyTrizn.Games.Tetris do
          new_origin
        ) do
       new_current = %{player.current | origin: new_origin}
-      new_player = %{player | current: new_current, last_was_rotate: false}
+
+      new_player =
+        %{player | current: new_current, last_was_rotate: false}
+        |> post_action_lock_check()
+
       new_state = put_in(state.players[player_id], new_player)
       {:ok, new_state, [{:player_state, player_id, public_player(new_player)}]}
     else
@@ -220,9 +243,40 @@ defmodule HappyTrizn.Games.Tetris do
 
       new_origin ->
         new_current = %{player.current | rotation: to_rotation, origin: new_origin}
-        new_player = %{player | current: new_current, last_was_rotate: true}
+
+        new_player =
+          %{player | current: new_current, last_was_rotate: true}
+          |> post_action_lock_check()
+
         new_state = put_in(state.players[player_id], new_player)
         {:ok, new_state, [{:player_state, player_id, public_player(new_player)}]}
+    end
+  end
+
+  # 액션 후 호출 — 현재 위치에서 try_drop = :landed 면 lock_delay 시작/리셋, 아니면 클리어.
+  # max resets 도달 시 시간만 흐름 (reset 안 함).
+  defp post_action_lock_check(player) do
+    case Board.try_drop(
+           player.board,
+           player.current.type,
+           player.current.rotation,
+           player.current.origin
+         ) do
+      :landed ->
+        cond do
+          is_nil(player.lock_delay_ms) ->
+            %{player | lock_delay_ms: @lock_delay_ms, lock_resets: 0}
+
+          player.lock_resets < @max_lock_resets ->
+            %{player | lock_delay_ms: @lock_delay_ms, lock_resets: player.lock_resets + 1}
+
+          true ->
+            player
+        end
+
+      {:ok, _} ->
+        # 더 이상 landed 아님 — lock_delay 클리어.
+        %{player | lock_delay_ms: nil}
     end
   end
 
@@ -259,7 +313,10 @@ defmodule HappyTrizn.Games.Tetris do
               bag: new_bag,
               hold_used: true,
               last_was_rotate: false,
-              gravity_counter: 0
+              gravity_counter: 0,
+              lock_delay_ms: nil,
+              lock_resets: 0,
+              hold_count: player.hold_count + 1
           }
 
           new_state = put_in(state.players[player_id], new_player)
@@ -281,7 +338,10 @@ defmodule HappyTrizn.Games.Tetris do
               current: %{type: held_type, rotation: 0, origin: spawn_origin},
               hold_used: true,
               last_was_rotate: false,
-              gravity_counter: 0
+              gravity_counter: 0,
+              lock_delay_ms: nil,
+              lock_resets: 0,
+              hold_count: player.hold_count + 1
           }
 
           new_state = put_in(state.players[player_id], new_player)
@@ -343,17 +403,23 @@ defmodule HappyTrizn.Games.Tetris do
     new_lines = player.lines + cleared
     new_level = div(new_lines, @lines_per_level) + 1
 
-    {board_with_garbage, top_out_garbage} =
+    {board_with_garbage, top_out_garbage, garbage_applied} =
       if cleared == 0 and player.pending_garbage > 0 do
         case Board.add_garbage(cleared_board, player.pending_garbage) do
-          {:ok, b} -> {b, false}
-          {:error, :top_out} -> {cleared_board, true}
+          {:ok, b} -> {b, false, player.pending_garbage}
+          {:error, :top_out} -> {cleared_board, true, 0}
         end
       else
-        {cleared_board, false}
+        {cleared_board, false, 0}
       end
 
+    # cleared > 0 면 받은 garbage 가 cancel — line clear 가 받은 garbage 보다 적으면 wasted (jstris 정의).
     pending_after = if cleared == 0, do: 0, else: player.pending_garbage
+
+    wasted_inc =
+      if cleared == 0,
+        do: 0,
+        else: max(player.pending_garbage - garbage_for_clear(cleared, tspin_kind), 0)
 
     spawn_origin = Piece.spawn_origin(player.next)
 
@@ -367,7 +433,11 @@ defmodule HappyTrizn.Games.Tetris do
           lines: new_lines,
           level: new_level,
           combo: new_combo,
-          b2b: new_b2b
+          b2b: new_b2b,
+          pieces_placed: player.pieces_placed + 1,
+          garbage_sent: player.garbage_sent + garbage_send,
+          garbage_received: player.garbage_received + garbage_applied,
+          garbage_wasted: player.garbage_wasted + wasted_inc
       }
 
       new_players = Map.put(state.players, player_id, new_player)
@@ -389,7 +459,15 @@ defmodule HappyTrizn.Games.Tetris do
           combo: new_combo,
           b2b: new_b2b,
           hold_used: false,
-          last_was_rotate: false
+          last_was_rotate: false,
+          # Lock delay 리셋
+          lock_delay_ms: nil,
+          lock_resets: 0,
+          # Stats
+          pieces_placed: player.pieces_placed + 1,
+          garbage_sent: player.garbage_sent + garbage_send,
+          garbage_received: player.garbage_received + garbage_applied,
+          garbage_wasted: player.garbage_wasted + wasted_inc
       }
 
       new_players = Map.put(state.players, player_id, new_player)
@@ -543,23 +621,76 @@ defmodule HappyTrizn.Games.Tetris do
   def tick(%{status: :playing} = state) do
     {new_state, broadcasts} =
       Enum.reduce(state.players, {state, []}, fn {pid, player}, {acc_state, acc_b} ->
-        if player.top_out do
-          {acc_state, acc_b}
-        else
-          interval = gravity_interval(player.level)
-          new_counter = player.gravity_counter + @tick_ms
+        cond do
+          player.top_out ->
+            {acc_state, acc_b}
 
-          if new_counter >= interval do
-            updated_player = %{player | gravity_counter: 0}
-            updated_state = put_in(acc_state.players[pid], updated_player)
+          # lock_delay active → 시간 경과 + 0 이하 면 force lock
+          not is_nil(player.lock_delay_ms) ->
+            new_remaining = player.lock_delay_ms - @tick_ms
 
-            case do_action(pid, "soft_drop", updated_player, updated_state) do
-              {:ok, ns, b} -> {ns, acc_b ++ b}
+            if new_remaining <= 0 do
+              # 강제 lock — 단, 그 사이에 landed 해제됐을 수도 있어 다시 체크
+              case Board.try_drop(
+                     player.board,
+                     player.current.type,
+                     player.current.rotation,
+                     player.current.origin
+                   ) do
+                :landed ->
+                  case lock_and_advance(pid, player, acc_state) do
+                    {:ok, ns, b} -> {ns, acc_b ++ b}
+                  end
+
+                {:ok, _} ->
+                  # 더 이상 landed 아님 — lock_delay 클리어
+                  cleared = %{player | lock_delay_ms: nil}
+                  {put_in(acc_state.players[pid], cleared), acc_b}
+              end
+            else
+              upd = %{player | lock_delay_ms: new_remaining}
+              {put_in(acc_state.players[pid], upd), acc_b}
             end
-          else
-            updated_player = %{player | gravity_counter: new_counter}
-            {put_in(acc_state.players[pid], updated_player), acc_b}
-          end
+
+          true ->
+            interval = gravity_interval(player.level)
+            new_counter = player.gravity_counter + @tick_ms
+
+            if new_counter >= interval do
+              # gravity 자동 drop — 사용자 키 입력 아님 (score / keys_pressed 영향 없음).
+              case Board.try_drop(
+                     player.board,
+                     player.current.type,
+                     player.current.rotation,
+                     player.current.origin
+                   ) do
+                {:ok, new_origin} ->
+                  new_current = %{player.current | origin: new_origin}
+
+                  np =
+                    %{
+                      player
+                      | current: new_current,
+                        gravity_counter: 0,
+                        last_was_rotate: false
+                    }
+                    |> post_action_lock_check()
+
+                  {put_in(acc_state.players[pid], np),
+                   acc_b ++ [{:player_state, pid, public_player(np)}]}
+
+                :landed ->
+                  np =
+                    %{player | gravity_counter: 0}
+                    |> post_action_lock_check()
+
+                  {put_in(acc_state.players[pid], np),
+                   acc_b ++ [{:player_state, pid, public_player(np)}]}
+              end
+            else
+              updated_player = %{player | gravity_counter: new_counter}
+              {put_in(acc_state.players[pid], updated_player), acc_b}
+            end
         end
       end)
 
@@ -587,21 +718,53 @@ defmodule HappyTrizn.Games.Tetris do
   def game_over?(%{status: :over, winner: w} = state) do
     public_players =
       Map.new(state.players, fn {id, p} ->
-        {id,
-         %{
-           score: p.score,
-           lines: p.lines,
-           level: p.level,
-           top_out: p.top_out,
-           combo: p.combo,
-           b2b: p.b2b
-         }}
+        {id, public_stats(p)}
       end)
 
     {:yes, %{winner: w, players: public_players}}
   end
 
   def game_over?(_), do: :no
+
+  @doc """
+  Player stats 결과 — game_over 시 + match_results 저장 시 사용.
+
+  - duration_ms: 시작부터 현재 시점까지
+  - pps: pieces per second
+  - kpp: keys per piece
+  - apm: garbage_sent per minute
+  - vs: jstris VS score (=apm + pps × 100, 단순 근사)
+  """
+  def public_stats(p) do
+    duration_ms = max(System.monotonic_time(:millisecond) - p.started_at, 1)
+    duration_min = duration_ms / 60_000.0
+    duration_sec = duration_ms / 1_000.0
+    pieces = p.pieces_placed
+
+    pps = if duration_sec > 0, do: Float.round(pieces / duration_sec, 2), else: 0.0
+    kpp = if pieces > 0, do: Float.round(p.keys_pressed / pieces, 2), else: 0.0
+    apm = if duration_min > 0, do: Float.round(p.garbage_sent / duration_min, 2), else: 0.0
+
+    %{
+      score: p.score,
+      lines: p.lines,
+      level: p.level,
+      top_out: p.top_out,
+      combo: p.combo,
+      b2b: p.b2b,
+      pieces_placed: pieces,
+      keys_pressed: p.keys_pressed,
+      garbage_sent: p.garbage_sent,
+      garbage_received: p.garbage_received,
+      garbage_wasted: p.garbage_wasted,
+      hold_count: p.hold_count,
+      finesse_violations: p.finesse_violations,
+      duration_ms: duration_ms,
+      pps: pps,
+      kpp: kpp,
+      apm: apm
+    }
+  end
 
   @impl true
   def terminate(_, _), do: :ok
@@ -624,7 +787,9 @@ defmodule HappyTrizn.Games.Tetris do
       pending_garbage: p.pending_garbage,
       combo: p.combo,
       b2b: p.b2b,
-      top_out: p.top_out
+      top_out: p.top_out,
+      lock_delay_ms: p.lock_delay_ms,
+      pieces_placed: p.pieces_placed
     }
   end
 
@@ -652,7 +817,19 @@ defmodule HappyTrizn.Games.Tetris do
       combo: -1,
       b2b: false,
       last_was_rotate: false,
-      top_out: false
+      top_out: false,
+      # Lock delay (Jstris 표준 ~500ms, 회전/이동 reset 최대 15회).
+      lock_delay_ms: nil,
+      lock_resets: 0,
+      # Stats — game_over 시 결과에 포함.
+      pieces_placed: 0,
+      keys_pressed: 0,
+      garbage_sent: 0,
+      garbage_received: 0,
+      garbage_wasted: 0,
+      hold_count: 0,
+      finesse_violations: 0,
+      started_at: System.monotonic_time(:millisecond)
     }
   end
 
