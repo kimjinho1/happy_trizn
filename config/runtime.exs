@@ -87,13 +87,22 @@ if config_env() == :prod do
 
   config :happy_trizn, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  # WebSocket 연결 시 origin 화이트리스트.
+  # PHX_HOST 외에도 localhost, 127.0.0.1, 사내망 IP 등 추가 허용.
+  # CHECK_ORIGIN 환경변수로 override 가능 (콤마 구분).
+  default_origins =
+    "//#{host},//localhost,//127.0.0.1,//#{host}:#{System.get_env("PHX_PORT_HOST", "4747")}"
+
+  check_origin =
+    System.get_env("CHECK_ORIGIN", default_origins)
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+
   config :happy_trizn, HappyTriznWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
+    check_origin: check_origin,
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
+      # IPv6 + 모든 인터페이스 bind. loopback only 면 {0,0,0,0,0,0,0,1}.
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base

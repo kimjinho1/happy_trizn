@@ -20,12 +20,28 @@ services:
       # 안전하게 .env 의 MYSQL_HOST/PORT/USER/PASSWORD 환경변수로 직접 전달
       # (runtime.exs 가 처리).
     depends_on:
-      mysql:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       mongo:
         condition: service_healthy
     networks:
       - happy_net
+
+  # Oneshot 마이그레이션. mysql healthy 후 실행, 성공 시 종료.
+  # app 은 service_completed_successfully 로 이걸 기다림.
+  migrate:
+    image: happy_trizn:latest
+    container_name: happy_trizn_migrate
+    restart: "no"
+    env_file: .env
+    environment:
+      PHX_SERVER: "false"   # 마이그만 실행, Phoenix 안 띄움
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - happy_net
+    command: ["/app/bin/migrate"]
 
   mysql:
     image: mysql:8.0
