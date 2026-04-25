@@ -28,12 +28,11 @@ services:
       - happy_net
 
   mysql:
-    image: mysql:8
+    image: mysql:8.0
     container_name: happy_trizn_mysql
     restart: unless-stopped
     command:
       - --port=${MYSQL_PORT:-3306}
-      - --default-authentication-plugin=caching_sha2_password
     expose:
       - "${MYSQL_PORT:-3306}"
     environment:

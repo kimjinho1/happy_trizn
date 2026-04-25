@@ -1,6 +1,7 @@
 # Multi-stage Phoenix 1.8 release Dockerfile.
 # Build stage: hexpm 공식 elixir + erlang debian 이미지로 컴파일.
 # Runtime stage: 가벼운 debian-slim + 런타임 종속성만.
+# syntax=docker/dockerfile:1.7  (BuildKit cache mount 지원)
 
 ARG ELIXIR_VERSION=1.16.3
 ARG OTP_VERSION=26.2.5
@@ -22,28 +23,49 @@ WORKDIR /app
 RUN mix local.hex --force && mix local.rebar --force
 
 ENV MIX_ENV="prod"
+# Hex registry 응답 늦으면 timeout 늘림 (default 5s 너무 짧음)
+ENV HEX_HTTP_TIMEOUT="120"
+ENV HEX_HTTP_CONCURRENCY="2"
 
-# deps 먼저 (캐시 효율)
+# deps 먼저 (캐시 효율). BuildKit cache mount 로 hex 메타데이터 + mix archive
+# 캐시만 보존 → 두번째 빌드부터 deps.get 거의 즉시. deps/ 는 layer 로 남겨야
+# 이후 단계가 사용 가능 (cache mount 안 함).
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
+RUN --mount=type=cache,target=/root/.hex \
+    --mount=type=cache,target=/root/.mix \
+    mix deps.get --only $MIX_ENV
 RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+RUN --mount=type=cache,target=/root/.hex \
+    --mount=type=cache,target=/root/.mix \
+    mix deps.compile
 
-# asset 빌드
+# 코드 복사
 COPY priv priv
 COPY lib lib
 COPY assets assets
-RUN mix assets.deploy
 
-# 컴파일 (config 만 있으면 컴파일러가 끌어다 씀)
-RUN mix compile
+# 컴파일 먼저 — Phoenix LiveView 1.1 의 phoenix-colocated/<app> 디렉토리는
+# `mix compile` 시 자동 생성됨. 이게 있어야 esbuild 가 import 해결 가능.
+RUN --mount=type=cache,target=/root/.hex \
+    --mount=type=cache,target=/root/.mix \
+    mix compile
+
+# 그 다음 asset 빌드 (tailwind + esbuild minify + phx.digest)
+RUN --mount=type=cache,target=/root/.hex \
+    --mount=type=cache,target=/root/.mix \
+    mix assets.deploy
 
 # runtime config 와 release overlay
 COPY config/runtime.exs config/
 COPY rel rel
 
-RUN mix release
+# 안전망: git +x 비트 누락 / Windows 체크아웃 등에서도 실행 권한 보장
+RUN chmod +x rel/overlays/bin/server rel/overlays/bin/migrate
+
+RUN --mount=type=cache,target=/root/.hex \
+    --mount=type=cache,target=/root/.mix \
+    mix release
 
 # ---------- Runtime stage ----------
 FROM ${RUNNER_IMAGE} AS runtime
