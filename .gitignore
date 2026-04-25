@@ -13,14 +13,11 @@ erl_crash.dump
 # Phoenix asset build output
 /priv/static/assets/
 /priv/static/cache_manifest.json
-
 # Local DB / Phoenix
 /priv/*/seeds_local.exs
-
 # Node / esbuild
 /assets/node_modules/
 npm-debug.log
-
 # Editors / OS
 .DS_Store
 *.swp
@@ -28,19 +25,29 @@ npm-debug.log
 .idea/
 .vscode/
 *.iml
-
 # Docker compose override (개발용 DB 포트 노출 등 로컬 전용)
 docker-compose.override.yml
-
 # Env files (실제 비밀)
 .env
 .env.local
 .env.production
 *.env.local
-
 # Logs
 *.log
 /log/
-
 # Mix release output
 /rel/overlays/
+# The directory Mix will write compiled artifacts to.
+# If you run "mix test --cover", coverage assets end up here.
+# The directory Mix downloads your dependencies sources to.
+# Where 3rd-party dependencies like ExDoc output generated docs.
+# Ignore .fetch files in case you like to edit your project deps locally.
+# If the VM crashes, it generates a dump, let's ignore it too.
+# Also ignore archive artifacts (built via "mix archive.build").
+# Temporary files, for example, from tests.
+/tmp/
+# Ignore package tarball (built via "mix hex.build").
+happy_trizn-*.tar
+# Ignore assets that are produced by build tools.
+# Ignore digested assets cache.
+# In case you use Node.js/npm, you want to ignore these.
