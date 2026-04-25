@@ -43,7 +43,12 @@ defmodule HappyTriznWeb.GameMultiLive do
             %{game_type: ^slug, status: status} = _room when status != "closed" ->
               case GameSession.get_or_start_room(room_id, slug) do
                 {:ok, pid} ->
-                  case GameSession.player_join(pid, user.id, %{nickname: nickname}) do
+                  # player_id = session.id (각 브라우저/탭마다 별도 세션이라 같은 사용자가
+                  # 두 디바이스로 같은 방 들어와도 다른 player 로 인식. 사내 dev 테스트 시
+                  # 같은 계정 두 incognito 로 1v1 시뮬 가능).
+                  player_id = socket.assigns.current_session.id
+
+                  case GameSession.player_join(pid, player_id, %{nickname: nickname, user_id: user.id}) do
                     :ok ->
                       if connected?(socket), do: GameSession.subscribe_room(room_id)
 
@@ -53,7 +58,7 @@ defmodule HappyTriznWeb.GameMultiLive do
                        |> assign(:meta, meta)
                        |> assign(:room_id, room_id)
                        |> assign(:session_pid, pid)
-                       |> assign(:player_id, user.id)
+                       |> assign(:player_id, player_id)
                        |> assign(:nickname, nickname)
                        |> assign(:game_state, GameSession.get_state(pid))
                        |> assign(:result, nil)}
