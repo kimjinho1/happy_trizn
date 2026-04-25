@@ -26,10 +26,31 @@ import {hooks as colocatedHooks} from "phoenix-colocated/happy_trizn"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+
+// LiveView Hooks
+const Hooks = {
+  // 채팅 메시지 컨테이너 — flex-col-reverse 라 새 메시지 추가 시 자동으로 위에 쌓임.
+  // 사용자가 스크롤로 위쪽을 보고 있으면 자동 스크롤 안 함 (mid-scroll 보존).
+  ChatScroll: {
+    mounted() {
+      this.handleEvent("chat_message_added", () => this.scrollToBottom())
+    },
+    updated() {
+      // flex-col-reverse 환경에서 scrollTop=0 이 가장 최신.
+      if (this.el.scrollTop > -50) {
+        this.el.scrollTop = 0
+      }
+    },
+    scrollToBottom() {
+      this.el.scrollTop = 0
+    }
+  },
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...Hooks},
 })
 
 // Show progress bar on live navigation and form submits

@@ -73,6 +73,9 @@ defmodule HappyTriznWeb.LobbyLive do
               registered: not is_nil(socket.assigns.user)
             }
 
+            # Mongo 영구 저장 (best-effort, 안 떠있으면 skip)
+            HappyTrizn.Chat.log_message(msg, "lobby")
+
             PubSub.broadcast(HappyTrizn.PubSub, @chat_topic, {:chat_message, msg})
 
             {:noreply, assign(socket, input: "", rate_limited: false)}
