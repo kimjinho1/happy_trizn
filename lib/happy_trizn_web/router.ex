@@ -38,8 +38,11 @@ defmodule HappyTriznWeb.Router do
     get "/register", RegistrationController, :new
     post "/register", RegistrationController, :create
 
-    # 로비 (Sprint 2 에서 LiveView 로 전환)
-    get "/lobby", PageController, :lobby
+    # 로비 — LiveView (글로벌 채팅, 게임 카테고리). 친구/방은 Sprint 2.
+    live_session :default,
+      on_mount: HappyTriznWeb.Live.Hooks.FetchLiveUser do
+      live "/lobby", LobbyLive
+    end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)
     get "/admin/login", AdminSessionController, :new

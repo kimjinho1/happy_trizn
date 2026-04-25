@@ -35,22 +35,35 @@ defmodule HappyTriznWeb.Plugs.FetchCurrentUser do
         with {:ok, raw} <- Session.decode_token(encoded),
              {user_or_nil, session} <- Accounts.get_session_by_token(raw) || :no_session do
           conn
+          |> Plug.Conn.put_session(:session_token, encoded)
           |> assign(:current_user, user_or_nil)
           |> assign(:current_session, session)
           |> assign(:current_nickname, session.nickname)
         else
-          _ -> assign_anonymous(conn) |> delete_resp_cookie(@cookie_name)
+          _ ->
+            conn
+            |> delete_resp_cookie(@cookie_name)
+            |> Plug.Conn.delete_session(:session_token)
+            |> assign_anonymous()
         end
     end
   end
 
-  @doc "외부에서 호출: 세션 cookie 심기."
+  @doc "외부에서 호출: 세션 cookie 심기 + LiveView 용 session 도 함께."
   def put_session_cookie(conn, raw_token) do
-    put_resp_cookie(conn, @cookie_name, Session.encode_token(raw_token), @cookie_options)
+    encoded = Session.encode_token(raw_token)
+
+    conn
+    |> put_resp_cookie(@cookie_name, encoded, @cookie_options)
+    |> Plug.Conn.put_session(:session_token, encoded)
   end
 
-  @doc "로그아웃 cookie 제거."
-  def delete_session_cookie(conn), do: delete_resp_cookie(conn, @cookie_name)
+  @doc "로그아웃 cookie 제거 + session 정리."
+  def delete_session_cookie(conn) do
+    conn
+    |> delete_resp_cookie(@cookie_name)
+    |> Plug.Conn.delete_session(:session_token)
+  end
 
   def cookie_name, do: @cookie_name
 
