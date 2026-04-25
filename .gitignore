@@ -35,8 +35,8 @@ docker-compose.override.yml
 # Logs
 *.log
 /log/
-# Mix release output
-/rel/overlays/
+# Mix release output (rel/overlays/ 는 phx.gen.release 가 만든 사용자 overlay
+# 스크립트라 commit 대상. _build 만 막으면 충분.)
 # The directory Mix will write compiled artifacts to.
 # If you run "mix test --cover", coverage assets end up here.
 # The directory Mix downloads your dependencies sources to.
