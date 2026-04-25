@@ -8,6 +8,7 @@ defmodule HappyTriznWeb.LobbyLive do
 
   use HappyTriznWeb, :live_view
 
+  require Logger
   alias Phoenix.PubSub
   alias HappyTrizn.{RateLimit, Friends, Rooms}
   alias HappyTrizn.Games.Registry, as: GameRegistry
@@ -185,6 +186,8 @@ defmodule HappyTriznWeb.LobbyLive do
   end
 
   def handle_event("join_room", %{"room-id" => room_id} = params, socket) do
+    Logger.info("[lobby] join_room user=#{inspect(socket.assigns.user && socket.assigns.user.id)} room=#{room_id}")
+
     case socket.assigns.user do
       nil ->
         {:noreply, put_flash(socket, :error, "게스트는 방 입장 불가. @trizn.kr 가입 필요.")}
@@ -260,6 +263,7 @@ defmodule HappyTriznWeb.LobbyLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.flash_group flash={@flash} />
     <div class="min-h-screen p-6 max-w-7xl mx-auto">
       <header class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold">Happy Trizn — 로비</h1>
@@ -326,12 +330,24 @@ defmodule HappyTriznWeb.LobbyLive do
                         <span class="badge badge-sm">{room.game_type}</span>
                         <span class="font-semibold">{room.name}</span>
                         <%= if room.password_hash do %>
-                          <span class="text-xs">🔒</span>
+                          <span class="text-xs" title="비밀번호 방">🔒</span>
                         <% end %>
                       </div>
-                      <button phx-click="join_room" phx-value-room-id={room.id} class="btn btn-xs btn-primary">
-                        입장
-                      </button>
+                      <%= if room.password_hash do %>
+                        <form phx-submit="join_room" class="flex items-center gap-1">
+                          <input type="hidden" name="room-id" value={room.id} />
+                          <input
+                            type="password"
+                            name="password"
+                            placeholder="비번"
+                            class="input input-bordered input-xs w-24"
+                            required
+                          />
+                          <button type="submit" class="btn btn-xs btn-primary">입장</button>
+                        </form>
+                      <% else %>
+                        <button phx-click="join_room" phx-value-room-id={room.id} class="btn btn-xs btn-primary">입장</button>
+                      <% end %>
                     </div>
                   <% end %>
                 </div>

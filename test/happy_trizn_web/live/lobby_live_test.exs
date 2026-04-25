@@ -212,4 +212,80 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       assert redirect_path =~ "/game/tetris/"
     end
   end
+
+  describe "/lobby — 비번 있는 방 (회귀)" do
+    setup %{conn: conn} do
+      Cachex.clear(:recommendations_cache)
+      HappyTrizn.Rooms.clear_kick_bans()
+      alice = user_fixture(nickname: "ar_pw_#{System.unique_integer([:positive])}")
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(alice, %{
+          game_type: "tetris",
+          name: "secret_room_#{System.unique_integer([:positive])}",
+          password: "topsecret"
+        })
+
+      {:ok, conn: log_in_user(conn, alice), alice: alice, room: room}
+    end
+
+    test "비번 방 row 에 password input form 표시", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      assert html =~ "🔒"
+      assert html =~ ~s(name="password")
+      assert html =~ room.name
+    end
+
+    test "비번 정확하면 redirect 성공", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      assert {:error, {:redirect, %{to: path}}} =
+               view
+               |> form("form[phx-submit='join_room']", %{"room-id" => room.id, "password" => "topsecret"})
+               |> render_submit()
+
+      assert path =~ "/game/tetris/"
+    end
+
+    test "비번 틀리면 wrong_password flash + 같은 페이지", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      html =
+        view
+        |> form("form[phx-submit='join_room']", %{"room-id" => room.id, "password" => "wrongguess"})
+        |> render_submit()
+
+      assert html =~ "비밀번호 오류"
+    end
+  end
+
+  describe "/lobby — 회귀 (게스트 + 강퇴 ban)" do
+    test "게스트는 join_room 이벤트 차단", %{conn: conn} do
+      conn = log_in_user(conn, nil, "guest_reg_#{System.unique_integer([:positive])}")
+      alice = user_fixture(nickname: "alice_reg_#{System.unique_integer([:positive])}")
+      {:ok, room} = HappyTrizn.Rooms.create(alice, %{game_type: "tetris", name: "n#{System.unique_integer([:positive])}"})
+
+      {:ok, view, _} = live(conn, ~p"/lobby")
+      # 게스트 → 친구/방 사이드바 안 보임. 직접 push (phx-click via render_hook)
+      html = render_hook(view, "join_room", %{"room-id" => room.id})
+      assert html =~ "게스트는 방 입장 불가"
+    end
+
+    test "강퇴된 user 가 같은 방 join 시도 → kicked flash", %{conn: conn} do
+      host = user_fixture(nickname: "host_kick_#{System.unique_integer([:positive])}")
+      target = user_fixture(nickname: "tgt_kick_#{System.unique_integer([:positive])}")
+      {:ok, room} = HappyTrizn.Rooms.create(host, %{game_type: "tetris", name: "k#{System.unique_integer([:positive])}"})
+      {:ok, :kicked} = HappyTrizn.Rooms.kick(host, room.id, target.id)
+
+      conn = log_in_user(conn, target)
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      html =
+        view
+        |> element("button[phx-click='join_room'][phx-value-room-id='#{room.id}']")
+        |> render_click()
+
+      assert html =~ "강퇴" or render(view) =~ "강퇴"
+    end
+  end
 end
