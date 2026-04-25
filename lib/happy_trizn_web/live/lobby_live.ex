@@ -191,13 +191,26 @@ defmodule HappyTriznWeb.LobbyLive do
 
       user ->
         password = Map.get(params, "password")
+        room = Rooms.get(room_id)
 
-        case Rooms.join(user, room_id, password) do
-          {:ok, room} -> {:noreply, redirect(socket, to: ~p"/game/#{room.game_type}/#{room.id}")}
-          {:error, :wrong_password} -> {:noreply, put_flash(socket, :error, "비밀번호 오류")}
-          {:error, :kicked} -> {:noreply, put_flash(socket, :error, "강퇴된 방 (5분 ban)")}
-          {:error, :closed} -> {:noreply, put_flash(socket, :error, "방 종료됨")}
-          {:error, :not_found} -> {:noreply, put_flash(socket, :error, "방 없음")}
+        cond do
+          # 비번 있는 방 + password 없으면 prompt 띄움 (browser confirm 대신 modal flash)
+          room && room.password_hash && (is_nil(password) or password == "") ->
+            {:noreply,
+             socket
+             |> put_flash(
+               :error,
+               "비밀번호 방은 url 직접 접속 또는 추후 modal 지원 — 비번 없는 방에 시도하세요."
+             )}
+
+          true ->
+            case Rooms.join(user, room_id, password) do
+              {:ok, room} -> {:noreply, redirect(socket, to: ~p"/game/#{room.game_type}/#{room.id}")}
+              {:error, :wrong_password} -> {:noreply, put_flash(socket, :error, "비밀번호 오류")}
+              {:error, :kicked} -> {:noreply, put_flash(socket, :error, "강퇴된 방 (5분 ban)")}
+              {:error, :closed} -> {:noreply, put_flash(socket, :error, "방 종료됨")}
+              {:error, :not_found} -> {:noreply, put_flash(socket, :error, "방 없음")}
+            end
         end
     end
   end
