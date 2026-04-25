@@ -106,21 +106,33 @@ defmodule HappyTriznWeb.GameLive do
       <div class="text-lg">점수: <strong>{@state.score}</strong></div>
       <div class="grid grid-cols-4 gap-1 bg-base-300 p-1 w-fit">
         <%= for row <- @state.board, cell <- row do %>
-          <div class={["w-16 h-16 flex items-center justify-center text-xl font-bold rounded",
-                       if(cell, do: "bg-warning text-base-100", else: "bg-base-200 text-base-content/30")]}>
+          <div class={[
+            "w-16 h-16 flex items-center justify-center text-xl font-bold rounded",
+            if(cell, do: "bg-warning text-base-100", else: "bg-base-200 text-base-content/30")
+          ]}>
             {cell || ""}
           </div>
         <% end %>
       </div>
       <div class="grid grid-cols-3 gap-2 w-48 text-sm">
         <div></div>
-        <button phx-click="input" phx-value-action="move" phx-value-dir="up" class="btn btn-sm">↑</button>
+        <button phx-click="input" phx-value-action="move" phx-value-dir="up" class="btn btn-sm">
+          ↑
+        </button>
         <div></div>
-        <button phx-click="input" phx-value-action="move" phx-value-dir="left" class="btn btn-sm">←</button>
-        <button phx-click="input" phx-value-action="move" phx-value-dir="down" class="btn btn-sm">↓</button>
-        <button phx-click="input" phx-value-action="move" phx-value-dir="right" class="btn btn-sm">→</button>
+        <button phx-click="input" phx-value-action="move" phx-value-dir="left" class="btn btn-sm">
+          ←
+        </button>
+        <button phx-click="input" phx-value-action="move" phx-value-dir="down" class="btn btn-sm">
+          ↓
+        </button>
+        <button phx-click="input" phx-value-action="move" phx-value-dir="right" class="btn btn-sm">
+          →
+        </button>
       </div>
-      <div class="text-xs text-base-content/50">키보드 화살표 또는 버튼. 데스크탑에선 phx-keyup 추가 가능 (Sprint 3b).</div>
+      <div class="text-xs text-base-content/50">
+        키보드 화살표 또는 버튼. 데스크탑에선 phx-keyup 추가 가능 (Sprint 3b).
+      </div>
     </div>
     """
   end
@@ -137,13 +149,26 @@ defmodule HappyTriznWeb.GameLive do
               <% cell = Map.fetch!(@state.cells, {r, c}) %>
               <%= cond do %>
                 <% cell.revealed and cell.mine -> %>
-                  <div class="w-7 h-7 bg-error text-base-100 flex items-center justify-center text-xs font-bold border border-base-100">💣</div>
+                  <div class="w-7 h-7 bg-error text-base-100 flex items-center justify-center text-xs font-bold border border-base-100">
+                    💣
+                  </div>
                 <% cell.revealed -> %>
-                  <div class="w-7 h-7 bg-base-200 flex items-center justify-center text-xs border border-base-100">{if cell.neighbors > 0, do: cell.neighbors, else: ""}</div>
+                  <div class="w-7 h-7 bg-base-200 flex items-center justify-center text-xs border border-base-100">
+                    {if cell.neighbors > 0, do: cell.neighbors, else: ""}
+                  </div>
                 <% cell.flagged -> %>
-                  <div class="w-7 h-7 bg-warning flex items-center justify-center text-xs border border-base-100">🚩</div>
+                  <div class="w-7 h-7 bg-warning flex items-center justify-center text-xs border border-base-100">
+                    🚩
+                  </div>
                 <% true -> %>
-                  <button phx-click="input" phx-value-action="reveal" phx-value-r={r} phx-value-c={c} class="w-7 h-7 bg-base-100 hover:bg-base-content/10 border border-base-300"></button>
+                  <button
+                    phx-click="input"
+                    phx-value-action="reveal"
+                    phx-value-r={r}
+                    phx-value-c={c}
+                    class="w-7 h-7 bg-base-100 hover:bg-base-content/10 border border-base-300"
+                  >
+                  </button>
               <% end %>
             <% end %>
           </div>

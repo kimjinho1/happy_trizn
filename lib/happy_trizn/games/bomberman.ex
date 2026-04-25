@@ -57,7 +57,9 @@ defmodule HappyTrizn.Games.Bomberman do
   def tick(state), do: {:ok, state, []}
 
   @impl true
-  def game_over?(%{status: :over, winner: w} = state), do: {:yes, %{winner: w, players: state.players}}
+  def game_over?(%{status: :over, winner: w} = state),
+    do: {:yes, %{winner: w, players: state.players}}
+
   def game_over?(_), do: :no
 
   @impl true

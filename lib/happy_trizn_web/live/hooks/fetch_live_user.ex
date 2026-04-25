@@ -28,8 +28,7 @@ defmodule HappyTriznWeb.Live.Hooks.FetchLiveUser do
           {nil, nil, nil}
       end
 
-    {:cont,
-     assign(socket, current_user: user, current_session: sess, current_nickname: nickname)}
+    {:cont, assign(socket, current_user: user, current_session: sess, current_nickname: nickname)}
   end
 
   # FetchCurrentUser plug의 cookie_name 노출은 더 이상 필요없음. session_token key 사용.

@@ -48,6 +48,10 @@ defmodule HappyTriznWeb.Router do
 
       # 멀티 게임 — GameSession 직접 사용 (Tetris 풀 구현). Channel 분리는 향후.
       live "/game/:game_type/:room_id", GameMultiLive
+
+      # 사용자 게임 옵션 — key bindings + DAS/ARR/grid/ghost/skin/sound.
+      live "/settings/games", GameSettingsLive, :index
+      live "/settings/games/:game_type", GameSettingsLive, :show
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)

@@ -44,12 +44,20 @@
               <td>
                 <%= if user.status == "active" do %>
                   <form action={~p"/admin/users/#{user.id}/ban"} method="post" class="inline">
-                    <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+                    <input
+                      type="hidden"
+                      name="_csrf_token"
+                      value={Plug.CSRFProtection.get_csrf_token()}
+                    />
                     <button class="btn btn-error btn-xs" type="submit">차단</button>
                   </form>
                 <% else %>
                   <form action={~p"/admin/users/#{user.id}/unban"} method="post" class="inline">
-                    <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+                    <input
+                      type="hidden"
+                      name="_csrf_token"
+                      value={Plug.CSRFProtection.get_csrf_token()}
+                    />
                     <button class="btn btn-success btn-xs" type="submit">해제</button>
                   </form>
                 <% end %>
@@ -62,11 +70,21 @@
 
     <div class="flex justify-center gap-2 mt-6">
       <%= if @page > 1 do %>
-        <.link href={~p"/admin/users?page=#{@page - 1}&status=#{@current_status || ""}"} class="btn btn-sm">이전</.link>
+        <.link
+          href={~p"/admin/users?page=#{@page - 1}&status=#{@current_status || ""}"}
+          class="btn btn-sm"
+        >
+          이전
+        </.link>
       <% end %>
       <span class="btn btn-sm btn-ghost no-animation">{@page} 페이지</span>
       <%= if length(@users) == @per_page do %>
-        <.link href={~p"/admin/users?page=#{@page + 1}&status=#{@current_status || ""}"} class="btn btn-sm">다음</.link>
+        <.link
+          href={~p"/admin/users?page=#{@page + 1}&status=#{@current_status || ""}"}
+          class="btn btn-sm"
+        >
+          다음
+        </.link>
       <% end %>
     </div>
   <% end %>

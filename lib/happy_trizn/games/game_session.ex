@@ -38,7 +38,8 @@ defmodule HappyTrizn.Games.GameSession do
     end
   end
 
-  def via_room(room_id), do: {:via, Registry, {HappyTrizn.Games.SessionRegistry, {:room, room_id}}}
+  def via_room(room_id),
+    do: {:via, Registry, {HappyTrizn.Games.SessionRegistry, {:room, room_id}}}
 
   @doc "특정 방의 GameSession 가져오기 (없으면 nil)."
   def whereis_room(room_id) do
@@ -56,7 +57,8 @@ defmodule HappyTrizn.Games.GameSession do
     end
   end
 
-  def player_join(pid, player_id, meta \\ %{}), do: GenServer.call(pid, {:player_join, player_id, meta})
+  def player_join(pid, player_id, meta \\ %{}),
+    do: GenServer.call(pid, {:player_join, player_id, meta})
 
   def player_leave(pid, player_id, reason \\ :quit),
     do: GenServer.cast(pid, {:player_leave, player_id, reason})

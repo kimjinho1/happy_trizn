@@ -8,7 +8,13 @@ defmodule HappyTrizn.Games.GameSessionTest do
   describe "start_link / via_room / whereis_room" do
     test "via_room name 으로 spawn 후 whereis_room 으로 lookup" do
       room_id = unique_room_id()
-      {:ok, pid} = GameSession.start_link(name: GameSession.via_room(room_id), room_id: room_id, game_type: "2048")
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room_id),
+          room_id: room_id,
+          game_type: "2048"
+        )
 
       assert GameSession.whereis_room(room_id) == pid
     end
@@ -41,7 +47,14 @@ defmodule HappyTrizn.Games.GameSessionTest do
   describe "lifecycle (2048 싱글)" do
     setup do
       room_id = unique_room_id()
-      {:ok, pid} = GameSession.start_link(name: GameSession.via_room(room_id), room_id: room_id, game_type: "2048")
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room_id),
+          room_id: room_id,
+          game_type: "2048"
+        )
+
       {:ok, room_id: room_id, pid: pid}
     end
 

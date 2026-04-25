@@ -34,7 +34,9 @@ defmodule HappyTrizn.AdminTest do
     end
 
     test "payload map 저장" do
-      assert {:ok, a} = Admin.log_action("admin", "nickname_change", payload: %{from: "x", to: "y"})
+      assert {:ok, a} =
+               Admin.log_action("admin", "nickname_change", payload: %{from: "x", to: "y"})
+
       assert a.payload == %{"from" => "x", "to" => "y"} or a.payload == %{from: "x", to: "y"}
     end
 

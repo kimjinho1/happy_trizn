@@ -18,7 +18,10 @@ defmodule HappyTrizn.FriendsTest do
 
   setup do
     Cachex.clear(:recommendations_cache)
-    {:ok, alice: register!(System.unique_integer([:positive])), bob: register!(System.unique_integer([:positive]))}
+
+    {:ok,
+     alice: register!(System.unique_integer([:positive])),
+     bob: register!(System.unique_integer([:positive]))}
   end
 
   describe "send_request/2" do

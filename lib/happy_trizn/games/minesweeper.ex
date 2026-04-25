@@ -53,8 +53,12 @@ defmodule HappyTrizn.Games.Minesweeper do
 
   def handle_input(_player_id, %{"action" => "flag", "r" => r, "c" => c}, state) do
     cond do
-      state.over -> {:ok, state, []}
-      not in_bounds?(r, c) -> {:ok, state, []}
+      state.over ->
+        {:ok, state, []}
+
+      not in_bounds?(r, c) ->
+        {:ok, state, []}
+
       true ->
         cell = Map.fetch!(state.cells, {r, c})
 
@@ -205,7 +209,9 @@ defmodule HappyTrizn.Games.Minesweeper do
 
           if cell.neighbors == 0 do
             neighbors =
-              for dr <- -1..1, dc <- -1..1, not (dr == 0 and dc == 0),
+              for dr <- -1..1,
+                  dc <- -1..1,
+                  not (dr == 0 and dc == 0),
                   in_bounds?(r + dr, c + dc),
                   do: {r + dr, c + dc}
 

@@ -129,7 +129,10 @@ defmodule HappyTrizn.Games.Games2048Test do
 
     test "restart 액션 → 새 게임", %{state: state} do
       state = %{state | score: 100, won: true}
-      {:ok, fresh, [{:state_changed, _}]} = Games2048.handle_input("p1", %{"action" => "restart"}, state)
+
+      {:ok, fresh, [{:state_changed, _}]} =
+        Games2048.handle_input("p1", %{"action" => "restart"}, state)
+
       assert fresh.score == 0
       refute fresh.won
     end

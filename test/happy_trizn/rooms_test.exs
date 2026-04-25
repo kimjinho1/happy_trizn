@@ -24,7 +24,9 @@ defmodule HappyTrizn.RoomsTest do
 
   describe "create/2" do
     test "비번 없는 방 생성", %{host: host} do
-      assert {:ok, %Room{} = room} = Rooms.create(host, %{game_type: "tetris", name: "테스트방", max_players: 2})
+      assert {:ok, %Room{} = room} =
+               Rooms.create(host, %{game_type: "tetris", name: "테스트방", max_players: 2})
+
       assert room.host_id == host.id
       assert room.password_hash == nil
       assert room.password_salt == nil
@@ -32,7 +34,14 @@ defmodule HappyTrizn.RoomsTest do
     end
 
     test "비번 있는 방 생성 → password_hash/salt 채워짐", %{host: host} do
-      assert {:ok, room} = Rooms.create(host, %{game_type: "bomberman", name: "비밀방", password: "secret123", max_players: 4})
+      assert {:ok, room} =
+               Rooms.create(host, %{
+                 game_type: "bomberman",
+                 name: "비밀방",
+                 password: "secret123",
+                 max_players: 4
+               })
+
       assert room.password_hash != nil
       assert byte_size(room.password_hash) == 32
       assert room.password_salt != nil
@@ -43,7 +52,14 @@ defmodule HappyTrizn.RoomsTest do
     end
 
     test "빈 비번 = 비번 없는 방", %{host: host} do
-      assert {:ok, room} = Rooms.create(host, %{game_type: "snake_io", name: "공개", password: "", max_players: 8})
+      assert {:ok, room} =
+               Rooms.create(host, %{
+                 game_type: "snake_io",
+                 name: "공개",
+                 password: "",
+                 max_players: 8
+               })
+
       assert room.password_hash == nil
     end
 
@@ -87,7 +103,10 @@ defmodule HappyTrizn.RoomsTest do
   describe "join/3" do
     setup ctx do
       {:ok, room} = Rooms.create(ctx.host, %{game_type: "tetris", name: "open_room"})
-      {:ok, secret_room} = Rooms.create(ctx.host, %{game_type: "tetris", name: "secret", password: "pw1234"})
+
+      {:ok, secret_room} =
+        Rooms.create(ctx.host, %{game_type: "tetris", name: "secret", password: "pw1234"})
+
       {:ok, room: room, secret_room: secret_room}
     end
 

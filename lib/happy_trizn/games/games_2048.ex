@@ -102,10 +102,12 @@ defmodule HappyTrizn.Games.Games2048 do
   @doc false
   def move(board, dir) do
     rows = transpose_for_dir(board, dir)
-    {merged, gained} = Enum.reduce(rows, {[], 0}, fn row, {acc, g} ->
-      {new_row, row_gain} = compress_and_merge(row)
-      {[new_row | acc], g + row_gain}
-    end)
+
+    {merged, gained} =
+      Enum.reduce(rows, {[], 0}, fn row, {acc, g} ->
+        {new_row, row_gain} = compress_and_merge(row)
+        {[new_row | acc], g + row_gain}
+      end)
 
     new_rows = Enum.reverse(merged)
     new_board = transpose_back(new_rows, dir)

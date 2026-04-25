@@ -48,5 +48,4 @@ defmodule HappyTrizn.Application do
     HappyTriznWeb.Endpoint.config_change(changed, removed)
     :ok
   end
-
 end

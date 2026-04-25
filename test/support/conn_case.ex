@@ -48,8 +48,13 @@ defmodule HappyTriznWeb.ConnCase do
   def log_in_user(conn, user_or_nil, nickname \\ nil) do
     {:ok, raw, _session} =
       case user_or_nil do
-        nil -> HappyTrizn.Accounts.create_guest_session(nickname || "guest_#{System.unique_integer([:positive])}")
-        user -> HappyTrizn.Accounts.create_user_session(user)
+        nil ->
+          HappyTrizn.Accounts.create_guest_session(
+            nickname || "guest_#{System.unique_integer([:positive])}"
+          )
+
+        user ->
+          HappyTrizn.Accounts.create_user_session(user)
       end
 
     encoded = HappyTrizn.Accounts.Session.encode_token(raw)

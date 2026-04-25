@@ -54,7 +54,11 @@ defmodule HappyTrizn.Friends do
 
         case %Friendship{} |> Friendship.changeset(attrs) |> Repo.insert() do
           {:ok, friendship} ->
-            broadcast(to.id, {:friend_request_received, %{from: from.nickname, friendship_id: friendship.id}})
+            broadcast(
+              to.id,
+              {:friend_request_received, %{from: from.nickname, friendship_id: friendship.id}}
+            )
+
             {:ok, friendship}
 
           {:error, cs} ->

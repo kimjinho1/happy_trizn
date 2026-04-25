@@ -118,7 +118,8 @@ defmodule HappyTrizn.Games.StubGamesTest do
     end
 
     test "game_over? over=true → yes + score" do
-      assert {:yes, %{score: 100}} = PacMan.game_over?(%{score: 100, level: 1, lives: 0, over: true})
+      assert {:yes, %{score: 100}} =
+               PacMan.game_over?(%{score: 100, level: 1, lives: 0, over: true})
     end
   end
 end

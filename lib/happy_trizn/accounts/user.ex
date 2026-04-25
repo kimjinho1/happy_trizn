@@ -37,14 +37,10 @@ defmodule HappyTrizn.Accounts.User do
     |> cast(attrs, [:email, :nickname, :password])
     |> validate_required([:email, :nickname, :password])
     |> update_change(:email, &String.downcase/1)
-    |> validate_format(:email, @email_regex,
-      message: "must be a @trizn.kr address"
-    )
+    |> validate_format(:email, @email_regex, message: "must be a @trizn.kr address")
     |> validate_length(:email, max: 160)
     |> validate_length(:nickname, min: 2, max: 32)
-    |> validate_format(:nickname, ~r/^[\p{L}\p{N}_\-]+$/u,
-      message: "letters, numbers, _, - only"
-    )
+    |> validate_format(:nickname, ~r/^[\p{L}\p{N}_\-]+$/u, message: "letters, numbers, _, - only")
     |> validate_length(:password, min: 8, max: 72)
     |> unique_constraint(:email)
     |> unique_constraint(:nickname)
