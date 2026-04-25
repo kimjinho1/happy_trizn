@@ -45,6 +45,20 @@ const Hooks = {
       this.el.scrollTop = 0
     }
   },
+
+  // 채팅 입력 form — server 가 "chat:reset_input" event 보내면 input value 비움.
+  // morphdom 은 typed input 의 value property 안 건드림. server-driven 명시 reset.
+  ChatReset: {
+    mounted() {
+      this.handleEvent("chat:reset_input", () => {
+        const input = this.el.querySelector('input[name="message"]')
+        if (input) {
+          input.value = ""
+          input.focus()
+        }
+      })
+    },
+  },
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

@@ -38,10 +38,14 @@ defmodule HappyTriznWeb.Router do
     get "/register", RegistrationController, :new
     post "/register", RegistrationController, :create
 
-    # 로비 — LiveView (글로벌 채팅, 게임 카테고리). 친구/방은 Sprint 2.
+    # 로비 — LiveView (글로벌 채팅, 친구 사이드바, 방 리스트, 게임 카테고리).
     live_session :default,
       on_mount: HappyTriznWeb.Live.Hooks.FetchLiveUser do
       live "/lobby", LobbyLive
+
+      # Sprint 3 에서 GameLive 로 교체. 현재는 placeholder.
+      live "/game/:game_type/:room_id", GamePlaceholderLive
+      live "/play/:game_type", GamePlaceholderLive
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)

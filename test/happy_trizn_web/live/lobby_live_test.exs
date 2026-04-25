@@ -35,12 +35,39 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       refute render(view) =~ "<span class=\"break-all\">"
     end
 
+    test "메시지 send 후 input 비움 — chat:reset_input event 푸시", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      view |> form("form[phx-submit='send']", %{"message" => "hello world"}) |> render_submit()
+
+      # 1. server-side input assign 비어야
+      assert render(view) =~ ~s(name="message" value="")
+      # 2. JS hook 트리거할 push_event 검증
+      assert_push_event(view, "chat:reset_input", %{})
+    end
+
     test "501자 메시지 안 표시 (rendered HTML 안에 본문 없음)", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/lobby")
       long = String.duplicate("a", 501)
       view |> form("form[phx-submit='send']", %{"message" => long}) |> render_submit()
       # 메시지가 broadcast 안 됨 → 화면에 안 보임
       refute render(view) =~ String.duplicate("a", 501)
+    end
+
+    test "rate limited 시 input 보존 (assign input 안 비움)", %{conn: conn} do
+      nick = "rate_buf_#{System.unique_integer([:positive])}"
+      conn = log_in_user(conn, nil, nick)
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      for i <- 1..5 do
+        view |> form("form[phx-submit='send']", %{"message" => "burst#{i}"}) |> render_submit()
+      end
+
+      # 6번째 → rate limited, broadcast 안 됨, button disabled
+      html = view |> form("form[phx-submit='send']", %{"message" => "kept"}) |> render_submit()
+      refute html =~ ~s(value="kept")
+      # broadcast 자체 안 됨 → 화면에 "kept" 본문 없음
+      refute html =~ ">kept<"
     end
   end
 
@@ -93,6 +120,96 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       refute html =~ "over_quota"
       # button 도 disabled (rate_limited true)
       assert html =~ ~s(disabled)
+    end
+  end
+
+  describe "/lobby — 친구 사이드바 (등록자)" do
+    setup %{conn: conn} do
+      Cachex.clear(:recommendations_cache)
+      alice = user_fixture(nickname: "alice_lob_#{System.unique_integer([:positive])}")
+      bob = user_fixture(nickname: "bob_lob_#{System.unique_integer([:positive])}")
+      {:ok, conn: log_in_user(conn, alice), alice: alice, bob: bob}
+    end
+
+    test "추천 친구에 다른 유저 표시", %{conn: conn, bob: bob} do
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      assert html =~ bob.nickname
+      assert html =~ "추천 친구"
+    end
+
+    test "send_friend_request → 요청 row 생성 + flash", %{conn: conn, alice: alice, bob: bob} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      view
+      |> element("button[phx-click='send_friend_request'][phx-value-user-id='#{bob.id}']")
+      |> render_click()
+
+      assert HappyTrizn.Friends.get_friendship_between(alice, bob)
+    end
+
+    test "accept_friend → 친구 성립", %{conn: conn, alice: alice, bob: bob} do
+      {:ok, f} = HappyTrizn.Friends.send_request(bob, alice)
+      Cachex.clear(:recommendations_cache)
+
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      view
+      |> element("button[phx-click='accept_friend'][phx-value-friendship-id='#{f.id}']")
+      |> render_click()
+
+      assert HappyTrizn.Friends.are_friends?(alice, bob)
+    end
+
+    test "더보기 → 모든 사용자 모드 toggle", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+      assert render(view) =~ "추천 친구"
+      view |> element("button[phx-click='toggle_show_all']") |> render_click()
+      assert render(view) =~ "모든 사용자"
+    end
+  end
+
+  describe "/lobby — 친구 사이드바 (게스트)" do
+    setup %{conn: conn} do
+      Cachex.clear(:recommendations_cache)
+      {:ok, conn: log_in_user(conn, nil, "guest_lobby_#{System.unique_integer([:positive])}")}
+    end
+
+    test "게스트는 친구 기능 비활성", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      assert html =~ "게스트는 친구 기능 사용 불가"
+    end
+
+    test "게스트는 방 생성 form 안 보임", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      assert html =~ "게스트는 방 생성 불가"
+      refute html =~ "phx-submit=\"create_room\""
+    end
+  end
+
+  describe "/lobby — 방 리스트 + 액션" do
+    setup %{conn: conn} do
+      Cachex.clear(:recommendations_cache)
+      HappyTrizn.Rooms.clear_kick_bans()
+      alice = user_fixture(nickname: "ar_#{System.unique_integer([:positive])}")
+      {:ok, room} = HappyTrizn.Rooms.create(alice, %{game_type: "tetris", name: "lobby_visible_room"})
+      {:ok, conn: log_in_user(conn, alice), alice: alice, room: room}
+    end
+
+    test "활성 방 표시", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      assert html =~ "lobby_visible_room"
+      assert html =~ "활성 방"
+    end
+
+    test "join_room → /game/:type/:id 리다이렉트", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      assert {:error, {:redirect, %{to: redirect_path}}} =
+               view
+               |> element("button[phx-click='join_room'][phx-value-room-id='#{room.id}']")
+               |> render_click()
+
+      assert redirect_path =~ "/game/tetris/"
     end
   end
 end
