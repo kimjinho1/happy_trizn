@@ -49,8 +49,7 @@ config :bcrypt_elixir, :log_rounds, 4
 config :happy_trizn, :admin,
   id: "admin",
   password_hash: nil,
-  session_secret:
-    "test_admin_session_secret_for_phoenix_token_sign_must_be_long",
+  session_secret: "test_admin_session_secret_for_phoenix_token_sign_must_be_long",
   ip_whitelist: []
 
 # Mongo url nil → Application.start 시 Mongo supervisor 안 띄움.

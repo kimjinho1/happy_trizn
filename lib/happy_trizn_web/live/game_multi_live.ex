@@ -15,13 +15,16 @@ defmodule HappyTriznWeb.GameMultiLive do
   alias HappyTrizn.Rooms
   alias HappyTrizn.Games.GameSession
   alias HappyTrizn.Games.Registry, as: GameRegistry
+  alias HappyTrizn.UserGameSettings
 
   @impl true
   def mount(%{"game_type" => slug, "room_id" => room_id}, _session, socket) do
     nickname = socket.assigns[:current_nickname]
     user = socket.assigns[:current_user]
 
-    Logger.info("[game_multi] mount slug=#{slug} room=#{room_id} nickname=#{inspect(nickname)} user=#{inspect(user && user.id)}")
+    Logger.info(
+      "[game_multi] mount slug=#{slug} room=#{room_id} nickname=#{inspect(nickname)} user=#{inspect(user && user.id)}"
+    )
 
     cond do
       is_nil(nickname) ->
@@ -37,7 +40,10 @@ defmodule HappyTriznWeb.GameMultiLive do
         meta = GameRegistry.get_meta(slug)
 
         if meta.mode != :multi do
-          {:ok, socket |> put_flash(:error, "이 게임은 싱글 — /play/#{slug}") |> redirect(to: ~p"/play/#{slug}")}
+          {:ok,
+           socket
+           |> put_flash(:error, "이 게임은 싱글 — /play/#{slug}")
+           |> redirect(to: ~p"/play/#{slug}")}
         else
           case Rooms.get(room_id) do
             nil ->
@@ -51,9 +57,14 @@ defmodule HappyTriznWeb.GameMultiLive do
                   # 같은 계정 두 incognito 로 1v1 시뮬 가능).
                   player_id = socket.assigns.current_session.id
 
-                  case GameSession.player_join(pid, player_id, %{nickname: nickname, user_id: user.id}) do
+                  case GameSession.player_join(pid, player_id, %{
+                         nickname: nickname,
+                         user_id: user.id
+                       }) do
                     :ok ->
                       if connected?(socket), do: GameSession.subscribe_room(room_id)
+
+                      key_settings = UserGameSettings.get_for(user, slug)
 
                       {:ok,
                        socket
@@ -64,10 +75,12 @@ defmodule HappyTriznWeb.GameMultiLive do
                        |> assign(:player_id, player_id)
                        |> assign(:nickname, nickname)
                        |> assign(:game_state, GameSession.get_state(pid))
+                       |> assign(:key_settings, key_settings)
                        |> assign(:result, nil)}
 
                     {:reject, reason} ->
-                      {:ok, socket |> put_flash(:error, "입장 거부: #{reason}") |> redirect(to: ~p"/lobby")}
+                      {:ok,
+                       socket |> put_flash(:error, "입장 거부: #{reason}") |> redirect(to: ~p"/lobby")}
                   end
 
                 {:error, _} ->
@@ -93,18 +106,36 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   def handle_event("key", %{"key" => key}, socket) do
     if action = key_to_action(socket.assigns.slug, key) do
-      GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{"action" => action})
+      GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
+        "action" => action
+      })
     end
 
     {:noreply, socket}
   end
 
+  # Tetris 기본 키 바인딩 (server-side fallback — JS DAS/ARR 훅이 우선).
+  # 사용자별 커스텀 바인딩은 user_game_settings 에 저장 후 JS hook 으로 주입.
   defp key_to_action("tetris", "ArrowLeft"), do: "left"
   defp key_to_action("tetris", "ArrowRight"), do: "right"
-  defp key_to_action("tetris", "ArrowUp"), do: "rotate"
+  defp key_to_action("tetris", "ArrowUp"), do: "rotate_cw"
   defp key_to_action("tetris", "ArrowDown"), do: "soft_drop"
   defp key_to_action("tetris", " "), do: "hard_drop"
   defp key_to_action("tetris", "Spacebar"), do: "hard_drop"
+  defp key_to_action("tetris", "z"), do: "rotate_ccw"
+  defp key_to_action("tetris", "Z"), do: "rotate_ccw"
+  defp key_to_action("tetris", "x"), do: "rotate_cw"
+  defp key_to_action("tetris", "X"), do: "rotate_cw"
+  defp key_to_action("tetris", "Control"), do: "rotate_ccw"
+  defp key_to_action("tetris", "a"), do: "rotate_180"
+  defp key_to_action("tetris", "A"), do: "rotate_180"
+  defp key_to_action("tetris", "Shift"), do: "hold"
+  defp key_to_action("tetris", "c"), do: "hold"
+  defp key_to_action("tetris", "C"), do: "hold"
+  defp key_to_action("tetris", "j"), do: "left"
+  defp key_to_action("tetris", "l"), do: "right"
+  defp key_to_action("tetris", "k"), do: "soft_drop"
+  defp key_to_action("tetris", "i"), do: "rotate_cw"
   defp key_to_action(_, _), do: nil
 
   # ============================================================================
@@ -162,7 +193,11 @@ defmodule HappyTriznWeb.GameMultiLive do
     ~H"""
     <div
       id={"game-multi-#{@slug}-#{@room_id}"}
+      phx-hook={if @slug == "tetris", do: "TetrisInput", else: nil}
       phx-window-keyup="key"
+      data-das={@key_settings.das}
+      data-arr={@key_settings.arr}
+      data-key-bindings={Jason.encode!(@key_settings.bindings)}
       class="min-h-screen p-6 max-w-6xl mx-auto"
     >
       <header class="flex items-center justify-between mb-4">
@@ -170,7 +205,10 @@ defmodule HappyTriznWeb.GameMultiLive do
           <h1 class="text-2xl font-bold">{@meta.name}</h1>
           <p class="text-xs text-base-content/60">방: <code>{@room_id}</code> · {@nickname}</p>
         </div>
-        <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
+        <div class="flex gap-2">
+          <.link navigate={~p"/settings/games/#{@slug}"} class="btn btn-ghost btn-sm">⚙️ 옵션</.link>
+          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
+        </div>
       </header>
 
       <%= if @result && @result != %{} do %>
@@ -182,7 +220,9 @@ defmodule HappyTriznWeb.GameMultiLive do
       <.game_view slug={@slug} state={@game_state} player_id={@player_id} />
 
       <div class="mt-4 text-xs text-base-content/50">
-        키보드: ← → 이동, ↑ 회전, ↓ 소프트드롭, Space 하드드롭.
+        <%= if @slug == "tetris" do %>
+          키: ← → 이동, ↑/X 회전CW, Z/Ctrl 회전CCW, A 180회전, ↓ 소프트드롭, Space 하드드롭, Shift/C 홀드. 옵션에서 변경 가능.
+        <% end %>
       </div>
     </div>
     """
@@ -203,12 +243,30 @@ defmodule HappyTriznWeb.GameMultiLive do
       <div>
         <h3 class="font-semibold mb-2">나 ({@player_id |> String.slice(0..7)})</h3>
         <%= if @me do %>
-          <.tetris_board board={with_current(@me)} />
+          <div class="flex gap-2 items-start">
+            <.tetris_board board={with_current(@me)} />
+            <div class="flex flex-col gap-2">
+              <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
+              <.piece_preview label="다음" piece={@me.next} />
+            </div>
+          </div>
           <div class="text-sm mt-2 space-y-1">
             <div>점수: <strong>{@me.score}</strong></div>
             <div>라인: {@me.lines} · 레벨: {@me.level}</div>
-            <div>다음: {@me.next}</div>
-            <div>받을 가비지: {@me.pending_garbage}</div>
+            <div>
+              받을 가비지:
+              <span class={if @me.pending_garbage > 0, do: "text-error font-bold", else: ""}>
+                {@me.pending_garbage}
+              </span>
+            </div>
+            <div class="flex gap-2">
+              <%= if Map.get(@me, :combo, -1) >= 1 do %>
+                <span class="badge badge-warning">콤보 ×{@me.combo}</span>
+              <% end %>
+              <%= if Map.get(@me, :b2b, false) do %>
+                <span class="badge badge-info">B2B</span>
+              <% end %>
+            </div>
             <%= if @me.top_out do %>
               <div class="text-error font-bold">탑아웃</div>
             <% end %>
@@ -221,9 +279,27 @@ defmodule HappyTriznWeb.GameMultiLive do
       <div>
         <h3 class="font-semibold mb-2">상대</h3>
         <%= if @other do %>
-          <.tetris_board board={with_current(@other)} />
+          <div class="flex gap-2 items-start">
+            <.tetris_board board={with_current(@other)} />
+            <div class="flex flex-col gap-2">
+              <.piece_preview
+                label="홀드"
+                piece={@other.hold}
+                dim={Map.get(@other, :hold_used, false)}
+              />
+              <.piece_preview label="다음" piece={@other.next} />
+            </div>
+          </div>
           <div class="text-sm mt-2 space-y-1">
             <div>점수: {@other.score} · 라인: {@other.lines} · 레벨: {@other.level}</div>
+            <div class="flex gap-2">
+              <%= if Map.get(@other, :combo, -1) >= 1 do %>
+                <span class="badge badge-warning">콤보 ×{@other.combo}</span>
+              <% end %>
+              <%= if Map.get(@other, :b2b, false) do %>
+                <span class="badge badge-info">B2B</span>
+              <% end %>
+            </div>
             <%= if @other.top_out do %>
               <div class="text-error font-bold">탑아웃</div>
             <% end %>
@@ -246,6 +322,35 @@ defmodule HappyTriznWeb.GameMultiLive do
       </div>
     </div>
     """
+  end
+
+  attr :label, :string, required: true
+  attr :piece, :atom, default: nil
+  attr :dim, :boolean, default: false
+
+  defp piece_preview(assigns) do
+    ~H"""
+    <div class={["bg-base-200 p-2 rounded text-center min-w-[80px]", @dim && "opacity-40"]}>
+      <div class="text-xs text-base-content/60 mb-1">{@label}</div>
+      <%= if @piece do %>
+        <div class="grid grid-cols-4 gap-px">
+          <%= for {r, c} <- piece_preview_cells(@piece) do %>
+            <div
+              class={["w-3 h-3", cell_color(@piece)]}
+              style={"grid-row: #{r + 1}; grid-column: #{c + 1};"}
+            >
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="h-8"></div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp piece_preview_cells(type) do
+    HappyTrizn.Games.Tetris.Piece.cells(type, 0)
   end
 
   # board (player) 에 current piece overlay → 단일 grid 렌더용.

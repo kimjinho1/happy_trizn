@@ -19,14 +19,12 @@
             </div>
           </div>
         </div>
-
       <% @current_nickname -> %>
         <div class="card bg-base-200">
           <div class="card-body items-center text-center">
             <p class="text-lg">게스트: <strong>{@current_nickname}</strong></p>
             <p class="text-xs text-base-content/60">
-              기록은 저장되지 않습니다.
-              <.link href={~p"/register"} class="link">@trizn.kr 가입</.link>
+              기록은 저장되지 않습니다. <.link href={~p"/register"} class="link">@trizn.kr 가입</.link>
               으로 영구 기록.
             </p>
             <div class="card-actions mt-4">
@@ -35,12 +33,15 @@
             </div>
           </div>
         </div>
-
       <% true -> %>
         <div class="card bg-base-200">
           <div class="card-body space-y-4">
             <form action={~p"/guest"} method="post" class="space-y-3">
-              <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+              <input
+                type="hidden"
+                name="_csrf_token"
+                value={Plug.CSRFProtection.get_csrf_token()}
+              />
               <label class="form-control">
                 <span class="label-text mb-1">닉네임으로 즉시 입장</span>
                 <input

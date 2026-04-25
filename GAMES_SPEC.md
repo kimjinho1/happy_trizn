@@ -289,11 +289,13 @@ personal_records (싱글 게임용)
 
 | Sprint | 게임 / 기능 |
 |---|---|
-| 3b-3 | **Tetris 본격** — SRS / wall kick / hold / 180 회전 / lock delay / combo / B2B / T-spin |
-| 3b-4 | **사용자 옵션 시스템** — `user_game_settings` schema + `/settings/games/:type` LiveView + Tetris 옵션 (key binding + DAS/ARR/grid/ghost/skin/sound) |
-| 3b-5 | **JS 클라이언트 canvas** — Tetris board canvas render (블록 스킨 + 그리드 + 고스트) + DAS/ARR client-side timing |
-| 3b-6 | **통계** — 매 라운드 stats 계산 + match_results 저장 + LiveView 표시 |
+| 3b-3 ✅ | **Tetris 본격** — SRS + wall kick (JLSTZ/I), CW/CCW/180 회전, hold (swap+top_out), combo, B2B, T-spin (full/mini), 7-bag, garbage queue, top out |
+| 3b-3 ✅ | **사용자 옵션 시스템 (1차)** — `user_game_settings` schema + `/settings/games/:type` LiveView + Tetris key binding 폼 + DAS/ARR/grid/ghost/skin/sound 옵션 |
+| 3b-3 ✅ | **JS DAS/ARR hook** — TetrisInput hook (keydown→DAS→ARR 자동 반복, keyup release, blur cleanup) |
+| 3b-5 | **JS 클라이언트 canvas** — Tetris board canvas render (블록 스킨 + 그리드 + 고스트, 현재는 LiveView grid render) |
+| 3b-6 | **통계** — 매 라운드 PPS/KPP/APM/Finesse 계산 + match_results 저장 + LiveView 표시 |
 | 3b-7 | **사운드** — 효과음 + 음성 해설 |
+| 3b-8 | **Lock delay** — piece landed 후 일정 시간 (default 500ms) 동안 회전/이동 가능 |
 | 3c | Bomberman 풀 구현 |
 | 3d | Skribbl 풀 구현 |
 | 3e | Snake.io 풀 구현 |

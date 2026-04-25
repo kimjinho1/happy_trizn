@@ -185,7 +185,9 @@ defmodule HappyTrizn.Rooms do
   def subscribe_room(room_id), do: Phoenix.PubSub.subscribe(@pubsub, "room:" <> room_id)
 
   defp broadcast_lobby(msg), do: Phoenix.PubSub.broadcast(@pubsub, "rooms:lobby", msg)
-  defp broadcast_room(room_id, msg), do: Phoenix.PubSub.broadcast(@pubsub, "room:" <> room_id, msg)
+
+  defp broadcast_room(room_id, msg),
+    do: Phoenix.PubSub.broadcast(@pubsub, "room:" <> room_id, msg)
 
   defp normalize_keys(map) do
     Map.new(map, fn

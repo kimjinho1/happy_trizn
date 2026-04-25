@@ -62,5 +62,4 @@ defmodule HappyTriznWeb.RegistrationControllerTest do
       assert html_response(conn, 200) =~ "should be at least 8 character"
     end
   end
-
 end

@@ -191,7 +191,10 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       Cachex.clear(:recommendations_cache)
       HappyTrizn.Rooms.clear_kick_bans()
       alice = user_fixture(nickname: "ar_#{System.unique_integer([:positive])}")
-      {:ok, room} = HappyTrizn.Rooms.create(alice, %{game_type: "tetris", name: "lobby_visible_room"})
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(alice, %{game_type: "tetris", name: "lobby_visible_room"})
+
       {:ok, conn: log_in_user(conn, alice), alice: alice, room: room}
     end
 
@@ -241,7 +244,10 @@ defmodule HappyTriznWeb.LobbyLiveTest do
 
       assert {:error, {:redirect, %{to: path}}} =
                view
-               |> form("form[phx-submit='join_room']", %{"room-id" => room.id, "password" => "topsecret"})
+               |> form("form[phx-submit='join_room']", %{
+                 "room-id" => room.id,
+                 "password" => "topsecret"
+               })
                |> render_submit()
 
       assert path =~ "/game/tetris/"
@@ -252,7 +258,10 @@ defmodule HappyTriznWeb.LobbyLiveTest do
 
       html =
         view
-        |> form("form[phx-submit='join_room']", %{"room-id" => room.id, "password" => "wrongguess"})
+        |> form("form[phx-submit='join_room']", %{
+          "room-id" => room.id,
+          "password" => "wrongguess"
+        })
         |> render_submit()
 
       assert html =~ "비밀번호 오류"
@@ -263,7 +272,12 @@ defmodule HappyTriznWeb.LobbyLiveTest do
     test "게스트는 join_room 이벤트 차단", %{conn: conn} do
       conn = log_in_user(conn, nil, "guest_reg_#{System.unique_integer([:positive])}")
       alice = user_fixture(nickname: "alice_reg_#{System.unique_integer([:positive])}")
-      {:ok, room} = HappyTrizn.Rooms.create(alice, %{game_type: "tetris", name: "n#{System.unique_integer([:positive])}"})
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(alice, %{
+          game_type: "tetris",
+          name: "n#{System.unique_integer([:positive])}"
+        })
 
       {:ok, view, _} = live(conn, ~p"/lobby")
       # 게스트 → 친구/방 사이드바 안 보임. 직접 push (phx-click via render_hook)
@@ -274,7 +288,13 @@ defmodule HappyTriznWeb.LobbyLiveTest do
     test "강퇴된 user 가 같은 방 join 시도 → kicked flash", %{conn: conn} do
       host = user_fixture(nickname: "host_kick_#{System.unique_integer([:positive])}")
       target = user_fixture(nickname: "tgt_kick_#{System.unique_integer([:positive])}")
-      {:ok, room} = HappyTrizn.Rooms.create(host, %{game_type: "tetris", name: "k#{System.unique_integer([:positive])}"})
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "tetris",
+          name: "k#{System.unique_integer([:positive])}"
+        })
+
       {:ok, :kicked} = HappyTrizn.Rooms.kick(host, room.id, target.id)
 
       conn = log_in_user(conn, target)

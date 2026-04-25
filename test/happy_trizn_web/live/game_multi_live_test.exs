@@ -12,7 +12,9 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
   end
 
   defp create_tetris_room(host) do
-    {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "ml_#{System.unique_integer([:positive])}"})
+    {:ok, room} =
+      Rooms.create(host, %{game_type: "tetris", name: "ml_#{System.unique_integer([:positive])}"})
+
     room
   end
 
@@ -44,7 +46,9 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
     test "없는 방 → /lobby", %{conn: conn} do
       user = user_fixture()
       conn = log_in_user(conn, user)
-      assert {:error, {:redirect, %{to: "/lobby"}}} = live(conn, ~p"/game/tetris/00000000-0000-0000-0000-000000000000")
+
+      assert {:error, {:redirect, %{to: "/lobby"}}} =
+               live(conn, ~p"/game/tetris/00000000-0000-0000-0000-000000000000")
     end
 
     test "방 game_type 불일치 → /lobby", %{conn: conn} do
