@@ -1,0 +1,90 @@
+# 운영용 docker-compose (사내 개발 서버 배포 기준).
+# 호스트 노출 포트는 47xxx prefix 로 통일 — 다른 프로젝트 충돌 회피.
+# 개발 디버깅용 DB 포트 노출은 docker-compose.override.yml (gitignored) 에서.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: happy_trizn:latest
+    container_name: happy_trizn_app
+    restart: unless-stopped
+    ports:
+      - "4747:4000"
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MONGO_URL: "mongodb://mongo:27017/${MYSQL_DATABASE:-happy_trizn}"
+      PHX_SERVER: "true"
+      DATABASE_URL: "ecto://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    networks:
+      - happy_net
+
+  mysql:
+    image: mysql:8
+    container_name: happy_trizn_mysql
+    restart: unless-stopped
+    expose:
+      - "3306"   # 컨테이너 내부 네트워크에만 노출, 호스트 노출 X
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - happy_net
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - -h
+        - localhost
+        - -u
+        - root
+        - --password=${MYSQL_ROOT_PASSWORD}
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  mongo:
+    image: mongo:7
+    container_name: happy_trizn_mongo
+    restart: unless-stopped
+    expose:
+      - "27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - happy_net
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "db.adminCommand({ ping: 1 }).ok"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+networks:
+  happy_net:
+    name: happy_trizn_net   # 다른 compose 프로젝트 네트워크와 분리
+
+volumes:
+  mysql_data:
+    name: happy_trizn_mysql_data
+  mongo_data:
+    name: happy_trizn_mongo_data
