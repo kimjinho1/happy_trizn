@@ -8,6 +8,7 @@ defmodule HappyTriznWeb.LobbyLive do
 
   use HappyTriznWeb, :live_view
 
+  require Logger
   alias Phoenix.PubSub
   alias HappyTrizn.{RateLimit, Friends, Rooms}
   alias HappyTrizn.Games.Registry, as: GameRegistry
@@ -185,6 +186,8 @@ defmodule HappyTriznWeb.LobbyLive do
   end
 
   def handle_event("join_room", %{"room-id" => room_id} = params, socket) do
+    Logger.info("[lobby] join_room user=#{inspect(socket.assigns.user && socket.assigns.user.id)} room=#{room_id}")
+
     case socket.assigns.user do
       nil ->
         {:noreply, put_flash(socket, :error, "게스트는 방 입장 불가. @trizn.kr 가입 필요.")}
@@ -339,12 +342,14 @@ defmodule HappyTriznWeb.LobbyLive do
                         <span class="badge badge-sm">{room.game_type}</span>
                         <span class="font-semibold">{room.name}</span>
                         <%= if room.password_hash do %>
-                          <span class="text-xs">🔒</span>
+                          <span class="text-xs" title="비밀번호 방">🔒</span>
                         <% end %>
                       </div>
-                      <button phx-click="join_room" phx-value-room-id={room.id} class="btn btn-xs btn-primary">
-                        입장
-                      </button>
+                      <%= if room.password_hash do %>
+                        <button class="btn btn-xs btn-disabled" disabled>비번 방 (TODO)</button>
+                      <% else %>
+                        <button phx-click="join_room" phx-value-room-id={room.id} class="btn btn-xs btn-primary">입장</button>
+                      <% end %>
                     </div>
                   <% end %>
                 </div>

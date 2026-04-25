@@ -11,6 +11,7 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   use HappyTriznWeb, :live_view
 
+  require Logger
   alias HappyTrizn.Rooms
   alias HappyTrizn.Games.GameSession
   alias HappyTrizn.Games.Registry, as: GameRegistry
@@ -19,6 +20,8 @@ defmodule HappyTriznWeb.GameMultiLive do
   def mount(%{"game_type" => slug, "room_id" => room_id}, _session, socket) do
     nickname = socket.assigns[:current_nickname]
     user = socket.assigns[:current_user]
+
+    Logger.info("[game_multi] mount slug=#{slug} room=#{room_id} nickname=#{inspect(nickname)} user=#{inspect(user && user.id)}")
 
     cond do
       is_nil(nickname) ->
