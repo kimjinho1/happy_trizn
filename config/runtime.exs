@@ -23,6 +23,35 @@ end
 config :happy_trizn, HappyTriznWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# ============================================================================
+# 모든 환경 공통 (dev / test / prod) — 환경변수로 override 가능.
+# 이 블록은 dev.exs / prod.exs 가 적용된 뒤 실행되므로 후방 우선.
+# Docker Compose 부팅 시 .env 로 MYSQL_*, MONGO_URL, ADMIN_* 주입.
+# ============================================================================
+
+# MySQL: Repo override (env 있을 때만)
+if mysql_host = System.get_env("MYSQL_HOST") do
+  config :happy_trizn, HappyTrizn.Repo,
+    hostname: mysql_host,
+    port: String.to_integer(System.get_env("MYSQL_PORT", "3306")),
+    username: System.get_env("MYSQL_USER", "app"),
+    password: System.fetch_env!("MYSQL_PASSWORD"),
+    database: System.get_env("MYSQL_DATABASE", "happy_trizn"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
+end
+
+# MongoDB
+config :happy_trizn, :mongo,
+  url: System.get_env("MONGO_URL", "mongodb://mongo:27017/happy_trizn"),
+  pool_size: String.to_integer(System.get_env("MONGO_POOL_SIZE", "5"))
+
+# Admin (.env 고정 계정 — DB 분리)
+config :happy_trizn, :admin,
+  id: System.get_env("ADMIN_ID", "admin"),
+  password_hash: System.get_env("ADMIN_PASSWORD_HASH"),
+  session_secret: System.get_env("ADMIN_SESSION_SECRET"),
+  ip_whitelist: System.get_env("ADMIN_IP_WHITELIST", "") |> String.split(",", trim: true)
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
