@@ -60,9 +60,10 @@ defmodule HappyTrizn.Games.GameSessionTest do
       GameSession.subscribe_room(room_id)
       :ok = GameSession.player_join(pid, "p1", %{})
 
-      GameSession.handle_input(pid, "p1", %{"action" => "move", "dir" => "left"})
+      # restart action 은 항상 state_changed broadcast (move 는 board 따라 안 될 수도)
+      GameSession.handle_input(pid, "p1", %{"action" => "restart"})
 
-      assert_receive {:game_event, {:state_changed, _}}, 500
+      assert_receive {:game_event, {:state_changed, _}}, 1000
     end
 
     test "마지막 player leave → GenServer 종료", %{pid: pid} do

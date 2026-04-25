@@ -46,8 +46,8 @@ defmodule HappyTriznWeb.Router do
       # 싱글 게임 (2048 / Minesweeper / Pac-Man stub) — GameLive
       live "/play/:game_type", GameLive
 
-      # 멀티 게임 — GameSession + Channel 연결은 Sprint 3b. 현재 placeholder.
-      live "/game/:game_type/:room_id", GamePlaceholderLive
+      # 멀티 게임 — GameSession 직접 사용 (Tetris 풀 구현). Channel 분리는 향후.
+      live "/game/:game_type/:room_id", GameMultiLive
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)
