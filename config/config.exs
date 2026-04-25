@@ -11,6 +11,17 @@ config :happy_trizn,
   ecto_repos: [HappyTrizn.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# 게임 모듈 레지스트리. 새 게임 추가 = 이 list 에 한 줄 + GameBehaviour 구현 폴더.
+config :happy_trizn, :games, [
+  HappyTrizn.Games.Games2048,
+  HappyTrizn.Games.Minesweeper,
+  HappyTrizn.Games.PacMan,
+  HappyTrizn.Games.Tetris,
+  HappyTrizn.Games.Bomberman,
+  HappyTrizn.Games.Skribbl,
+  HappyTrizn.Games.SnakeIo
+]
+
 # Configure the endpoint
 config :happy_trizn, HappyTriznWeb.Endpoint,
   url: [host: "localhost"],
