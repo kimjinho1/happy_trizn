@@ -40,10 +40,12 @@ if mysql_host = System.get_env("MYSQL_HOST") do
     pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
 end
 
-# MongoDB
-config :happy_trizn, :mongo,
-  url: System.get_env("MONGO_URL", "mongodb://mongo:27017/happy_trizn"),
-  pool_size: String.to_integer(System.get_env("MONGO_POOL_SIZE", "5"))
+# MongoDB — test 환경은 mongo 안 띄움 (Chat 모듈 best-effort 검증).
+if config_env() in [:dev, :prod] do
+  config :happy_trizn, :mongo,
+    url: System.get_env("MONGO_URL", "mongodb://mongo:27017/happy_trizn"),
+    pool_size: String.to_integer(System.get_env("MONGO_POOL_SIZE", "5"))
+end
 
 # Admin (.env 고정 계정 — DB 분리)
 config :happy_trizn, :admin,

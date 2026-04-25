@@ -28,7 +28,7 @@
 
 ## 기능
 
-**Sprint 1 완료**:
+**Sprint 1 완료** (PR #1 + #2 + #3):
 
 - 게스트 모드: 닉네임만 입력하면 즉시 입장 (DB session, user_id=null)
 - 회원가입: `@trizn.kr` 도메인 정규식 락 + bcrypt 비번 (외부 가입 차단)
@@ -37,6 +37,9 @@
 - Admin 페이지: `.env` 고정 계정, `EnsureAdmin` Plug, 사용자 목록 / ban / unban
 - `admin_actions` 감사 로그
 - Rate limit (admin login 5/min, register 3/min, chat 5/10s)
+- WebSocket origin 화이트리스트 (PHX_HOST + localhost + 127.0.0.1)
+- oneshot migrate service — `docker compose up -d` 한 번에 마이그까지
+- 단위/통합 테스트 105개 (Plugs, Controllers, LiveView, 도메인 모듈)
 
 향후 (DESIGN.md 참고):
 
@@ -163,8 +166,8 @@ bin/mix deps.get                  # 의존성 설치
 bin/mix deps.update --all         # 의존성 업그레이드
 bin/mix compile                   # 컴파일
 bin/mix compile --warnings-as-errors --force
-bin/mix test                      # 단위 테스트 (Accounts 등)
-bin/mix test test/happy_trizn/accounts_test.exs:42   # 특정 줄
+MIX_ENV=test bin/mix test         # 전체 테스트 (105 tests, mysql/mongo 컨테이너 떠있어야)
+MIX_ENV=test bin/mix test test/happy_trizn/accounts_test.exs:42   # 특정 줄
 bin/mix format                    # 코드 포맷
 bin/mix phx.gen.secret            # 64 char 시크릿
 bin/mix phx.gen.secret 32         # 32 char
@@ -297,13 +300,15 @@ docker run --rm \
 
 호스트 노출 포트는 `47xxx` prefix 로 통일 (다른 프로젝트 충돌 회피).
 
-| 서비스 | 호스트 | 컨테이너 내부 |
-|---|---|---|
-| Phoenix | 4747 | 4000 |
-| MySQL (운영) | 노출 X | 4406 (.env `MYSQL_PORT`) |
-| MongoDB (운영) | 노출 X | 37017 |
-| MySQL (dev override) | 47306 | 4406 |
-| MongoDB (dev override) | 47017 | 37017 |
+| 서비스 | 호스트 | 컨테이너 내부 | `.env` 변수 |
+|---|---|---|---|
+| Phoenix | 4747 | 4000 | `PHX_PORT_HOST` / `PORT` |
+| MySQL (운영) | 노출 X | 4406 | `MYSQL_PORT` |
+| MongoDB (운영) | 노출 X | 37017 | `MONGO_PORT` |
+| MySQL (dev override) | 47306 | 4406 | (override.yml) |
+| MongoDB (dev override) | 47017 | 37017 | (override.yml) |
+
+`.env` 한 곳만 바꾸면 docker-compose 가 `${VAR:-기본값}` 으로 추종.
 
 Docker 네트워크: `happy_trizn_net`. 볼륨: `happy_trizn_mysql_data`, `happy_trizn_mongo_data`.
 
