@@ -113,6 +113,32 @@ docker compose up -d --build      # 빌드 후 부팅
 docker compose pull               # GHCR 등 remote 이미지 갱신 (운영)
 ```
 
+### 코드 변경 후 재배포 (한 줄 — 가장 자주 씀)
+
+```bash
+DOCKER_BUILDKIT=1 docker compose build app && \
+  docker compose up -d --no-deps app && \
+  docker compose exec app /app/bin/migrate
+```
+
+- `DOCKER_BUILDKIT=1` — BuildKit cache mount 활성 (deps.get / mix archive 재사용, 빌드 빠름)
+- `--no-deps app` — mysql/mongo 는 그대로 두고 app 만 재시작 (DB 안 끊김)
+- `migrate` — 새 마이그레이션 있으면 적용. 없어도 안전 (`Migrations already up`)
+
+캐시 다 날리고 풀 재빌드:
+
+```bash
+DOCKER_BUILDKIT=1 docker compose build --no-cache app && docker compose up -d --no-deps app
+```
+
+확인:
+
+```bash
+docker compose ps                       # 헬스 상태
+docker compose logs app --tail=20       # 부팅 로그
+curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:4747/   # 200 이면 OK
+```
+
 ### 상태 / 로그
 
 ```bash
