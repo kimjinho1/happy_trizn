@@ -43,9 +43,11 @@ defmodule HappyTriznWeb.Router do
       on_mount: HappyTriznWeb.Live.Hooks.FetchLiveUser do
       live "/lobby", LobbyLive
 
-      # Sprint 3 에서 GameLive 로 교체. 현재는 placeholder.
+      # 싱글 게임 (2048 / Minesweeper / Pac-Man stub) — GameLive
+      live "/play/:game_type", GameLive
+
+      # 멀티 게임 — GameSession + Channel 연결은 Sprint 3b. 현재 placeholder.
       live "/game/:game_type/:room_id", GamePlaceholderLive
-      live "/play/:game_type", GamePlaceholderLive
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)
