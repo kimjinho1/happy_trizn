@@ -59,16 +59,12 @@ defmodule HappyTriznWeb.Plugs.EnsureAdmin do
           {:error, :no_session}
 
         token ->
-          case Phoenix.Token.verify(secret_key(secret), "admin", token, max_age: 60 * 60 * 2) do
+          case Phoenix.Token.verify(secret, "admin", token, max_age: 60 * 60 * 2) do
             {:ok, _admin_id} -> :ok
             _ -> {:error, :invalid}
           end
       end
     end
-  end
-
-  defp secret_key(secret) do
-    %{secret_key_base: secret}
   end
 
   def cookie_name, do: @cookie_name
@@ -77,7 +73,7 @@ defmodule HappyTriznWeb.Plugs.EnsureAdmin do
   def put_admin_cookie(conn, admin_id) do
     cfg = Application.get_env(:happy_trizn, :admin, [])
     secret = Keyword.fetch!(cfg, :session_secret)
-    token = Phoenix.Token.sign(secret_key(secret), "admin", admin_id)
+    token = Phoenix.Token.sign(secret, "admin", admin_id)
 
     put_resp_cookie(conn, @cookie_name, token,
       max_age: 60 * 60 * 2,
