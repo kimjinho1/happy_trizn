@@ -12,7 +12,7 @@ services:
     container_name: happy_trizn_app
     restart: unless-stopped
     ports:
-      - "4747:4000"
+      - "${PHX_PORT_HOST:-4747}:${PORT:-4000}"
     env_file: .env
     environment:
       PHX_SERVER: "true"
@@ -32,9 +32,9 @@ services:
     container_name: happy_trizn_mysql
     restart: unless-stopped
     command:
-      - --port=${MYSQL_PORT:-3306}
+      - --port=${MYSQL_PORT:-4406}
     expose:
-      - "${MYSQL_PORT:-3306}"
+      - "${MYSQL_PORT:-4406}"
     environment:
       MYSQL_DATABASE: "${MYSQL_DATABASE}"
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
@@ -43,7 +43,7 @@ services:
     networks:
       - happy_net
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -P ${MYSQL_PORT:-3306} -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -P ${MYSQL_PORT:-4406} -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -55,15 +55,15 @@ services:
     restart: unless-stopped
     command:
       - --port
-      - "37017"
+      - "${MONGO_PORT:-37017}"
     expose:
-      - "37017"
+      - "${MONGO_PORT:-37017}"
     volumes:
       - mongo_data:/data/db
     networks:
       - happy_net
     healthcheck:
-      test: ["CMD", "mongosh", "--port", "37017", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      test: ["CMD-SHELL", "mongosh --port ${MONGO_PORT:-37017} --quiet --eval \"db.adminCommand({ ping: 1 }).ok\""]
       interval: 5s
       timeout: 3s
       retries: 20
