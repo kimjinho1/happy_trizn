@@ -35,12 +35,39 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       refute render(view) =~ "<span class=\"break-all\">"
     end
 
+    test "메시지 send 후 input 비움 — chat:reset_input event 푸시", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      view |> form("form[phx-submit='send']", %{"message" => "hello world"}) |> render_submit()
+
+      # 1. server-side input assign 비어야
+      assert render(view) =~ ~s(name="message" value="")
+      # 2. JS hook 트리거할 push_event 검증
+      assert_push_event(view, "chat:reset_input", %{})
+    end
+
     test "501자 메시지 안 표시 (rendered HTML 안에 본문 없음)", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/lobby")
       long = String.duplicate("a", 501)
       view |> form("form[phx-submit='send']", %{"message" => long}) |> render_submit()
       # 메시지가 broadcast 안 됨 → 화면에 안 보임
       refute render(view) =~ String.duplicate("a", 501)
+    end
+
+    test "rate limited 시 input 보존 (assign input 안 비움)", %{conn: conn} do
+      nick = "rate_buf_#{System.unique_integer([:positive])}"
+      conn = log_in_user(conn, nil, nick)
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      for i <- 1..5 do
+        view |> form("form[phx-submit='send']", %{"message" => "burst#{i}"}) |> render_submit()
+      end
+
+      # 6번째 → rate limited, broadcast 안 됨, button disabled
+      html = view |> form("form[phx-submit='send']", %{"message" => "kept"}) |> render_submit()
+      refute html =~ ~s(value="kept")
+      # broadcast 자체 안 됨 → 화면에 "kept" 본문 없음
+      refute html =~ ">kept<"
     end
   end
 

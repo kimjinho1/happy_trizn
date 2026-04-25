@@ -84,7 +84,12 @@ defmodule HappyTriznWeb.LobbyLive do
             HappyTrizn.Chat.log_message(msg, "lobby")
             PubSub.broadcast(HappyTrizn.PubSub, @chat_topic, {:chat_message, msg})
 
-            {:noreply, assign(socket, input: "", rate_limited: false)}
+            # 클라이언트 input value clear — morphdom 이 typed value 안 건드리므로
+            # 명시적 push_event 로 JS hook 이 reset.
+            {:noreply,
+             socket
+             |> assign(input: "", rate_limited: false)
+             |> push_event("chat:reset_input", %{})}
         end
     end
   end
@@ -354,7 +359,7 @@ defmodule HappyTriznWeb.LobbyLive do
                   <% end %>
                 <% end %>
               </div>
-              <form phx-submit="send" class="flex gap-2 mt-3">
+              <form id="chat-form" phx-submit="send" phx-hook="ChatReset" class="flex gap-2 mt-3">
                 <input type="text" name="message" value={@input} placeholder="메시지..." class="input input-bordered input-sm flex-1" maxlength={@max_message_length} autocomplete="off" />
                 <button type="submit" class="btn btn-primary btn-sm" disabled={@rate_limited}>보내기</button>
               </form>
