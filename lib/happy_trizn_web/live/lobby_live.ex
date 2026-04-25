@@ -194,26 +194,13 @@ defmodule HappyTriznWeb.LobbyLive do
 
       user ->
         password = Map.get(params, "password")
-        room = Rooms.get(room_id)
 
-        cond do
-          # 비번 있는 방 + password 없으면 prompt 띄움 (browser confirm 대신 modal flash)
-          room && room.password_hash && (is_nil(password) or password == "") ->
-            {:noreply,
-             socket
-             |> put_flash(
-               :error,
-               "비밀번호 방은 url 직접 접속 또는 추후 modal 지원 — 비번 없는 방에 시도하세요."
-             )}
-
-          true ->
-            case Rooms.join(user, room_id, password) do
-              {:ok, room} -> {:noreply, redirect(socket, to: ~p"/game/#{room.game_type}/#{room.id}")}
-              {:error, :wrong_password} -> {:noreply, put_flash(socket, :error, "비밀번호 오류")}
-              {:error, :kicked} -> {:noreply, put_flash(socket, :error, "강퇴된 방 (5분 ban)")}
-              {:error, :closed} -> {:noreply, put_flash(socket, :error, "방 종료됨")}
-              {:error, :not_found} -> {:noreply, put_flash(socket, :error, "방 없음")}
-            end
+        case Rooms.join(user, room_id, password) do
+          {:ok, room} -> {:noreply, redirect(socket, to: ~p"/game/#{room.game_type}/#{room.id}")}
+          {:error, :wrong_password} -> {:noreply, put_flash(socket, :error, "비밀번호 오류")}
+          {:error, :kicked} -> {:noreply, put_flash(socket, :error, "강퇴된 방 (5분 ban)")}
+          {:error, :closed} -> {:noreply, put_flash(socket, :error, "방 종료됨")}
+          {:error, :not_found} -> {:noreply, put_flash(socket, :error, "방 없음")}
         end
     end
   end
@@ -276,6 +263,7 @@ defmodule HappyTriznWeb.LobbyLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <Layouts.flash_group flash={@flash} />
     <div class="min-h-screen p-6 max-w-7xl mx-auto">
       <header class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold">Happy Trizn — 로비</h1>
@@ -346,7 +334,17 @@ defmodule HappyTriznWeb.LobbyLive do
                         <% end %>
                       </div>
                       <%= if room.password_hash do %>
-                        <button class="btn btn-xs btn-disabled" disabled>비번 방 (TODO)</button>
+                        <form phx-submit="join_room" class="flex items-center gap-1">
+                          <input type="hidden" name="room-id" value={room.id} />
+                          <input
+                            type="password"
+                            name="password"
+                            placeholder="비번"
+                            class="input input-bordered input-xs w-24"
+                            required
+                          />
+                          <button type="submit" class="btn btn-xs btn-primary">입장</button>
+                        </form>
                       <% else %>
                         <button phx-click="join_room" phx-value-room-id={room.id} class="btn btn-xs btn-primary">입장</button>
                       <% end %>

@@ -29,15 +29,18 @@ config :happy_trizn, HappyTriznWeb.Endpoint,
 # Docker Compose 부팅 시 .env 로 MYSQL_*, MONGO_URL, ADMIN_* 주입.
 # ============================================================================
 
-# MySQL: Repo override (env 있을 때만)
-if mysql_host = System.get_env("MYSQL_HOST") do
-  config :happy_trizn, HappyTrizn.Repo,
-    hostname: mysql_host,
-    port: String.to_integer(System.get_env("MYSQL_PORT", "3306")),
-    username: System.get_env("MYSQL_USER", "app"),
-    password: System.fetch_env!("MYSQL_PASSWORD"),
-    database: System.get_env("MYSQL_DATABASE", "happy_trizn"),
-    pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
+# MySQL: Repo override (env 있을 때만). test 환경은 제외 — test.exs 가 sandbox 모드
+# 로 별도 DB(happy_trizn_test) 사용하므로 운영 DB로 override 되면 격리 깨짐.
+if config_env() in [:dev, :prod] do
+  if mysql_host = System.get_env("MYSQL_HOST") do
+    config :happy_trizn, HappyTrizn.Repo,
+      hostname: mysql_host,
+      port: String.to_integer(System.get_env("MYSQL_PORT", "3306")),
+      username: System.get_env("MYSQL_USER", "app"),
+      password: System.fetch_env!("MYSQL_PASSWORD"),
+      database: System.get_env("MYSQL_DATABASE", "happy_trizn"),
+      pool_size: String.to_integer(System.get_env("POOL_SIZE", "10"))
+  end
 end
 
 # MongoDB — test 환경은 mongo 안 띄움 (Chat 모듈 best-effort 검증).
