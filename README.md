@@ -3,6 +3,7 @@
 사내 게임 허브. Elixir + Phoenix LiveView + MySQL + MongoDB.
 
 - 디자인 문서: [DESIGN.md](DESIGN.md)
+- 게임별 본격 spec (Jstris 수준): [GAMES_SPEC.md](GAMES_SPEC.md)
 - 테스트 계획: [TEST_PLAN.md](TEST_PLAN.md)
 - 게임 라인업: Tetris, Bomberman, Skribbl, Snake.io, 2048, Minesweeper, Pac-Man
 
