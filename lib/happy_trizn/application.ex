@@ -20,6 +20,10 @@ defmodule HappyTrizn.Application do
         {Cachex, name: :recommendations_cache},
         # Rate limit (admin login, chat throttle) — Hammer 7.x module-based
         HappyTrizn.RateLimit,
+        # GameSession process registry — 방 1개당 GenServer 1개 lookup.
+        {Registry, keys: :unique, name: HappyTrizn.Games.SessionRegistry},
+        # GameSession DynamicSupervisor — 방마다 spawn / 죽으면 정리.
+        {DynamicSupervisor, name: HappyTrizn.Games.SessionSupervisor, strategy: :one_for_one},
         # MongoDB — url 환경변수 있을 때만 시작 (호스트 직접 test 시 mongo 없을 수 있음)
         if(mongo_url,
           do:
