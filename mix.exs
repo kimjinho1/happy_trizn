@@ -65,7 +65,17 @@ defmodule HappyTrizn.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      # Auth
+      {:bcrypt_elixir, "~> 3.1"},
+      # MongoDB (chat_logs, game_events, presence_logs, analytics)
+      {:mongodb_driver, "~> 1.5"},
+      # Rate limiting (admin login, chat throttle)
+      {:hammer, "~> 7.0"},
+      # In-memory cache (친구 추천 사이드바, 60s TTL)
+      {:cachex, "~> 4.0"},
+      # Async pipeline (Sprint 4: Mongo game_events fallback queue)
+      {:broadway, "~> 1.1"}
     ]
   end
 

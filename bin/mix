@@ -26,16 +26,23 @@ if [ -t 0 ] && [ -t 1 ]; then
   DOCKER_TTY_FLAGS="-it"
 fi
 
-# alpine 이미지의 소수 의존성 설치 후 mix archive (phx_new) 강제 설치, 그 다음 사용자 명령 실행.
-# 매번 hex/rebar 다운로드는 느리지만 별도 dev 이미지 빌드 전까지는 충분히 빠름.
+# Hex/Mix 캐시 영구 보존 → 매 호출마다 deps 다시 안 받음
+docker volume create happy_trizn_hex_cache >/dev/null 2>&1 || true
+docker volume create happy_trizn_mix_cache >/dev/null 2>&1 || true
+
+# alpine 이미지의 빌드 의존성 설치 후 mix archive (phx_new) 강제 설치, 그 다음 사용자 명령 실행.
 docker run --rm $DOCKER_TTY_FLAGS \
+  --dns 8.8.8.8 --dns 1.1.1.1 \
+  -v "happy_trizn_hex_cache:/root/.hex" \
+  -v "happy_trizn_mix_cache:/root/.mix" \
   -v "$REPO_ROOT:/app" \
   -w /app \
   -e MIX_ENV="${MIX_ENV:-dev}" \
+  -e HEX_HTTP_TIMEOUT=60 \
   "$ELIXIR_IMAGE" \
   sh -c "
     set -e
-    apk add --no-cache --quiet git build-base openssl-dev >/dev/null 2>&1 || true
+    apk add --no-cache --quiet git build-base openssl-dev nodejs npm >/dev/null 2>&1 || true
     mix local.hex --force --if-missing >/dev/null 2>&1
     mix local.rebar --force --if-missing >/dev/null 2>&1
     if ! mix archive 2>/dev/null | grep -q phx_new; then
