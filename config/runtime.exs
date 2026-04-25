@@ -53,22 +53,23 @@ config :happy_trizn, :admin,
   ip_whitelist: System.get_env("ADMIN_IP_WHITELIST", "") |> String.split(",", trim: true)
 
 if config_env() == :prod do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
+  # MySQL 연결: DATABASE_URL 우선, 없으면 위쪽 공통 블록의 env-driven 설정
+  # (MYSQL_HOST/PORT/USER/PASSWORD/DATABASE) 그대로 사용. 비번에 URL reserved
+  # char 가 있어도 안전.
+  if database_url = System.get_env("DATABASE_URL") do
+    maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+    config :happy_trizn, HappyTrizn.Repo,
+      url: database_url,
+      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+      socket_options: maybe_ipv6
+  end
 
-  config :happy_trizn, HappyTrizn.Repo,
-    # ssl: true,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    # For machines with several cores, consider starting multiple pools of `pool_size`
-    # pool_count: 4,
-    socket_options: maybe_ipv6
+  unless System.get_env("DATABASE_URL") || System.get_env("MYSQL_HOST") do
+    raise """
+    환경 변수 누락. DATABASE_URL 또는 MYSQL_HOST/MYSQL_USER/MYSQL_PASSWORD/MYSQL_DATABASE 중 하나는 있어야 함.
+    """
+  end
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

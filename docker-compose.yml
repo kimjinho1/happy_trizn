@@ -1,5 +1,6 @@
 # 운영용 docker-compose (사내 개발 서버 배포 기준).
 # 호스트 노출 포트는 47xxx prefix 로 통일 — 다른 프로젝트 충돌 회피.
+# 컨테이너 내부 포트도 .env 와 일치 (MYSQL_PORT, MONGO 37017) — 충돌 회피.
 # 개발 디버깅용 DB 포트 노출은 docker-compose.override.yml (gitignored) 에서.
 
 services:
@@ -14,11 +15,10 @@ services:
       - "4747:4000"
     env_file: .env
     environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: "3306"
-      MONGO_URL: "mongodb://mongo:27017/${MYSQL_DATABASE:-happy_trizn}"
       PHX_SERVER: "true"
-      DATABASE_URL: "ecto://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
+      # DATABASE_URL 미사용 — 비번에 URL reserved char(&, %, ^ 등) 있어도
+      # 안전하게 .env 의 MYSQL_HOST/PORT/USER/PASSWORD 환경변수로 직접 전달
+      # (runtime.exs 가 처리).
     depends_on:
       mysql:
         condition: service_healthy
@@ -31,27 +31,20 @@ services:
     image: mysql:8
     container_name: happy_trizn_mysql
     restart: unless-stopped
+    command:
+      - --port=${MYSQL_PORT:-3306}
+      - --default-authentication-plugin=caching_sha2_password
     expose:
-      - "3306"   # 컨테이너 내부 네트워크에만 노출, 호스트 노출 X
+      - "${MYSQL_PORT:-3306}"
     environment:
       MYSQL_DATABASE: "${MYSQL_DATABASE}"
-      MYSQL_USER: "${MYSQL_USER}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
       - happy_net
     healthcheck:
-      test:
-        - CMD
-        - mysqladmin
-        - ping
-        - -h
-        - localhost
-        - -u
-        - root
-        - --password=${MYSQL_ROOT_PASSWORD}
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -P ${MYSQL_PORT:-3306} -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -61,19 +54,17 @@ services:
     image: mongo:7
     container_name: happy_trizn_mongo
     restart: unless-stopped
+    command:
+      - --port
+      - "37017"
     expose:
-      - "27017"
+      - "37017"
     volumes:
       - mongo_data:/data/db
     networks:
       - happy_net
     healthcheck:
-      test:
-        - CMD
-        - mongosh
-        - --quiet
-        - --eval
-        - "db.adminCommand({ ping: 1 }).ok"
+      test: ["CMD", "mongosh", "--port", "37017", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
       interval: 5s
       timeout: 3s
       retries: 20
