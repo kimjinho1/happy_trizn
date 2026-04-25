@@ -1,0 +1,51 @@
+# Build output / cache
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+
+# Editor / OS
+.elixir_ls/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Asset build output (Dockerfile rebuilds these)
+/priv/static/assets/
+/priv/static/cache_manifest.json
+
+# Node
+/assets/node_modules/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Compose override (로컬 디버깅 전용)
+docker-compose.override.yml
+
+# Git
+.git/
+.gitignore
+
+# Docs (image 안에서 불필요)
+DESIGN.md
+TEST_PLAN.md
+README.md
+AGENTS.md
+
+# Test artifacts
+/test/
+test_*.exs
+*_test.exs
+
+# Helper scripts (image 안에서 호출 안 함)
+/bin/mix
+
+# Tarballs
+happy_trizn-*.tar

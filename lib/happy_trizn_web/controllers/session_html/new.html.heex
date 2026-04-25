@@ -1,0 +1,56 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-md space-y-6">
+    <div class="text-center">
+      <h1 class="text-3xl font-bold">로그인</h1>
+      <p class="mt-2 text-sm text-base-content/70">@trizn.kr 계정</p>
+    </div>
+
+    <div class="card bg-base-200">
+      <div class="card-body">
+        <%= if @error do %>
+          <div class="alert alert-error mb-2">
+            <span>{@error}</span>
+          </div>
+        <% end %>
+
+        <form action={~p"/login"} method="post" class="space-y-3">
+          <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+
+          <label class="form-control">
+            <span class="label-text">이메일</span>
+            <input
+              type="email"
+              name="session[email]"
+              placeholder="you@trizn.kr"
+              class="input input-bordered w-full"
+              required
+              autofocus
+            />
+          </label>
+
+          <label class="form-control">
+            <span class="label-text">비밀번호</span>
+            <input
+              type="password"
+              name="session[password]"
+              class="input input-bordered w-full"
+              required
+            />
+          </label>
+
+          <button type="submit" class="btn btn-primary w-full mt-2">로그인</button>
+        </form>
+
+        <p class="text-xs text-center mt-4 text-base-content/60">
+          계정이 없나요?
+          <.link href={~p"/register"} class="link">@trizn.kr 가입</.link>
+        </p>
+        <p class="text-xs text-center text-base-content/60">
+          <.link href={~p"/"} class="link">메인으로</.link>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

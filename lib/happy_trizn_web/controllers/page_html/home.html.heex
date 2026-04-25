@@ -1,0 +1,73 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-md space-y-8">
+    <div class="text-center">
+      <h1 class="text-4xl font-bold tracking-tight">Happy Trizn</h1>
+      <p class="mt-2 text-base-content/70 text-sm">사내 게임 허브</p>
+    </div>
+
+    <%= cond do %>
+      <% @current_user -> %>
+        <div class="card bg-base-200">
+          <div class="card-body items-center text-center">
+            <p class="text-lg">환영합니다, <strong>{@current_user.nickname}</strong> 님</p>
+            <p class="text-xs text-base-content/60">{@current_user.email}</p>
+            <div class="card-actions mt-4">
+              <.link navigate={~p"/lobby"} class="btn btn-primary">로비 입장</.link>
+              <.link href={~p"/logout"} method="delete" class="btn btn-ghost">로그아웃</.link>
+            </div>
+          </div>
+        </div>
+
+      <% @current_nickname -> %>
+        <div class="card bg-base-200">
+          <div class="card-body items-center text-center">
+            <p class="text-lg">게스트: <strong>{@current_nickname}</strong></p>
+            <p class="text-xs text-base-content/60">
+              기록은 저장되지 않습니다.
+              <.link href={~p"/register"} class="link">@trizn.kr 가입</.link>
+              으로 영구 기록.
+            </p>
+            <div class="card-actions mt-4">
+              <.link navigate={~p"/lobby"} class="btn btn-primary">로비 입장</.link>
+              <.link href={~p"/logout"} method="delete" class="btn btn-ghost">나가기</.link>
+            </div>
+          </div>
+        </div>
+
+      <% true -> %>
+        <div class="card bg-base-200">
+          <div class="card-body space-y-4">
+            <form action={~p"/guest"} method="post" class="space-y-3">
+              <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+              <label class="form-control">
+                <span class="label-text mb-1">닉네임으로 즉시 입장</span>
+                <input
+                  type="text"
+                  name="guest[nickname]"
+                  placeholder="닉네임 (2~32자)"
+                  class="input input-bordered w-full"
+                  minlength="2"
+                  maxlength="32"
+                  required
+                />
+              </label>
+              <button class="btn btn-primary w-full" type="submit">게스트 입장</button>
+            </form>
+
+            <div class="divider text-xs text-base-content/50">또는</div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <.link href={~p"/login"} class="btn btn-outline btn-sm">로그인</.link>
+              <.link href={~p"/register"} class="btn btn-outline btn-sm">@trizn.kr 가입</.link>
+            </div>
+          </div>
+        </div>
+    <% end %>
+
+    <p class="text-center text-xs text-base-content/40">
+      <.link href={~p"/admin/login"} class="hover:text-base-content/70">admin</.link>
+    </p>
+  </div>
+</div>

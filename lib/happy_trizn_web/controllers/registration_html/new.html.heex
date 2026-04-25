@@ -1,0 +1,72 @@
+<Layouts.flash_group flash={@flash} />
+
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-md space-y-6">
+    <div class="text-center">
+      <h1 class="text-3xl font-bold">회원가입</h1>
+      <p class="mt-2 text-sm text-base-content/70">
+        <code>@trizn.kr</code> 도메인 메일만 가입 가능
+      </p>
+    </div>
+
+    <div class="card bg-base-200">
+      <div class="card-body">
+        <.form for={@changeset} action={~p"/register"} class="space-y-3">
+          <label class="form-control">
+            <span class="label-text">이메일</span>
+            <input
+              type="email"
+              name="user[email]"
+              placeholder="you@trizn.kr"
+              class={["input input-bordered w-full", error_class(@changeset, :email)]}
+              required
+            />
+            <%= if msg = error_msg(@changeset, :email) do %>
+              <span class="label-text-alt text-error mt-1">{msg}</span>
+            <% end %>
+          </label>
+
+          <label class="form-control">
+            <span class="label-text">닉네임</span>
+            <input
+              type="text"
+              name="user[nickname]"
+              minlength="2"
+              maxlength="32"
+              class={["input input-bordered w-full", error_class(@changeset, :nickname)]}
+              required
+            />
+            <%= if msg = error_msg(@changeset, :nickname) do %>
+              <span class="label-text-alt text-error mt-1">{msg}</span>
+            <% end %>
+          </label>
+
+          <label class="form-control">
+            <span class="label-text">비밀번호 (8~72자)</span>
+            <input
+              type="password"
+              name="user[password]"
+              minlength="8"
+              maxlength="72"
+              class={["input input-bordered w-full", error_class(@changeset, :password)]}
+              required
+            />
+            <%= if msg = error_msg(@changeset, :password) do %>
+              <span class="label-text-alt text-error mt-1">{msg}</span>
+            <% end %>
+          </label>
+
+          <button type="submit" class="btn btn-primary w-full mt-2">가입</button>
+        </.form>
+
+        <p class="text-xs text-center mt-4 text-base-content/60">
+          이미 계정이 있나요?
+          <.link href={~p"/login"} class="link">로그인</.link>
+        </p>
+        <p class="text-xs text-center text-base-content/60">
+          <.link href={~p"/"} class="link">메인으로</.link>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
