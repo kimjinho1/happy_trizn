@@ -100,6 +100,7 @@ MIX_ENV=test bin/mix test
 - Tetris ranking (Sprint 3l-3) — top_out_at monotonic_time 추적, game_over.ranking 정렬 (winner 1등 / 늦게 죽은 사람이 위), 🥇🥈🥉 modal UI ✅
 - Tetris live HUD (Sprint 3l-4) — public_player 에 pps/apm/vs/kpp/garbage_sent 포함, 매 lock broadcast 시 갱신, UI grid-cols-3 사이드 패널 ✅
 - Bomberman ranking modal (Sprint 3l-6) — game_over.ranking, dead_at monotonic 순서, 🥇🥈🥉 + 본인 row primary highlight + 생존/💥 표시 ✅
+- Skribbl ranking modal (Sprint 3l-7) — 점수 내림차순, 🥇🥈🥉 + 본인 row primary highlight + 점수 표시 (Tetris/Bomberman 와 일관) ✅
 
 ## E2E 미구현 (계획)
 

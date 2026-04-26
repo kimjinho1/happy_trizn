@@ -1874,10 +1874,22 @@ defmodule HappyTriznWeb.GameMultiLive do
     winner = winner_id && Map.get(assigns.state.players, winner_id)
     me_won? = winner_id == assigns.player_id
 
-    sorted =
-      assigns.state.players |> Enum.sort_by(fn {_, p} -> -p.score end) |> Enum.take(8)
+    # 점수 내림차순. {player_id, public_player} → ranking entry.
+    ranking =
+      assigns.state.players
+      |> Enum.sort_by(fn {_, p} -> -p.score end)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {{id, p}, rank} ->
+        %{
+          rank: rank,
+          player_id: id,
+          nickname: Map.get(p, :nickname, "anon"),
+          score: p.score,
+          is_winner: id == winner_id
+        }
+      end)
 
-    assigns = assign(assigns, winner: winner, me_won?: me_won?, sorted: sorted)
+    assigns = assign(assigns, winner: winner, me_won?: me_won?, ranking: ranking)
 
     ~H"""
     <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
@@ -1899,17 +1911,24 @@ defmodule HappyTriznWeb.GameMultiLive do
           </div>
         </div>
 
-        <ol class="mb-4 space-y-1 text-sm">
-          <%= for {{_, p}, idx} <- Enum.with_index(@sorted) do %>
-            <li class="flex justify-between">
-              <span>
-                <span class="badge badge-sm">#{idx + 1}</span>
-                <span class="font-mono ml-2">{p.nickname}</span>
-              </span>
-              <strong>{p.score}점</strong>
-            </li>
-          <% end %>
-        </ol>
+        <div class="mb-4">
+          <div class="font-semibold text-base-content/70 mb-2 text-center">최종 순위</div>
+          <div class="space-y-1 text-sm">
+            <%= for entry <- @ranking do %>
+              <div class={[
+                "flex items-center gap-2 px-3 py-1.5 rounded",
+                entry.player_id == @player_id && "bg-primary/20 ring-1 ring-primary",
+                entry.player_id != @player_id && "bg-base-200"
+              ]}>
+                <span class="font-bold w-6 text-center">
+                  {rank_emoji(entry.rank)}
+                </span>
+                <span class="flex-1 truncate font-medium">{entry.nickname}</span>
+                <span class="text-xs font-bold">{entry.score}점</span>
+              </div>
+            <% end %>
+          </div>
+        </div>
 
         <button phx-click="skribbl_start_game" class="btn btn-primary w-full">
           🔄 다시 하기
