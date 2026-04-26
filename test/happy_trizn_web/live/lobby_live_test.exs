@@ -340,4 +340,57 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       assert html =~ "강퇴" or render(view) =~ "강퇴"
     end
   end
+
+  describe "친구 초대 (DM 자동 발송)" do
+    test "open_invite + send_invites → 선택 친구에게 DM 발송", %{conn: conn} do
+      host = user_fixture(nickname: "host_inv_#{System.unique_integer([:positive])}")
+      friend = user_fixture(nickname: "fri_inv_#{System.unique_integer([:positive])}")
+      {:ok, fr} = HappyTrizn.Friends.send_request(host, friend)
+      {:ok, _} = HappyTrizn.Friends.accept(friend, fr)
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "bomberman",
+          name: "inv_room_#{System.unique_integer([:positive])}"
+        })
+
+      conn = log_in_user(conn, host)
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      # 초대 버튼 — 친구 있으면 노출.
+      html = render(view)
+      assert html =~ "phx-click=\"open_invite\""
+
+      # modal open.
+      view
+      |> element("button[phx-click='open_invite'][phx-value-room-id='#{room.id}']")
+      |> render_click()
+
+      assert render(view) =~ "친구 초대"
+
+      # 친구 체크 + 발송.
+      view
+      |> form("form[phx-submit='send_invites']", %{"friend_ids" => [friend.id]})
+      |> render_submit()
+
+      # DB 에 friend 받은 DM 1개.
+      thread = HappyTrizn.Messages.list_thread(host, friend)
+      assert length(thread) == 1
+      msg = hd(thread)
+      assert msg.from_user_id == host.id
+      assert msg.to_user_id == friend.id
+      assert msg.body =~ "/game/bomberman/#{room.id}"
+    end
+
+    test "친구 없으면 초대 버튼 X", %{conn: conn} do
+      host = user_fixture()
+
+      {:ok, _room} =
+        HappyTrizn.Rooms.create(host, %{game_type: "bomberman", name: "no_fri"})
+
+      conn = log_in_user(conn, host)
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      refute html =~ "phx-click=\"open_invite\""
+    end
+  end
 end

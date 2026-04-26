@@ -166,8 +166,8 @@ defmodule HappyTriznWeb.DmLive do
     <div class="max-w-5xl mx-auto p-4">
       <h1 class="text-2xl font-bold mb-4">💬 DM</h1>
 
-      <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 h-[calc(100vh-200px)]">
-        <aside class="bg-base-200 rounded p-2 overflow-y-auto">
+      <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+        <aside class="bg-base-200 rounded p-2 overflow-y-auto h-[70vh]">
           <h2 class="text-sm font-semibold px-2 py-1 text-base-content/60">대화 상대</h2>
           <%= if @threads == [] do %>
             <div class="text-xs text-base-content/40 px-2 py-3">
@@ -230,7 +230,7 @@ defmodule HappyTriznWeb.DmLive do
             <div
               id="dm-thread-scroll"
               phx-hook="ChatScroll"
-              class="flex-1 overflow-y-auto p-3 flex flex-col-reverse gap-2"
+              class="overflow-y-auto p-3 flex flex-col-reverse gap-2 h-[60vh]"
             >
               <%= if @messages == [] do %>
                 <div class="text-xs text-base-content/40 text-center my-auto">메시지 없음 — 첫 인사를</div>
@@ -296,7 +296,8 @@ defmodule HappyTriznWeb.DmLive do
 
   defp dm_bubble(assigns) do
     is_me = assigns.msg.from_user_id == assigns.me.id
-    assigns = assign(assigns, :is_me, is_me)
+    parts = body_with_links(assigns.msg.body || "")
+    assigns = assigns |> assign(:is_me, is_me) |> assign(:parts, parts)
 
     ~H"""
     <div class={["flex", @is_me && "justify-end"]}>
@@ -305,7 +306,22 @@ defmodule HappyTriznWeb.DmLive do
         @is_me && "bg-primary text-primary-content rounded-br-sm",
         !@is_me && "bg-base-200 rounded-bl-sm"
       ]}>
-        <div>{@msg.body}</div>
+        <div>
+          <%= for part <- @parts do %>
+            <%= case part do %>
+              <% {:text, t} -> %>
+                {t}
+              <% {:link, url} -> %>
+                <.link
+                  navigate={url}
+                  class="underline font-semibold hover:opacity-80"
+                  title="게임 방 입장"
+                >
+                  🎮 {url}
+                </.link>
+            <% end %>
+          <% end %>
+        </div>
         <div class="text-[10px] opacity-50 mt-1 text-right">
           {format_ts(@msg.inserted_at)}
         </div>
@@ -313,6 +329,27 @@ defmodule HappyTriznWeb.DmLive do
     </div>
     """
   end
+
+  # 본문 안 `/game/<slug>/<room_id>` 패턴을 link 로 분해.
+  # 결과: list of `{:text, str}` | `{:link, url}`.
+  @link_regex ~r{(/game/[a-zA-Z0-9_]+/[a-zA-Z0-9_-]+)}
+
+  defp body_with_links(body) when is_binary(body) do
+    case Regex.run(@link_regex, body, return: :index) do
+      nil ->
+        [{:text, body}]
+
+      [{start, len} | _] ->
+        before = String.slice(body, 0, start)
+        url = String.slice(body, start, len)
+        rest_start = start + len
+        rest = String.slice(body, rest_start, byte_size(body))
+
+        [{:text, before}, {:link, url}] ++ body_with_links(rest)
+    end
+  end
+
+  defp body_with_links(_), do: [{:text, ""}]
 
   defp dm_preview(nil), do: "(메시지 없음)"
   defp dm_preview(%{body: body}), do: String.slice(body || "", 0, 30)
