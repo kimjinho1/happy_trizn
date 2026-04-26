@@ -63,7 +63,11 @@ defmodule HappyTriznWeb.GameSettingsLive do
     if is_nil(user) do
       {:noreply, put_flash(socket, :error, "게스트는 옵션 저장 불가 (브라우저 임시 저장만)")}
     else
-      keys = keys_str |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+      keys =
+        keys_str
+        |> String.split(",", trim: true)
+        |> Enum.map(&(&1 |> String.trim() |> parse_key()))
+        |> Enum.reject(&(&1 == ""))
 
       new_bindings = Map.put(socket.assigns.settings.bindings, action, keys)
 
@@ -130,9 +134,12 @@ defmodule HappyTriznWeb.GameSettingsLive do
     ~H"""
     <div class="max-w-3xl mx-auto p-6">
       <Layouts.flash_group flash={@flash} />
-      <header class="mb-6">
-        <h1 class="text-2xl font-bold">게임 옵션</h1>
-        <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
+      <header class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold">게임 옵션</h1>
+          <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
+        </div>
+        <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
       </header>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -163,7 +170,10 @@ defmodule HappyTriznWeb.GameSettingsLive do
             <p class="text-warning text-sm">게스트는 변경 후 저장 안 됨 (브라우저 다시 열면 초기화).</p>
           <% end %>
         </div>
-        <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+        <div class="flex gap-2">
+          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
+        </div>
       </header>
 
       <section class="mb-6">
@@ -179,7 +189,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
               <input
                 type="text"
                 name="keys"
-                value={(@settings.bindings[action] || []) |> Enum.join(", ")}
+                value={display_keys(@settings.bindings[action] || [])}
                 class="input input-bordered input-sm flex-1"
                 disabled={is_nil(@current_user)}
               />
@@ -288,7 +298,10 @@ defmodule HappyTriznWeb.GameSettingsLive do
             <p class="text-warning text-sm">게스트는 변경 후 저장 안 됨.</p>
           <% end %>
         </div>
-        <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+        <div class="flex gap-2">
+          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
+        </div>
       </header>
 
       <%= if map_size(@settings.bindings) > 0 do %>
@@ -303,7 +316,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
                 <input
                   type="text"
                   name="keys"
-                  value={(@settings.bindings[action] || []) |> Enum.join(", ")}
+                  value={display_keys(@settings.bindings[action] || [])}
                   class="input input-bordered input-sm flex-1"
                   disabled={is_nil(@current_user)}
                 />
@@ -392,6 +405,22 @@ defmodule HappyTriznWeb.GameSettingsLive do
       {"pause", "일시정지"}
     ]
   end
+
+  # Display: " " → "Space" (UI 친화 표기). 그 외엔 그대로.
+  defp display_keys(keys) when is_list(keys) do
+    keys |> Enum.map(&display_key/1) |> Enum.join(", ")
+  end
+
+  defp display_key(" "), do: "Space"
+  defp display_key("\t"), do: "Tab"
+  defp display_key(k), do: k
+
+  # Parse: "Space" → " " 등 reverse 매핑. 사용자가 친화 이름 적어도 KeyboardEvent.key 와 매칭.
+  defp parse_key("Space"), do: " "
+  defp parse_key("space"), do: " "
+  defp parse_key("Tab"), do: "\t"
+  defp parse_key(""), do: ""
+  defp parse_key(k), do: k
 
   # Boolean-like.
   defp normalize_option_value(_k, "true"), do: true

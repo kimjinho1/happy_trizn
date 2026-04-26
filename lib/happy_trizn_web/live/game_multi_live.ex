@@ -221,7 +221,7 @@ defmodule HappyTriznWeb.GameMultiLive do
     <div
       id={"game-multi-#{@slug}-#{@room_id}"}
       phx-hook={if @slug == "tetris", do: "TetrisInput", else: nil}
-      phx-window-keyup="key"
+      phx-window-keyup={if @slug == "tetris", do: nil, else: "key"}
       data-das={@key_settings.das}
       data-arr={@key_settings.arr}
       data-key-bindings={Jason.encode!(@key_settings.bindings)}
@@ -233,7 +233,14 @@ defmodule HappyTriznWeb.GameMultiLive do
           <p class="text-xs text-base-content/60">방: <code>{@room_id}</code> · {@nickname}</p>
         </div>
         <div class="flex gap-2">
-          <.link navigate={~p"/settings/games/#{@slug}"} class="btn btn-ghost btn-sm">⚙️ 옵션</.link>
+          <.link
+            href={~p"/settings/games/#{@slug}"}
+            target="_blank"
+            class="btn btn-ghost btn-sm"
+            title="새 탭에서 열기 — 게임 안 멈춤"
+          >
+            ⚙️ 옵션
+          </.link>
           <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
         </div>
       </header>

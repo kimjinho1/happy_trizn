@@ -103,4 +103,38 @@ defmodule HappyTrizn.Games.GameSessionTest do
       assert Process.alive?(pid)
     end
   end
+
+  describe "terminate cleanup (room close)" do
+    test "GameSession 종료 시 Rooms.close_by_id 호출 → 방 status closed" do
+      Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(HappyTrizn.Repo, {:shared, self()})
+
+      {:ok, host} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "gst#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "gst#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "tetris",
+          name: "term_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room.id),
+          room_id: room.id,
+          game_type: "tetris"
+        )
+
+      ref = Process.monitor(pid)
+      GenServer.stop(pid, :normal)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 1000
+
+      # 방 닫혔어야
+      assert HappyTrizn.Rooms.get(room.id).status == "closed"
+    end
+  end
 end

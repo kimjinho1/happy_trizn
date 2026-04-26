@@ -172,6 +172,16 @@ defmodule HappyTrizn.Games.GameSession do
       state.module.terminate(reason, state.game_state)
     end
 
+    # GameSession 종료 = 방도 닫기. 0명 leave / game_over / 비정상 종료 모두 cleanup.
+    # 멀티 게임 only (room_id 있을 때).
+    if state.room_id do
+      try do
+        HappyTrizn.Rooms.close_by_id(state.room_id)
+      rescue
+        _ -> :ok
+      end
+    end
+
     :ok
   end
 
