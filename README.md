@@ -1,6 +1,6 @@
 # Happy Trizn
 
-재로 만드는 사내 게임 허브. Elixir + Phoenix LiveView + MySQL + MongoDB.
+재미로 만드는 사내 게임 허브. Elixir + Phoenix LiveView + MySQL + MongoDB.
 
 - 디자인 문서: [DESIGN.md](DESIGN.md)
 - 게임별 본격 spec (Jstris 수준): [GAMES_SPEC.md](GAMES_SPEC.md)
