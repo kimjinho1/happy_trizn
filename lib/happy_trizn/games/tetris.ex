@@ -199,8 +199,16 @@ defmodule HappyTrizn.Games.Tetris do
          false <- player.top_out,
          status when status in [:playing, :practice] <- state.status do
       # 키 카운터 (KPP) — 인식된 action 만 카운트, hold 가 noop 이어도 카운트.
+      # piece_inputs — Sprint 3i Finesse 측정용 (left/right/rotate* 만 cnt).
       if known_action?(action) do
-        bumped = %{player | keys_pressed: player.keys_pressed + 1}
+        finesse_inc = if finesse_action?(action), do: 1, else: 0
+
+        bumped = %{
+          player
+          | keys_pressed: player.keys_pressed + 1,
+            piece_inputs: player.piece_inputs + finesse_inc
+        }
+
         bumped_state = put_in(state.players[player_id], bumped)
         do_action(player_id, action, bumped, bumped_state)
       else
@@ -214,9 +222,12 @@ defmodule HappyTrizn.Games.Tetris do
   def handle_input(_, _, state), do: {:ok, state, []}
 
   @known_actions ~w(left right rotate rotate_cw rotate_ccw rotate_180 soft_drop hard_drop hold)
+  @finesse_actions ~w(left right rotate rotate_cw rotate_ccw rotate_180)
 
   defp known_action?(a) when is_binary(a), do: a in @known_actions
   defp known_action?(_), do: false
+
+  defp finesse_action?(a), do: a in @finesse_actions
 
   defp do_action(player_id, "left", player, state),
     do: move_horizontal(player_id, player, state, -1)
@@ -412,7 +423,8 @@ defmodule HappyTrizn.Games.Tetris do
               gravity_counter: 0,
               lock_delay_ms: nil,
               lock_resets: 0,
-              hold_count: player.hold_count + 1
+              hold_count: player.hold_count + 1,
+              piece_inputs: 0
           }
 
           new_state = put_in(state.players[player_id], new_player)
@@ -437,7 +449,8 @@ defmodule HappyTrizn.Games.Tetris do
               gravity_counter: 0,
               lock_delay_ms: nil,
               lock_resets: 0,
-              hold_count: player.hold_count + 1
+              hold_count: player.hold_count + 1,
+              piece_inputs: 0
           }
 
           new_state = put_in(state.players[player_id], new_player)
@@ -451,6 +464,20 @@ defmodule HappyTrizn.Games.Tetris do
   # ============================================================================
 
   defp lock_and_advance(player_id, player, state) do
+    # Sprint 3i Finesse — actual piece_inputs vs optimal.
+    {_lock_row, lock_col} = player.current.origin
+
+    finesse_violations_inc =
+      case HappyTrizn.Games.Tetris.Finesse.evaluate(
+             player.current.type,
+             player.current.rotation,
+             lock_col,
+             player.piece_inputs
+           ) do
+        :violation -> 1
+        :ok -> 0
+      end
+
     locked_board =
       Board.lock_piece(
         player.board,
@@ -542,7 +569,8 @@ defmodule HappyTrizn.Games.Tetris do
           pieces_placed: player.pieces_placed + 1,
           garbage_sent: player.garbage_sent + garbage_send,
           garbage_received: player.garbage_received + garbage_applied,
-          garbage_wasted: player.garbage_wasted + wasted_inc
+          garbage_wasted: player.garbage_wasted + wasted_inc,
+          finesse_violations: player.finesse_violations + finesse_violations_inc
       }
 
       new_players = Map.put(state.players, player_id, new_player)
@@ -572,7 +600,10 @@ defmodule HappyTrizn.Games.Tetris do
           pieces_placed: player.pieces_placed + 1,
           garbage_sent: player.garbage_sent + garbage_send,
           garbage_received: player.garbage_received + garbage_applied,
-          garbage_wasted: player.garbage_wasted + wasted_inc
+          garbage_wasted: player.garbage_wasted + wasted_inc,
+          # Sprint 3i Finesse — lock 시 평가 + spawn 직후 카운터 리셋.
+          finesse_violations: player.finesse_violations + finesse_violations_inc,
+          piece_inputs: 0
       }
 
       new_players = Map.put(state.players, player_id, new_player)
@@ -965,7 +996,8 @@ defmodule HappyTrizn.Games.Tetris do
       b2b: p.b2b,
       top_out: p.top_out,
       lock_delay_ms: p.lock_delay_ms,
-      pieces_placed: p.pieces_placed
+      pieces_placed: p.pieces_placed,
+      finesse_violations: p.finesse_violations
     }
   end
 
@@ -1010,6 +1042,8 @@ defmodule HappyTrizn.Games.Tetris do
       garbage_wasted: 0,
       hold_count: 0,
       finesse_violations: 0,
+      # Sprint 3i — spawn 부터 lock 까지의 left/right/rotate* 입력 수.
+      piece_inputs: 0,
       started_at: System.monotonic_time(:millisecond)
     }
   end

@@ -972,4 +972,44 @@ defmodule HappyTrizn.Games.TetrisTest do
       refute kicks == Piece.wall_kicks(:t, 0, 1, :cw)
     end
   end
+
+  describe "Finesse 통합 (Sprint 3i)" do
+    setup do: {:ok, state: join2()}
+
+    test "spawn 그대로 hard_drop → violations 0", %{state: state} do
+      # 입력 없이 바로 hard_drop = optimal=0, actual=0 → :ok.
+      {:ok, s, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      assert s.players["p1"].finesse_violations == 0
+      # spawn 직후 piece_inputs 리셋.
+      assert s.players["p1"].piece_inputs == 0
+    end
+
+    test "left 1번 + hard_drop → optimal=1, actual=1 → violations 0", %{state: state} do
+      {:ok, s, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      assert s.players["p1"].piece_inputs == 1
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, s)
+      assert s2.players["p1"].finesse_violations == 0
+    end
+
+    test "left + right (제자리) + hard_drop → actual=2 > optimal=0 → violation", %{state: state} do
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "right"}, s1)
+      {:ok, s3, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, s2)
+      assert s3.players["p1"].finesse_violations == 1
+    end
+
+    test "soft_drop / hard_drop / hold 는 finesse 입력 안 침", %{state: state} do
+      {:ok, s, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      assert s.players["p1"].piece_inputs == 0
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "hold"}, s)
+      assert s2.players["p1"].piece_inputs == 0
+    end
+
+    test "hold → 새 piece 의 piece_inputs 0 으로 리셋", %{state: state} do
+      {:ok, s, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      assert s.players["p1"].piece_inputs == 1
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "hold"}, s)
+      assert s2.players["p1"].piece_inputs == 0
+    end
+  end
 end
