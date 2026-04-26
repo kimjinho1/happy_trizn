@@ -67,12 +67,12 @@ defmodule HappyTrizn.Games.Skribbl do
   @impl true
   def meta do
     %{
-      name: "Skribbl",
+      name: "캐치마인드",
       slug: "skribbl",
       mode: :multi,
       max_players: @max_players,
       min_players: 2,
-      description: "그림 맞추기 (한국어)",
+      description: "그림 그리고 단어 맞추기 (한국어)",
       tick_interval_ms: @tick_ms
     }
   end

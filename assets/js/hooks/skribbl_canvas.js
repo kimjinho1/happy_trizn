@@ -52,6 +52,7 @@ export const SkribblCanvas = {
     this.canvas.removeEventListener("pointermove", this._move)
     window.removeEventListener("pointerup", this._up)
     this.canvas.removeEventListener("pointerleave", this._up)
+    if (this._toolClick) document.removeEventListener("click", this._toolClick)
   },
 
   parseDataset() {
@@ -60,15 +61,30 @@ export const SkribblCanvas = {
   },
 
   bindToolButtons() {
-    document.querySelectorAll("[data-skribbl-color]").forEach((b) => {
-      b.addEventListener("click", () => {
-        this.currentColor = b.dataset.skribblColor
-      })
-    })
-    document.querySelectorAll("[data-skribbl-size]").forEach((b) => {
-      b.addEventListener("click", () => {
-        this.currentSize = parseInt(b.dataset.skribblSize, 10) || 4
-      })
+    // Event delegation — LiveView 가 도구 버튼들을 re-render 해도 listener 유지.
+    // 버튼 자체에 직접 binding 하면 mount 시점에 없거나 DOM 교체 후 잃음.
+    this._toolClick = (e) => {
+      const colorBtn = e.target.closest("[data-skribbl-color]")
+      if (colorBtn) {
+        this.currentColor = colorBtn.dataset.skribblColor
+        this.highlightTool("color", this.currentColor)
+        return
+      }
+      const sizeBtn = e.target.closest("[data-skribbl-size]")
+      if (sizeBtn) {
+        this.currentSize = parseInt(sizeBtn.dataset.skribblSize, 10) || 4
+        this.highlightTool("size", String(this.currentSize))
+      }
+    }
+    document.addEventListener("click", this._toolClick)
+  },
+
+  highlightTool(kind, value) {
+    const sel = kind === "color" ? "[data-skribbl-color]" : "[data-skribbl-size]"
+    document.querySelectorAll(sel).forEach((b) => {
+      const matches = b.dataset[kind === "color" ? "skribblColor" : "skribblSize"] === value
+      b.classList.toggle("ring-2", matches)
+      b.classList.toggle("ring-primary", matches)
     })
   },
 

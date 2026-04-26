@@ -562,11 +562,11 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       _ = drawer_view
     end
 
-    test "글로벌 top nav (Happy Trizn + Skribbl) skribbl 화면에도 노출", %{conn: conn, room: room} do
+    test "글로벌 top nav (Happy Trizn + 캐치마인드) skribbl 화면에도 노출", %{conn: conn, room: room} do
       conn = Phoenix.ConnTest.get(conn, ~p"/game/skribbl/#{room.id}")
       html = Phoenix.ConnTest.html_response(conn, 200)
       assert html =~ "Happy Trizn"
-      assert html =~ "Skribbl"
+      assert html =~ "캐치마인드"
     end
 
     test "skribbl_chat 후 chat:reset_input push (입력창 자동 비움)", %{conn: conn, room: room} do
