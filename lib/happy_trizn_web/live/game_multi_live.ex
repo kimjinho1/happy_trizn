@@ -93,7 +93,8 @@ defmodule HappyTriznWeb.GameMultiLive do
 
         case GameSession.player_join(pid, player_id, %{
                nickname: nickname,
-               user_id: user.id
+               user_id: user.id,
+               avatar_url: user.avatar_url
              }) do
           :ok ->
             GameSession.subscribe_room(room_id)
@@ -1409,11 +1410,19 @@ defmodule HappyTriznWeb.GameMultiLive do
     "ring-2 ring-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.9)]"
   }
 
-  defp player_visual(_p, idx) do
-    avatar = elem(@player_avatars, rem(idx, 4))
+  defp player_visual(p, idx) do
     ring = elem(@player_rings, rem(idx, 4))
+    avatar_url = Map.get(p, :avatar_url)
 
-    ~s|<span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-base-100/80 #{ring}">#{avatar}</span>|
+    if is_binary(avatar_url) and avatar_url != "" do
+      # 사용자 업로드 사진 — 둥글게 자른 img.
+      ~s|<img src="#{avatar_url}" alt="" class="w-9 h-9 rounded-full object-cover #{ring}" />|
+    else
+      # fallback — 인덱스별 emoji.
+      avatar = elem(@player_avatars, rem(idx, 4))
+
+      ~s|<span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-base-100/80 #{ring}">#{avatar}</span>|
+    end
   end
 
   attr :players, :map, required: true

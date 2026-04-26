@@ -51,3 +51,6 @@ happy_trizn-*.tar
 # Ignore assets that are produced by build tools.
 # Ignore digested assets cache.
 # In case you use Node.js/npm, you want to ignore these.
+
+# 마이페이지 프로필 사진 (사용자 업로드 — runtime, 빌드 산출물 X).
+/priv/static/uploads/

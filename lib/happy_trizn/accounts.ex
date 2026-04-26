@@ -82,6 +82,17 @@ defmodule HappyTrizn.Accounts do
     |> Repo.update()
   end
 
+  @doc """
+  마이페이지 프로필 수정 — nickname / avatar_url.
+  - nickname unique 제약 검증.
+  - avatar_url 은 LiveView upload 후 path 를 받아 저장.
+  """
+  def update_profile(%User{} = user, attrs) do
+    user
+    |> User.profile_changeset(attrs)
+    |> Repo.update()
+  end
+
   # =========================================================================
   # 세션
   # =========================================================================

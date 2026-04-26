@@ -26,6 +26,9 @@ defmodule HappyTrizn.Accounts.User do
     field :password_hash, :string, redact: true
     field :status, :string, default: "active"
 
+    # `/uploads/avatars/<user_id>.<ext>` — 사용자가 업로드한 프로필 사진 경로. nil 이면 fallback.
+    field :avatar_url, :string
+
     timestamps(type: :utc_datetime)
   end
 
@@ -52,6 +55,20 @@ defmodule HappyTrizn.Accounts.User do
     user
     |> cast(attrs, [:status])
     |> validate_inclusion(:status, @valid_statuses)
+  end
+
+  @doc """
+  마이페이지 프로필 수정 — nickname / avatar_url.
+  password / email 은 별도 changeset (이번 마이페이지 범위 밖).
+  """
+  def profile_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:nickname, :avatar_url])
+    |> validate_required([:nickname])
+    |> validate_length(:nickname, min: 2, max: 32)
+    |> validate_format(:nickname, ~r/^[\p{L}\p{N}_\-]+$/u, message: "letters, numbers, _, - only")
+    |> validate_length(:avatar_url, max: 255)
+    |> unique_constraint(:nickname)
   end
 
   @doc "평문 비번을 저장된 해시와 비교 (timing-safe)."

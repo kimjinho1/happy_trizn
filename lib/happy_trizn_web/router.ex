@@ -56,6 +56,9 @@ defmodule HappyTriznWeb.Router do
       # 매치 히스토리 + 개인 기록 + 리더보드.
       live "/history", HistoryLive, :index
       live "/history/leaderboard/:game_type", HistoryLive, :leaderboard
+
+      # 마이페이지 — 닉네임 수정 + 프로필 사진 업로드 (등록 사용자 전용).
+      live "/me", ProfileLive
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)
