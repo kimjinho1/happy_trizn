@@ -46,6 +46,10 @@
       <% end %>
 
       <div class="ml-auto flex items-center gap-2">
+        <%= if assigns[:current_nickname] do %>
+          <a href="/history" class="btn btn-ghost btn-md" title="내 기록">🏆 기록</a>
+          <a href="/settings/games" class="btn btn-ghost btn-md" title="게임 옵션">⚙️ 옵션</a>
+        <% end %>
         <%= if user = assigns[:current_user] do %>
           <a href="/dm" class="btn btn-ghost btn-md text-xl relative" title="DM">
             💬 <% unread = HappyTrizn.Messages.unread_count(user) %>
@@ -64,15 +68,21 @@
               <img
                 src={user.avatar_url}
                 alt={user.nickname}
-                class="w-8 h-8 rounded-full object-cover ring-2 ring-base-300"
+                class="w-9 h-9 rounded-full object-cover ring-2 ring-base-300"
               />
             <% else %>
-              <div class="w-8 h-8 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center ring-2 ring-base-300 text-sm">
+              <div class="w-9 h-9 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center ring-2 ring-base-300">
                 {String.first(user.nickname) |> String.upcase()}
               </div>
             <% end %>
-            <span class="text-sm hidden sm:inline">{user.nickname}</span>
+            <span class="hidden sm:inline">{user.nickname}</span>
           </a>
+          <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-md">로그아웃</.link>
+        <% else %>
+          <%= if guest_nick = assigns[:current_nickname] do %>
+            <span class="text-sm text-base-content/70">(게스트) <strong>{guest_nick}</strong></span>
+            <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-md">로그아웃</.link>
+          <% end %>
         <% end %>
       </div>
     </header>

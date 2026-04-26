@@ -359,36 +359,14 @@ defmodule HappyTriznWeb.LobbyLive do
     ~H"""
     <Layouts.flash_group flash={@flash} />
     <div class="min-h-screen p-3 sm:p-6 max-w-7xl mx-auto">
-      <header class="flex flex-wrap items-center justify-between gap-2 mb-4 sm:mb-6">
-        <h1 class="text-xl sm:text-2xl font-bold">Happy Trizn — 로비</h1>
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-sm text-base-content/70 hidden sm:inline">
-            <%= if @user do %>
-              <strong>{@nickname}</strong>
-            <% else %>
-              (게스트) <strong>{@nickname}</strong>
-            <% end %>
-          </span>
-          <.link navigate={~p"/history"} class="btn btn-ghost btn-xs sm:btn-sm" title="내 기록">
-            🏆 <span class="hidden sm:inline">기록</span>
-          </.link>
-          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-xs sm:btn-sm" title="게임 옵션">
-            ⚙️ <span class="hidden sm:inline">옵션</span>
-          </.link>
-          <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-xs sm:btn-sm">
-            로그아웃
-          </.link>
-        </div>
-      </header>
-
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <!-- 왼쪽: 게임 카테고리 + 방 생성 -->
         <section class="card bg-base-200 lg:col-span-1">
           <div class="card-body">
-            <h2 class="card-title text-base">방 만들기</h2>
+            <h2 class="card-title text-lg">방 만들기</h2>
             <%= if @user do %>
               <form phx-submit="create_room" class="space-y-2">
-                <select name="game_type" class="select select-bordered select-sm w-full" required>
+                <select name="game_type" class="select select-bordered select-md w-full" required>
                   <option value="">게임 선택</option>
                   <%= for g <- @games_multi do %>
                     <option value={g.slug}>{g.name} ({g.mode})</option>
@@ -398,7 +376,7 @@ defmodule HappyTriznWeb.LobbyLive do
                   type="text"
                   name="name"
                   placeholder="방 이름"
-                  class="input input-bordered input-sm w-full"
+                  class="input input-bordered input-md w-full"
                   required
                   maxlength="64"
                 />
@@ -406,7 +384,7 @@ defmodule HappyTriznWeb.LobbyLive do
                   type="password"
                   name="password"
                   placeholder="비번 (선택)"
-                  class="input input-bordered input-sm w-full"
+                  class="input input-bordered input-md w-full"
                 />
                 <input
                   type="number"
@@ -414,9 +392,9 @@ defmodule HappyTriznWeb.LobbyLive do
                   value="4"
                   min="2"
                   max="16"
-                  class="input input-bordered input-sm w-full"
+                  class="input input-bordered input-md w-full"
                 />
-                <button type="submit" class="btn btn-primary btn-sm w-full">생성</button>
+                <button type="submit" class="btn btn-primary btn-md w-full">생성</button>
               </form>
             <% else %>
               <p class="text-xs text-base-content/50">
@@ -429,7 +407,7 @@ defmodule HappyTriznWeb.LobbyLive do
               <%= for g <- @games_single do %>
                 <.link
                   navigate={~p"/play/#{g.slug}"}
-                  class="btn btn-sm btn-outline btn-primary justify-start"
+                  class="btn btn-md btn-outline btn-primary justify-start text-base"
                 >
                   {single_game_emoji(g.slug)} {g.name}
                 </.link>
@@ -445,7 +423,7 @@ defmodule HappyTriznWeb.LobbyLive do
         <section class="lg:col-span-2 space-y-4">
           <div class="card bg-base-200">
             <div class="card-body">
-              <h2 class="card-title text-base">활성 방 ({length(@rooms)})</h2>
+              <h2 class="card-title text-lg">활성 방 ({length(@rooms)})</h2>
               <%= if @rooms == [] do %>
                 <p class="text-base-content/50 text-sm py-4 text-center">열린 방 없음. 직접 만들어보세요.</p>
               <% else %>
@@ -536,7 +514,7 @@ defmodule HappyTriznWeb.LobbyLive do
 
           <div class="card bg-base-200">
             <div class="card-body">
-              <h2 class="card-title text-base">글로벌 채팅</h2>
+              <h2 class="card-title text-lg">글로벌 채팅</h2>
               <div
                 id="chat-messages"
                 class="h-64 overflow-y-auto flex flex-col-reverse gap-1 bg-base-100 rounded p-3 text-sm"
@@ -579,7 +557,7 @@ defmodule HappyTriznWeb.LobbyLive do
     <!-- 오른쪽: 친구 사이드바 -->
         <section class="card bg-base-200 lg:col-span-1">
           <div class="card-body">
-            <h2 class="card-title text-base">친구</h2>
+            <h2 class="card-title text-lg">친구</h2>
 
             <%= cond do %>
               <% is_nil(@user) -> %>
@@ -588,22 +566,22 @@ defmodule HappyTriznWeb.LobbyLive do
                 </p>
               <% true -> %>
                 <%= if @pending_received != [] do %>
-                  <div class="text-xs font-semibold mt-2">받은 요청 ({length(@pending_received)})</div>
+                  <div class="text-sm font-semibold mt-3">받은 요청 ({length(@pending_received)})</div>
                   <%= for f <- @pending_received do %>
-                    <div class="flex items-center justify-between text-sm py-1 border-b">
+                    <div class="flex items-center justify-between text-base py-1.5 border-b">
                       <span>{f.requester.nickname}</span>
                       <div class="flex gap-1">
                         <button
                           phx-click="accept_friend"
                           phx-value-friendship-id={f.id}
-                          class="btn btn-xs btn-success"
+                          class="btn btn-sm btn-success"
                         >
                           ✓
                         </button>
                         <button
                           phx-click="reject_friend"
                           phx-value-friendship-id={f.id}
-                          class="btn btn-xs btn-error"
+                          class="btn btn-sm btn-error"
                         >
                           ✗
                         </button>
@@ -612,16 +590,16 @@ defmodule HappyTriznWeb.LobbyLive do
                   <% end %>
                 <% end %>
 
-                <div class="text-xs font-semibold mt-2">친구 ({length(@friends)})</div>
+                <div class="text-sm font-semibold mt-3">친구 ({length(@friends)})</div>
                 <%= if @friends == [] do %>
                   <p class="text-xs text-base-content/40">아직 없음</p>
                 <% else %>
                   <%= for u <- @friends do %>
-                    <div class="flex items-center justify-between text-sm py-1">
+                    <div class="flex items-center justify-between text-base py-1.5">
                       <span class="truncate">{u.nickname}</span>
                       <.link
                         navigate={~p"/dm/#{u.id}"}
-                        class="btn btn-xs btn-ghost"
+                        class="btn btn-sm btn-ghost"
                         title="DM 보내기"
                       >
                         💬
@@ -630,17 +608,17 @@ defmodule HappyTriznWeb.LobbyLive do
                   <% end %>
                 <% end %>
 
-                <div class="text-xs font-semibold mt-2">
+                <div class="text-sm font-semibold mt-3">
                   {if @show_all_users, do: "모든 사용자", else: "추천 친구 (최대 10)"}
                 </div>
                 <%= for u <- (if @show_all_users, do: @all_users, else: @recommend) do %>
-                  <div class="flex items-center justify-between text-sm py-1">
+                  <div class="flex items-center justify-between text-base py-1.5">
                     <span>{u.nickname}</span>
                     <%= if u.id != @user.id do %>
                       <button
                         phx-click="send_friend_request"
                         phx-value-user-id={u.id}
-                        class="btn btn-xs btn-outline"
+                        class="btn btn-sm btn-outline"
                       >
                         +
                       </button>
