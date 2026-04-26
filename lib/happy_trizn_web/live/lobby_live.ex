@@ -488,7 +488,16 @@ defmodule HappyTriznWeb.LobbyLive do
                   <p class="text-xs text-base-content/40">아직 없음</p>
                 <% else %>
                   <%= for u <- @friends do %>
-                    <div class="text-sm py-1">{u.nickname}</div>
+                    <div class="flex items-center justify-between text-sm py-1">
+                      <span class="truncate">{u.nickname}</span>
+                      <.link
+                        navigate={~p"/dm/#{u.id}"}
+                        class="btn btn-xs btn-ghost"
+                        title="DM 보내기"
+                      >
+                        💬
+                      </.link>
+                    </div>
                   <% end %>
                 <% end %>
 

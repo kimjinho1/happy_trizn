@@ -59,6 +59,10 @@ defmodule HappyTriznWeb.Router do
 
       # 마이페이지 — 닉네임 수정 + 프로필 사진 업로드 (등록 사용자 전용).
       live "/me", ProfileLive
+
+      # DM (Direct Messages) — 친구 사이 1:1 채팅.
+      live "/dm", DmLive
+      live "/dm/:peer_id", DmLive
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)
