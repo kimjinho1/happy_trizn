@@ -270,9 +270,13 @@ defmodule HappyTriznWeb.GameMultiLive do
   # ============================================================================
 
   @impl true
-  def handle_info({:game_event, {:player_state, _pid, _state}}, socket) do
-    # 모든 player_state event 시 server에서 다시 fetch (간단)
-    {:noreply, refresh_state(socket)}
+  def handle_info({:game_event, {:player_state, pid, player_state}}, socket) do
+    # payload 에 새 player state 포함 — GenServer.call(get_state) 안 해도 됨.
+    # 매 50ms tick + 매 input 마다 GenServer call 하면 mailbox 폭주 → freeze.
+    game_state = socket.assigns.game_state
+    new_players = Map.put(game_state.players || %{}, pid, player_state)
+    new_game_state = %{game_state | players: new_players}
+    {:noreply, assign(socket, :game_state, new_game_state)}
   end
 
   def handle_info({:game_event, {:winner, w}}, socket) do
@@ -281,8 +285,8 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   def handle_info({:game_event, {:game_over, results}}, socket) do
-    new_socket = refresh_state(socket)
-    {:noreply, assign(new_socket, result: results)}
+    socket = sfx(socket, sfx_for_game_over(results, socket.assigns.player_id))
+    {:noreply, socket |> refresh_state() |> assign(result: results)}
   end
 
   def handle_info({:game_event, {:restart, _}}, socket) do
@@ -290,7 +294,52 @@ defmodule HappyTriznWeb.GameMultiLive do
     {:noreply, socket |> refresh_state() |> assign(:result, nil)}
   end
 
-  def handle_info({:game_event, {:top_out, _pid}}, socket) do
+  def handle_info({:game_event, {:top_out, pid}}, socket) do
+    socket = if pid == socket.assigns.player_id, do: sfx(socket, "top_out"), else: socket
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:line_clear, %{player: pid, lines: lines, b2b: b2b}}}, socket) do
+    socket =
+      cond do
+        pid != socket.assigns.player_id -> socket
+        b2b and lines >= 2 -> sfx(socket, "b2b")
+        lines == 4 -> sfx(socket, "tetris")
+        lines >= 1 -> sfx(socket, "line_clear")
+        true -> socket
+      end
+
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:garbage_sent, %{to: to}}}, socket) do
+    socket = if to == socket.assigns.player_id, do: sfx(socket, "garbage"), else: socket
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:countdown_start, _}}, socket) do
+    {:noreply, sfx(socket, "countdown") |> refresh_state()}
+  end
+
+  def handle_info({:game_event, {:countdown_tick, ms}}, socket) when is_integer(ms) do
+    # 1초마다 (1000ms 경계) "초읽기" tick 사운드. 마지막 0 도달 시 game_over 가 :tetris.
+    socket =
+      cond do
+        ms <= 0 -> socket
+        rem(ms, 1000) == 0 -> sfx(socket, "countdown")
+        true -> socket
+      end
+
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:rotated, pid}}, socket) do
+    socket = if pid == socket.assigns.player_id, do: sfx(socket, "rotate"), else: socket
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:locked, pid}}, socket) do
+    socket = if pid == socket.assigns.player_id, do: sfx(socket, "lock"), else: socket
     {:noreply, refresh_state(socket)}
   end
 
@@ -298,9 +347,25 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   def handle_info(_, socket), do: {:noreply, socket}
 
+  defp sfx_for_game_over(%{winner: w}, me) when is_binary(w) and w == me, do: "tetris"
+  defp sfx_for_game_over(_, _), do: "top_out"
+
+  defp sfx(socket, event) when is_binary(event) do
+    Phoenix.LiveView.push_event(socket, "tetris:sfx", %{event: event})
+  end
+
   defp refresh_state(socket) do
-    if Process.alive?(socket.assigns.session_pid) do
-      assign(socket, game_state: GameSession.get_state(socket.assigns.session_pid))
+    pid = socket.assigns[:session_pid]
+
+    if pid && Process.alive?(pid) do
+      try do
+        # 5초 timeout — GenServer 가 다른 호출 처리 중이어도 LiveView 안 멈춤.
+        assign(socket, game_state: GenServer.call(pid, :get_state, 5_000))
+      catch
+        :exit, _ ->
+          # GameSession busy / dead — 기존 game_state 유지.
+          socket
+      end
     else
       socket
     end
@@ -340,6 +405,23 @@ defmodule HappyTriznWeb.GameMultiLive do
       data-key-bindings={Jason.encode!(@key_settings.bindings)}
       class="min-h-screen p-6 max-w-6xl mx-auto"
     >
+      <%= if @slug == "tetris" do %>
+        <div
+          id="tetris-sound"
+          phx-hook="TetrisSound"
+          data-sound-volume={@key_settings.options["sound_volume"] || 16}
+          data-sound-rotate={to_string(@key_settings.options["sound_rotate"] != false)}
+          data-sound-lock={to_string(@key_settings.options["sound_lock"] != false)}
+          data-sound-line-clear={to_string(@key_settings.options["sound_line_clear"] != false)}
+          data-sound-tetris={to_string(@key_settings.options["sound_tetris"] != false)}
+          data-sound-b2b={to_string(@key_settings.options["sound_b2b"] != false)}
+          data-sound-garbage={to_string(@key_settings.options["sound_garbage"] != false)}
+          data-sound-top-out={to_string(@key_settings.options["sound_top_out"] != false)}
+          data-sound-countdown={to_string(@key_settings.options["sound_countdown"] != false)}
+          class="hidden"
+        >
+        </div>
+      <% end %>
       <header class="flex items-center justify-between mb-4">
         <div>
           <h1 class="text-2xl font-bold">{@meta.name}</h1>

@@ -228,6 +228,7 @@ defmodule HappyTrizn.Games.GameSession do
 
   # match_results 저장 — 멀티 게임만, room_id 있을 때.
   # winner_id 는 results.winner (player_id) → state.players[player_id].user_id 매핑.
+  # 추가로 personal_records (참가자 모두) 갱신.
   defp maybe_record_match(state, results) do
     duration = duration_ms(results)
     winner_user_id = winner_user_id(state, results)
@@ -239,12 +240,42 @@ defmodule HappyTrizn.Games.GameSession do
       duration_ms: duration,
       stats: results |> stringify_keys()
     })
+
+    update_personal_records(state, results, winner_user_id)
   rescue
     e ->
       require Logger
       Logger.warning("[game_session] match_result save failed: #{inspect(e)}")
       :ok
   end
+
+  # results.players 의 stats 를 사용자별 PersonalRecords 에 반영.
+  defp update_personal_records(state, %{players: result_players}, winner_user_id)
+       when is_map(result_players) do
+    Enum.each(result_players, fn {player_id, stats} ->
+      case Map.get(state.players, player_id) do
+        %{user_id: uid} when is_binary(uid) ->
+          metadata = %{
+            "max_pps" => Map.get(stats, :pps, 0),
+            "max_apm" => Map.get(stats, :apm, 0),
+            "max_kpp" => Map.get(stats, :kpp, 0),
+            "max_pieces" => Map.get(stats, :pieces_placed, 0)
+          }
+
+          HappyTrizn.PersonalRecords.apply_stats(%{id: uid}, state.game_type, %{
+            score: Map.get(stats, :score, 0),
+            lines: Map.get(stats, :lines, 0),
+            won: uid == winner_user_id,
+            metadata: metadata
+          })
+
+        _ ->
+          :ok
+      end
+    end)
+  end
+
+  defp update_personal_records(_, _, _), do: :ok
 
   defp duration_ms(%{players: ps}) when is_map(ps) do
     ps

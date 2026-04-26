@@ -52,6 +52,10 @@ defmodule HappyTriznWeb.Router do
       # 사용자 게임 옵션 — key bindings + DAS/ARR/grid/ghost/skin/sound.
       live "/settings/games", GameSettingsLive, :index
       live "/settings/games/:game_type", GameSettingsLive, :show
+
+      # 매치 히스토리 + 개인 기록 + 리더보드.
+      live "/history", HistoryLive, :index
+      live "/history/leaderboard/:game_type", HistoryLive, :leaderboard
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)

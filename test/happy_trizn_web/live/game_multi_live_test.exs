@@ -266,8 +266,11 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
         %{state | game_state: %{gs | players: new_players}}
       end)
 
-      # PubSub broadcast push — re-render.
-      send(view.pid, {:game_event, {:player_state, "stub", %{}}})
+      # 실제 player_id 의 갱신된 player state 를 broadcast — pending_garbage = 5 반영.
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      [player_id] = Map.keys(state.players)
+      pp = HappyTrizn.Games.Tetris.public_player(state.players[player_id])
+      send(view.pid, {:game_event, {:player_state, player_id, pp}})
       Process.sleep(20)
       html = render(view)
 
@@ -325,6 +328,122 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "bob"
       assert html =~ "2회"
       assert html =~ "방 누적 우승"
+    end
+
+    test "TetrisSound 훅 + 사운드 옵션 data attrs 노출", %{conn: conn, room: room} do
+      {:ok, _, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "phx-hook=\"TetrisSound\""
+      assert html =~ "data-sound-rotate"
+      assert html =~ "data-sound-tetris"
+      assert html =~ "data-sound-volume"
+    end
+
+    test "lock event → tetris:sfx push (lock)", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      # 첫 player_id 가져오기
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      [player_id] = Map.keys(state.players)
+
+      send(view.pid, {:game_event, {:locked, player_id}})
+      assert_push_event(view, "tetris:sfx", %{event: "lock"})
+    end
+
+    test "line_clear (4 lines) → tetris sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      [player_id] = Map.keys(state.players)
+
+      send(
+        view.pid,
+        {:game_event,
+         {:line_clear, %{player: player_id, lines: 4, b2b: false, tspin: :none, combo: 0}}}
+      )
+
+      assert_push_event(view, "tetris:sfx", %{event: "tetris"})
+    end
+
+    test "rotate event → rotate sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      [player_id] = HappyTrizn.Games.GameSession.get_state(pid).players |> Map.keys()
+
+      send(view.pid, {:game_event, {:rotated, player_id}})
+      assert_push_event(view, "tetris:sfx", %{event: "rotate"})
+    end
+
+    test "b2b line_clear (b2b: true) → b2b sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      [player_id] = HappyTrizn.Games.GameSession.get_state(pid).players |> Map.keys()
+
+      send(
+        view.pid,
+        {:game_event,
+         {:line_clear, %{player: player_id, lines: 4, b2b: true, tspin: :none, combo: 0}}}
+      )
+
+      assert_push_event(view, "tetris:sfx", %{event: "b2b"})
+    end
+
+    test "garbage_sent (to: me) → garbage sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      [player_id] = HappyTrizn.Games.GameSession.get_state(pid).players |> Map.keys()
+
+      send(view.pid, {:game_event, {:garbage_sent, %{from: "x", to: player_id, lines: 3}}})
+      assert_push_event(view, "tetris:sfx", %{event: "garbage"})
+    end
+
+    test "top_out (me) → top_out sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      [player_id] = HappyTrizn.Games.GameSession.get_state(pid).players |> Map.keys()
+
+      send(view.pid, {:game_event, {:top_out, player_id}})
+      assert_push_event(view, "tetris:sfx", %{event: "top_out"})
+    end
+
+    test "countdown_start → countdown sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      send(view.pid, {:game_event, {:countdown_start, 3000}})
+      assert_push_event(view, "tetris:sfx", %{event: "countdown"})
+    end
+
+    test "player_state event → game_state.players 직접 갱신 (GenServer.call 안 함)", %{
+      conn: conn,
+      room: room
+    } do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      [player_id] = HappyTrizn.Games.GameSession.get_state(pid).players |> Map.keys()
+
+      # 가짜 player state — score 9999 — broadcast.
+      fake = %{
+        board: HappyTrizn.Games.Tetris.Board.new(),
+        current: %{type: :o, rotation: 0, origin: {0, 4}},
+        next: :i,
+        nexts: [:i, :t, :s, :z, :l],
+        hold: nil,
+        hold_used: false,
+        score: 9999,
+        lines: 99,
+        level: 5,
+        pending_garbage: 0,
+        combo: -1,
+        b2b: false,
+        top_out: false,
+        lock_delay_ms: nil,
+        pieces_placed: 0
+      }
+
+      send(view.pid, {:game_event, {:player_state, player_id, fake}})
+      Process.sleep(20)
+      html = render(view)
+      # 화면에 9999 점수 노출
+      assert html =~ "9999"
     end
 
     test "modal reset 버튼 → bindings/options 초기화 + 모달 유지", %{conn: conn, room: room, host: host} do

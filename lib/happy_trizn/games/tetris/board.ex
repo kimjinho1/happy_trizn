@@ -78,13 +78,17 @@ defmodule HappyTrizn.Games.Tetris.Board do
   end
 
   @doc """
-  Garbage 라인 추가 (board 하단에 lines 만큼 새 row 추가, 상단 같은 수 만큼 잘림).
+  Garbage 라인 추가 — 하단에 lines 만큼 새 row 추가, 상단 같은 수 만큼 잘림.
   각 garbage 라인은 1 col 만 hole (random).
-  Returns {:ok, new_board} | {:error, :top_out}
+
+  반환값:
+    - `{:ok, new_board}` — 정상 적용, top_out 아님.
+    - `{:top_out, new_board}` — 가비지 가 spawn buffer / visible 영역 전체 차지 →
+      게임 오버. **board 는 가비지 가 적용된 상태로 반환** — UI 가 "가비지로 졌구나"
+      를 시각적으로 보여줄 수 있게.
   """
   def add_garbage(board, lines) when lines > 0 do
-    # lines > @height (22) 면 board 길이가 그대로 늘어나는 overflow 버그.
-    # @height 로 capping — 그 이상은 어차피 top_out (visible 다 garbage 로 채움).
+    # lines > @height (22) 면 board 길이가 그대로 늘어나는 overflow 방어.
     capped_lines = min(lines, @height)
     visible = Enum.drop(board, @hidden_rows)
     top_out_check = Enum.take(visible, capped_lines)
@@ -93,18 +97,14 @@ defmodule HappyTrizn.Games.Tetris.Board do
     garbage_rows = build_garbage_rows(capped_lines)
     new_board = shifted ++ garbage_rows
 
-    cond do
-      Enum.any?(top_out_check, fn row -> Enum.any?(row, &(&1 != nil)) end) and
-          over_top?(new_board) ->
-        {:error, :top_out}
+    visible_filled_in_top_check? =
+      Enum.any?(top_out_check, fn row -> Enum.any?(row, &(&1 != nil)) end)
 
-      capped_lines >= @visible_height ->
-        # visible 전부 garbage 로 채워짐 → 무조건 top_out.
-        {:error, :top_out}
+    top_out? =
+      capped_lines >= @visible_height or
+        (visible_filled_in_top_check? and over_top?(new_board))
 
-      true ->
-        {:ok, new_board}
-    end
+    if top_out?, do: {:top_out, new_board}, else: {:ok, new_board}
   end
 
   def add_garbage(board, _), do: {:ok, board}
