@@ -859,12 +859,17 @@ defmodule HappyTriznWeb.GameMultiLive do
                   {@me.pending_garbage}
                 </span>
               </div>
-              <div class="flex gap-2">
+              <div class="flex gap-2 flex-wrap">
                 <%= if Map.get(@me, :combo, -1) >= 1 do %>
                   <span class="badge badge-warning">콤보 ×{@me.combo}</span>
                 <% end %>
                 <%= if Map.get(@me, :b2b, false) do %>
                   <span class="badge badge-info">B2B</span>
+                <% end %>
+                <%= if Map.get(@me, :finesse_violations, 0) > 0 do %>
+                  <span class="badge badge-error" title="불필요 입력 횟수 (낮을수록 효율적)">
+                    Finesse −{@me.finesse_violations}
+                  </span>
                 <% end %>
               </div>
               <%= if @me.top_out do %>
