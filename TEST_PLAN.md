@@ -4,7 +4,7 @@ Branch tracking. 최근 갱신: Sprint 3 100% 완료 (3j Tetris Canvas + skin) +
 
 ## Status
 
-**620 tests, 0 failures**.
+**652 tests, 0 failures**.
 
 ```bash
 docker compose up -d
@@ -29,6 +29,7 @@ MIX_ENV=test bin/mix test
 | 다른 게임 stub | stub_games_test (Bomberman/Snake/Pacman/Skribbl 인터페이스 검증) | 12 |
 | 2048 | games_2048_test (board_size 4/5/6 + restart 보존 + 키보드 input) | 25+ |
 | 지뢰찾기 (Minesweeper) | minesweeper_test (난이도 easy/medium/hard/custom + clamp + restart + 지뢰찾기 rename + phx-value string→int + cursor 4 방향 + boundary clamp + reveal/flag_cursor) | 27 |
+| 스도쿠 (Sudoku) | sudoku_test (meta + 난이도 3종 + random_solution 100번 valid 검증 + fixed/clue 수 + cursor + enter 1-9 + clear + win 조건 + restart) | 22 |
 | **MatchResults** | match_results_test (record/for_user/recent/winners_summary) | 12 |
 | **PersonalRecords** | personal_records_test (apply_stats max / metadata merge / leaderboard) | 8 |
 | Registry | registry_test | 5 |
@@ -104,6 +105,7 @@ MIX_ENV=test bin/mix test
 - Skribbl ranking modal (Sprint 3l-7) — 점수 내림차순, 🥇🥈🥉 + 본인 row primary highlight + 점수 표시 (Tetris/Bomberman 와 일관) ✅
 - Tetris JS Canvas + skin (Sprint 3j) — block_skin 4종 (default_jstris/vivid/monochrome/neon), tetris_renderer "dom" 기본 / "canvas" opt-in, JS hook TetrisCanvas 가 data-board JSON 받아 redraw ✅
 - 지뢰찾기 (Sprint 4f) — meta name 한글 "지뢰찾기", phx-value string r/c → int 강제, 화살표 cursor 이동 + boundary clamp + Space/Enter reveal_cursor + F flag_cursor + MinesweeperCell hook 우클릭 ✅
+- 스도쿠 (Sprint 3m) — base 패턴 + symmetry transforms (digit perm / row/col swap in band+stack / band/stack swap) → 항상 valid 9×9 solution. 100회 반복 valid 검증, easy 40 / medium 32 / hard 26 clue, cursor 이동 + 1-9 입력 + 0/Backspace clear + 충돌 셀 highlight ✅
 
 ## E2E 미구현 (계획)
 

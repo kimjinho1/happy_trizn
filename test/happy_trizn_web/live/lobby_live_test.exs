@@ -246,6 +246,26 @@ defmodule HappyTriznWeb.LobbyLiveTest do
 
       assert redirect_path =~ "/game/tetris/"
     end
+
+    test "방 5개 이상 — 페이지네이션 노출 (page_size=4)", %{conn: conn, alice: alice} do
+      # 추가 4개 → 총 5개. total_pages = 2.
+      for i <- 1..4 do
+        HappyTrizn.Rooms.create(alice, %{
+          game_type: "tetris",
+          name: "page_room_#{i}_#{System.unique_integer([:positive])}"
+        })
+      end
+
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      # 페이지 버튼 — 1, 2 + ←, → 표시.
+      assert html =~ "phx-click=\"rooms_page\""
+      assert html =~ "phx-value-page=\"2\""
+    end
+
+    test "방 4개 이하 — 페이지네이션 안 보임", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/lobby")
+      refute html =~ "phx-click=\"rooms_page\""
+    end
   end
 
   describe "/lobby — 비번 있는 방 (회귀)" do

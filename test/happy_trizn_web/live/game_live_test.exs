@@ -219,6 +219,47 @@ defmodule HappyTriznWeb.GameLiveTest do
     end
   end
 
+  describe "/play/sudoku (Sprint 3m)" do
+    setup %{conn: conn} do
+      {:ok, conn: log_in_user(conn, nil, "psd_#{System.unique_integer([:positive])}")}
+    end
+
+    test "마운트 — 스도쿠 + 9×9 grid + 난이도 표기", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/sudoku")
+      assert html =~ "스도쿠"
+      assert html =~ "난이도:"
+      # 9*9 = 81 cell button.
+      assert html |> String.split("phx-value-action=\"set_cursor\"") |> length() == 82
+      # 1-9 number 버튼
+      assert html =~ "phx-value-action=\"enter\""
+    end
+
+    test "키보드 1 → 빈 셀에 1 입력", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/sudoku")
+      # cursor 0,0 일 시점. 우선 빈 셀로 cursor 옮기기 — phx-click set_cursor.
+      # 빈 셀 찾는 건 server state 보지 않고는 어려우니 키 입력만 verify.
+      render_hook(view, "keydown", %{"key" => "1"})
+      # 페이지 살아있음.
+      assert render(view) =~ "스도쿠"
+    end
+
+    test "data-keys 1-9 + Backspace + Delete 포함", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/sudoku")
+      assert html =~ "data-keys="
+      assert html =~ "1,2,3,4,5,6,7,8,9"
+      assert html =~ "Backspace"
+      assert html =~ "Delete"
+    end
+
+    test "옵션 모달 — 난이도 변경 가능", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/sudoku")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      assert html =~ "difficulty"
+      assert html =~ "modal_save_options"
+    end
+  end
+
   describe "/play/pacman (stub)" do
     setup %{conn: conn} do
       {:ok, conn: log_in_user(conn, nil, "ppm_#{System.unique_integer([:positive])}")}

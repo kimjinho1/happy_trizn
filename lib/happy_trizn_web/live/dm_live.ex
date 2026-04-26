@@ -25,7 +25,11 @@ defmodule HappyTriznWeb.DmLive do
         {:ok, socket |> put_flash(:error, "로그인 사용자만") |> redirect(to: ~p"/lobby")}
 
       true ->
-        if connected?(socket), do: Messages.subscribe(user)
+        if connected?(socket) do
+          Messages.subscribe(user)
+          HappyTriznWeb.Presence.subscribe()
+        end
+
         action = if params["peer_id"], do: :thread, else: :index
         socket = assign(socket, :live_action, action)
 
@@ -33,6 +37,7 @@ defmodule HappyTriznWeb.DmLive do
          socket
          |> assign(:user, user)
          |> assign(:page_title, "💬 DM")
+         |> assign(:online_user_ids, HappyTriznWeb.Presence.online_user_ids())
          |> load_action(action, params)}
     end
   end
@@ -154,6 +159,11 @@ defmodule HappyTriznWeb.DmLive do
     {:noreply, socket}
   end
 
+  # Sprint 4g — presence diff. 누가 접속/이탈하면 online list 갱신.
+  def handle_info(%{event: "presence_diff"}, socket) do
+    {:noreply, assign(socket, :online_user_ids, HappyTriznWeb.Presence.online_user_ids())}
+  end
+
   def handle_info(_, socket), do: {:noreply, socket}
 
   # ============================================================================
@@ -166,12 +176,12 @@ defmodule HappyTriznWeb.DmLive do
     <div class="max-w-5xl mx-auto p-2 sm:p-4">
       <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">💬 DM</h1>
 
-      <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-2 md:gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-2 md:gap-4">
         <aside class={[
           "bg-base-200 rounded p-2 overflow-y-auto h-[40vh] md:h-[70vh]",
           @peer && "hidden md:block"
         ]}>
-          <h2 class="text-sm font-semibold px-2 py-1 text-base-content/60">대화 상대</h2>
+          <h2 class="text-base font-semibold px-2 py-1 text-base-content/70">대화 상대</h2>
           <%= if @threads == [] do %>
             <div class="text-xs text-base-content/40 px-2 py-3">
               친구 추가 후 메시지 가능. <.link navigate={~p"/lobby"} class="link">로비</.link>에서 친구 검색.
@@ -183,17 +193,26 @@ defmodule HappyTriznWeb.DmLive do
                   <.link
                     navigate={~p"/dm/#{t.peer.id}"}
                     class={[
-                      "flex items-center gap-2 p-2 rounded transition",
+                      "flex items-center gap-2 p-2.5 rounded transition",
                       @peer && @peer.id == t.peer.id && "bg-base-300",
                       t.unread > 0 && "bg-error/10 hover:bg-error/20 border-l-4 border-error",
                       !(t.unread > 0) && "hover:bg-base-300"
                     ]}
                   >
-                    <.dm_avatar user={t.peer} size={36} />
+                    <div class="relative shrink-0">
+                      <.dm_avatar user={t.peer} size={42} />
+                      <%= if MapSet.member?(@online_user_ids, t.peer.id) do %>
+                        <span
+                          class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success ring-2 ring-base-200"
+                          title="접속 중"
+                        >
+                        </span>
+                      <% end %>
+                    </div>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2">
                         <span class={[
-                          "truncate",
+                          "truncate text-base",
                           t.unread > 0 && "font-bold text-error",
                           !(t.unread > 0) && "font-semibold"
                         ]}>
@@ -206,7 +225,7 @@ defmodule HappyTriznWeb.DmLive do
                         <% end %>
                       </div>
                       <div class={[
-                        "text-xs truncate",
+                        "text-sm truncate",
                         t.unread > 0 && "text-base-content/80 font-medium",
                         !(t.unread > 0) && "text-base-content/50"
                       ]}>
@@ -220,7 +239,7 @@ defmodule HappyTriznWeb.DmLive do
           <% end %>
         </aside>
 
-        <main class="bg-base-100 rounded border border-base-300 flex flex-col">
+        <main class="bg-base-100 rounded border border-base-300 flex flex-col h-[70vh]">
           <%= if @peer do %>
             <header class="border-b border-base-300 p-3 flex items-center gap-2">
               <.link
@@ -230,17 +249,31 @@ defmodule HappyTriznWeb.DmLive do
               >
                 ←
               </.link>
-              <.dm_avatar user={@peer} size={40} />
+              <div class="relative shrink-0">
+                <.dm_avatar user={@peer} size={44} />
+                <%= if MapSet.member?(@online_user_ids, @peer.id) do %>
+                  <span
+                    class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success ring-2 ring-base-100"
+                    title="접속 중"
+                  >
+                  </span>
+                <% end %>
+              </div>
               <div class="min-w-0">
-                <div class="font-bold truncate">{@peer.nickname}</div>
-                <div class="text-xs text-base-content/50 truncate">{@peer.email}</div>
+                <div class="font-bold text-lg truncate flex items-center gap-2">
+                  {@peer.nickname}
+                  <%= if MapSet.member?(@online_user_ids, @peer.id) do %>
+                    <span class="text-xs text-success font-normal">접속 중</span>
+                  <% end %>
+                </div>
+                <div class="text-sm text-base-content/50 truncate">{@peer.email}</div>
               </div>
             </header>
 
             <div
               id="dm-thread-scroll"
               phx-hook="ChatScroll"
-              class="overflow-y-auto p-3 flex flex-col-reverse gap-2 h-[60vh]"
+              class="overflow-y-auto p-3 flex flex-col-reverse gap-2 flex-1 min-h-0"
             >
               <%= if @messages == [] do %>
                 <div class="text-xs text-base-content/40 text-center my-auto">메시지 없음 — 첫 인사를</div>
@@ -255,17 +288,17 @@ defmodule HappyTriznWeb.DmLive do
               id="dm-form"
               phx-submit="send"
               phx-hook="ChatReset"
-              class="border-t border-base-300 p-2 flex gap-1"
+              class="border-t border-base-300 p-2 flex gap-2"
             >
               <input
                 type="text"
                 name="body"
                 autocomplete="off"
                 maxlength="1000"
-                placeholder="메시지..."
-                class="input input-sm input-bordered flex-1"
+                placeholder="메시지를 입력하세요..."
+                class="input input-md input-bordered flex-1 text-base"
               />
-              <button type="submit" class="btn btn-sm btn-primary">전송</button>
+              <button type="submit" class="btn btn-md btn-primary text-base">전송</button>
             </form>
           <% else %>
             <div class="flex-1 flex items-center justify-center text-base-content/50">

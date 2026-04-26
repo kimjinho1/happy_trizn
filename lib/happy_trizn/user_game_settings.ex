@@ -144,6 +144,24 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
+  defp do_defaults("sudoku") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"],
+        "clear" => ["Backspace", "Delete", "0"]
+      },
+      options: %{
+        "difficulty" => "easy"
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
   defp do_defaults("pacman") do
     %{
       bindings: %{

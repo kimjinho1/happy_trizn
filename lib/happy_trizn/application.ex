@@ -16,6 +16,8 @@ defmodule HappyTrizn.Application do
         HappyTrizn.Repo,
         {DNSCluster, query: Application.get_env(:happy_trizn, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: HappyTrizn.PubSub},
+        # Sprint 4g — 접속 중 사용자 추적 (친구 list online indicator).
+        HappyTriznWeb.Presence,
         # 친구 추천 사이드바 / 사용자 목록 캐싱 (60s TTL)
         {Cachex, name: :recommendations_cache},
         # Rate limit (admin login, chat throttle) — Hammer 7.x module-based
