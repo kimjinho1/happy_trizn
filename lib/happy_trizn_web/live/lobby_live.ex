@@ -327,6 +327,14 @@ defmodule HappyTriznWeb.LobbyLive do
     end
   end
 
+  # 싱글 게임 버튼용 emoji.
+  defp single_game_emoji("2048"), do: "🔢"
+  defp single_game_emoji("games_2048"), do: "🔢"
+  defp single_game_emoji("minesweeper"), do: "💣"
+  defp single_game_emoji("pacman"), do: "👻"
+  defp single_game_emoji("sudoku"), do: "🧩"
+  defp single_game_emoji(_), do: "🎯"
+
   # ============================================================================
   # Render
   # ============================================================================
@@ -408,7 +416,7 @@ defmodule HappyTriznWeb.LobbyLive do
                   navigate={~p"/play/#{g.slug}"}
                   class="btn btn-sm btn-outline btn-primary justify-start"
                 >
-                  🎯 {g.name}
+                  {single_game_emoji(g.slug)} {g.name}
                 </.link>
               <% end %>
               <%= if @games_single == [] do %>
