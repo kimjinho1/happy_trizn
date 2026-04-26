@@ -590,6 +590,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         state={@game_state}
         player_id={@player_id}
         options={@key_settings.options}
+        key_settings={@key_settings}
       />
 
       <div class="mt-4 text-xs text-base-content/50">
