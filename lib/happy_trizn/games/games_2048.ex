@@ -1,12 +1,16 @@
 defmodule HappyTrizn.Games.Games2048 do
   @moduledoc """
-  2048 — 4x4 grid 싱글 게임. 같은 숫자 합쳐서 2048 만들기.
+  2048 — N×N grid 싱글 게임. 같은 숫자 합쳐서 2048 만들기.
 
   state:
-    - board: [[int | nil, ...], ...] 4x4
+    - size: 4 | 5 | 6 (`board_size` 옵션 — 사용자 설정에서 주입)
+    - board: [[int | nil, ...], ...] N×N
     - score: integer
     - won: boolean (2048 도달)
     - over: boolean (이동 불가)
+
+  init/1 config:
+    - %{"board_size" => 4 | 5 | 6}  (기타 무시 → 기본 4)
 
   input:
     - %{"action" => "move", "dir" => "up" | "down" | "left" | "right"}
@@ -15,7 +19,8 @@ defmodule HappyTrizn.Games.Games2048 do
 
   @behaviour HappyTrizn.Games.GameBehaviour
 
-  @size 4
+  @default_size 4
+  @valid_sizes [4, 5, 6]
   @win_value 2048
 
   @impl true
@@ -31,8 +36,9 @@ defmodule HappyTrizn.Games.Games2048 do
   end
 
   @impl true
-  def init(_config) do
-    {:ok, new_game()}
+  def init(config) do
+    size = config |> Map.get("board_size", @default_size) |> normalize_size()
+    {:ok, new_game(size)}
   end
 
   @impl true
@@ -64,8 +70,9 @@ defmodule HappyTrizn.Games.Games2048 do
     end
   end
 
-  def handle_input(_player_id, %{"action" => "restart"}, _state) do
-    new = new_game()
+  def handle_input(_player_id, %{"action" => "restart"}, state) do
+    size = Map.get(state, :size, board_size(state.board) || @default_size)
+    new = new_game(size)
     {:ok, new, [{:state_changed, new}]}
   end
 
@@ -86,13 +93,35 @@ defmodule HappyTrizn.Games.Games2048 do
   # ============================================================================
 
   @doc false
-  def new_game do
-    empty = empty_board()
+  def new_game, do: new_game(@default_size)
 
-    %{board: empty |> spawn_tile() |> spawn_tile(), score: 0, won: false, over: false}
+  def new_game(size) when size in @valid_sizes do
+    empty = empty_board(size)
+
+    %{
+      size: size,
+      board: empty |> spawn_tile() |> spawn_tile(),
+      score: 0,
+      won: false,
+      over: false
+    }
   end
 
-  defp empty_board, do: List.duplicate(List.duplicate(nil, @size), @size)
+  defp normalize_size(s) when s in @valid_sizes, do: s
+
+  defp normalize_size(s) when is_binary(s) do
+    case Integer.parse(s) do
+      {n, _} when n in @valid_sizes -> n
+      _ -> @default_size
+    end
+  end
+
+  defp normalize_size(_), do: @default_size
+
+  defp empty_board(size), do: List.duplicate(List.duplicate(nil, size), size)
+
+  defp board_size([row | _]) when is_list(row), do: length(row)
+  defp board_size(_), do: nil
 
   defp dir_atom("up"), do: :up
   defp dir_atom("down"), do: :down
@@ -138,10 +167,12 @@ defmodule HappyTrizn.Games.Games2048 do
   end
 
   # left compress: nil 제거 → 인접한 같은 값 merge → 뒤를 nil padding.
+  # row 길이로 board 사이즈 추정 (4/5/6 어느 것이든 동작).
   defp compress_and_merge(row) do
+    size = length(row)
     compressed = Enum.reject(row, &is_nil/1)
     {merged, gained} = merge_adjacent(compressed, [], 0)
-    pad = @size - length(merged)
+    pad = size - length(merged)
     {merged ++ List.duplicate(nil, pad), gained}
   end
 

@@ -25,10 +25,11 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, conn: log_in_user(conn, nil, "p2048_#{System.unique_integer([:positive])}")}
     end
 
-    test "mount + 초기 board 렌더", %{conn: conn} do
+    test "mount + 초기 board 렌더 (default 4×4)", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/2048")
       assert html =~ "2048"
       assert html =~ "점수:"
+      assert html =~ "보드: 4×4"
       # 4x4 = 16 cell div
       assert html |> String.split("w-16 h-16") |> length() == 17
     end
@@ -55,11 +56,13 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, conn: log_in_user(conn, nil, "pms_#{System.unique_integer([:positive])}")}
     end
 
-    test "mount + 10x10 grid", %{conn: conn} do
+    test "mount — 게스트 default = medium 프리셋 16×16 grid", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
       assert html =~ "Minesweeper"
-      # 100 hidden cell 있어야
-      assert html |> String.split("phx-value-action=\"reveal\"") |> length() == 101
+      assert html =~ "16×16"
+      assert html =~ "지뢰 40개"
+      # 256 hidden cell (16×16) 있어야
+      assert html |> String.split("phx-value-action=\"reveal\"") |> length() == 257
     end
 
     test "셀 reveal → state 변화", %{conn: conn} do
@@ -83,7 +86,7 @@ defmodule HappyTriznWeb.GameLiveTest do
     test "mount stub 렌더", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/pacman")
       assert html =~ "Pac-Man"
-      assert html =~ "Sprint 3b"
+      assert html =~ "Sprint 3g"
     end
   end
 end

@@ -44,6 +44,14 @@ defmodule HappyTrizn.UserGameSettingsTest do
       assert UserGameSettings.defaults("games_2048").options["board_size"] == 4
     end
 
+    test "minesweeper difficulty + custom 필드 defaults" do
+      opts = UserGameSettings.defaults("minesweeper").options
+      assert opts["difficulty"] == "medium"
+      assert opts["custom_rows"] == 10
+      assert opts["custom_cols"] == 10
+      assert opts["custom_mines"] == 12
+    end
+
     test "알 수 없는 게임 → 빈 map" do
       d = UserGameSettings.defaults("unknown")
       assert d.bindings == %{}

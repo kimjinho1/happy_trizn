@@ -26,6 +26,83 @@ defmodule HappyTrizn.Games.MinesweeperTest do
       refute state.mines_placed
       assert state.over == nil
     end
+
+    test "difficulty easy → 9×9 / 10 mines" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+      assert state.rows == 9
+      assert state.cols == 9
+      assert state.mine_count == 10
+      assert state.difficulty == "easy"
+      assert map_size(state.cells) == 81
+    end
+
+    test "difficulty medium → 16×16 / 40 mines" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "medium"})
+      assert state.rows == 16
+      assert state.cols == 16
+      assert state.mine_count == 40
+      assert state.difficulty == "medium"
+    end
+
+    test "difficulty hard → 16×30 / 99 mines" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "hard"})
+      assert state.rows == 16
+      assert state.cols == 30
+      assert state.mine_count == 99
+      assert state.difficulty == "hard"
+    end
+
+    test "difficulty custom → 사용자 지정 적용" do
+      {:ok, state} =
+        Minesweeper.init(%{
+          "difficulty" => "custom",
+          "custom_rows" => 12,
+          "custom_cols" => 20,
+          "custom_mines" => 30
+        })
+
+      assert state.rows == 12
+      assert state.cols == 20
+      assert state.mine_count == 30
+      assert state.difficulty == "custom"
+    end
+
+    test "difficulty custom — out-of-range rows 는 기본으로 fallback" do
+      {:ok, state} =
+        Minesweeper.init(%{
+          "difficulty" => "custom",
+          "custom_rows" => 999,
+          "custom_cols" => 8,
+          "custom_mines" => 5
+        })
+
+      # rows out of [5..30] → 기본 10 으로 fallback
+      assert state.rows == 10
+      assert state.cols == 8
+      assert state.mine_count == 5
+    end
+
+    test "difficulty custom — mines 가 셀 수 - 9 초과 시 캡" do
+      {:ok, state} =
+        Minesweeper.init(%{
+          "difficulty" => "custom",
+          "custom_rows" => 5,
+          "custom_cols" => 5,
+          "custom_mines" => 1000
+        })
+
+      # 25셀 - 9 safe = 최대 16 mine
+      assert state.rows == 5
+      assert state.cols == 5
+      assert state.mine_count == 16
+    end
+
+    test "알 수 없는 difficulty → 기본 10×10/12" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "ultra"})
+      assert state.rows == 10
+      assert state.cols == 10
+      assert state.mine_count == 12
+    end
   end
 
   describe "first reveal" do
@@ -146,6 +223,34 @@ defmodule HappyTrizn.Games.MinesweeperTest do
 
       {:ok, ^state, []} =
         Minesweeper.handle_input("p1", %{"action" => "reveal", "r" => 100, "c" => 0}, state)
+    end
+
+    test "hard 난이도 grid 의 끝 좌표 (15,29) 는 in-bounds" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "hard"})
+
+      {:ok, new_state, _} =
+        Minesweeper.handle_input("p1", %{"action" => "flag", "r" => 15, "c" => 29}, state)
+
+      assert Map.fetch!(new_state.cells, {15, 29}).flagged
+    end
+  end
+
+  describe "restart" do
+    test "easy 게임 restart → 같은 dims 새 게임" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+
+      {:ok, s1, _} =
+        Minesweeper.handle_input("p1", %{"action" => "reveal", "r" => 0, "c" => 0}, state)
+
+      assert s1.mines_placed
+
+      {:ok, fresh, _} = Minesweeper.handle_input("p1", %{"action" => "restart"}, s1)
+      assert fresh.rows == 9
+      assert fresh.cols == 9
+      assert fresh.mine_count == 10
+      assert fresh.difficulty == "easy"
+      refute fresh.mines_placed
+      assert fresh.over == nil
     end
   end
 end

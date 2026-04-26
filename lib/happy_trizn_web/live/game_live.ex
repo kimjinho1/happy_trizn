@@ -3,14 +3,15 @@ defmodule HappyTriznWeb.GameLive do
   싱글 게임 진입점 (`/play/:game_type`).
 
   GameRegistry 에서 모듈 dispatch + GameBehaviour state 를 LiveView assign 으로 보유.
-  클라이언트는 phx-hook 으로 board 업데이트 받음 (game_state push_event).
+  사용자 옵션 (UserGameSettings) → init/1 config 로 주입 (board_size / difficulty).
 
-  멀티 게임은 GamePlaceholderLive (Sprint 3b 에서 GameSession + Channel 로 전환).
+  멀티 게임은 GameMultiLive (Sprint 3b 부터).
   """
 
   use HappyTriznWeb, :live_view
 
   alias HappyTrizn.Games.Registry, as: GameRegistry
+  alias HappyTrizn.UserGameSettings
 
   @impl true
   def mount(%{"game_type" => slug}, _session, socket) do
@@ -30,7 +31,8 @@ defmodule HappyTriznWeb.GameLive do
           {:ok, socket |> put_flash(:error, "이 게임은 멀티 — 방을 만들어 주세요") |> redirect(to: ~p"/lobby")}
         else
           module = GameRegistry.get_module(slug)
-          {:ok, game_state} = module.init(%{})
+          options = load_options(socket.assigns[:current_user], slug)
+          {:ok, game_state} = module.init(options)
           # 싱글 게임은 player_id = nickname.
           {:ok, game_state, _} = module.handle_player_join(nickname, %{}, game_state)
 
@@ -41,6 +43,7 @@ defmodule HappyTriznWeb.GameLive do
            |> assign(:module, module)
            |> assign(:game_state, game_state)
            |> assign(:nickname, nickname)
+           |> assign(:options, options)
            |> assign(:result, nil)}
         end
     end
@@ -60,10 +63,22 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   def handle_event("restart", _, socket) do
-    %{module: module, nickname: nickname} = socket.assigns
-    {:ok, fresh} = module.init(%{})
+    %{module: module, nickname: nickname, options: options} = socket.assigns
+    {:ok, fresh} = module.init(options)
     {:ok, fresh, _} = module.handle_player_join(nickname, %{}, fresh)
     {:noreply, assign(socket, game_state: fresh, result: nil)}
+  end
+
+  # ============================================================================
+  # 사용자 옵션 → init/1 config map
+  # ============================================================================
+
+  # 2048 의 settings_key 는 historical 이유로 "games_2048" (slug 와 다름).
+  defp settings_key("2048"), do: "games_2048"
+  defp settings_key(slug), do: slug
+
+  defp load_options(user, slug) do
+    UserGameSettings.get_for(user, settings_key(slug)).options
   end
 
   @impl true
@@ -90,7 +105,7 @@ defmodule HappyTriznWeb.GameLive do
       </div>
 
       <p class="text-xs text-base-content/40 mt-4">
-        Sprint 3a placeholder. 풀 클라이언트 canvas 는 Sprint 3b. 키보드 입력은 console 또는 단순 button 으로 dispatch.
+        옵션 변경은 로비 → 게임 옵션 (board 크기 / 난이도). 변경 후 다시 시작 시 적용.
       </p>
     </div>
     """
@@ -103,8 +118,11 @@ defmodule HappyTriznWeb.GameLive do
   defp game_view(%{slug: "2048"} = assigns) do
     ~H"""
     <div class="space-y-2">
-      <div class="text-lg">점수: <strong>{@state.score}</strong></div>
-      <div class="grid grid-cols-4 gap-1 bg-base-300 p-1 w-fit">
+      <div class="text-lg">점수: <strong>{@state.score}</strong> · 보드: {@state.size}×{@state.size}</div>
+      <div
+        class="grid gap-1 bg-base-300 p-1 w-fit"
+        style={"grid-template-columns: repeat(#{@state.size}, minmax(0, 1fr))"}
+      >
         <%= for row <- @state.board, cell <- row do %>
           <div class={[
             "w-16 h-16 flex items-center justify-center text-xl font-bold rounded",
@@ -131,7 +149,7 @@ defmodule HappyTriznWeb.GameLive do
         </button>
       </div>
       <div class="text-xs text-base-content/50">
-        키보드 화살표 또는 버튼. 데스크탑에선 phx-keyup 추가 가능 (Sprint 3b).
+        키보드 화살표 또는 버튼.
       </div>
     </div>
     """
@@ -140,9 +158,13 @@ defmodule HappyTriznWeb.GameLive do
   defp game_view(%{slug: "minesweeper"} = assigns) do
     ~H"""
     <div class="space-y-2">
-      <div class="text-sm">셀 클릭 = reveal, 우클릭 (right-click 미구현, 일단 [F] 버튼 토글):
-        지뢰 {@state.mine_count}개 숨겨져 있음.</div>
-      <div class="inline-block bg-base-300 p-1">
+      <div class="text-sm">
+        {@state.rows}×{@state.cols} · 지뢰 {@state.mine_count}개
+        <%= if @state.difficulty do %>
+          ({@state.difficulty})
+        <% end %>
+      </div>
+      <div class="inline-block bg-base-300 p-1 overflow-auto max-w-full">
         <%= for r <- 0..(@state.rows - 1) do %>
           <div class="flex">
             <%= for c <- 0..(@state.cols - 1) do %>
@@ -181,14 +203,14 @@ defmodule HappyTriznWeb.GameLive do
   defp game_view(%{slug: "pacman"} = assigns) do
     ~H"""
     <div class="text-base-content/60">
-      Pac-Man stub. 풀 구현은 Sprint 3b. 점수: {@state.score}, 라이프: {@state.lives}.
+      Pac-Man stub. 풀 구현은 Sprint 3g. 점수: {@state.score}, 라이프: {@state.lives}.
     </div>
     """
   end
 
   defp game_view(assigns) do
     ~H"""
-    <div class="text-base-content/60">{@slug}: 풀 구현 Sprint 3b 예정.</div>
+    <div class="text-base-content/60">{@slug}: 풀 구현 예정.</div>
     """
   end
 

@@ -115,7 +115,11 @@ defmodule HappyTrizn.UserGameSettings do
       },
       options: %{
         "difficulty" => "medium",
-        "show_timer" => true
+        "show_timer" => true,
+        # custom 난이도일 때만 사용. 다른 난이도는 프리셋이 우선.
+        "custom_rows" => 10,
+        "custom_cols" => 10,
+        "custom_mines" => 12
       },
       das: 0,
       arr: 0,
@@ -280,7 +284,8 @@ defmodule HappyTrizn.UserGameSettings do
   def normalize_option_value(_k, "false"), do: false
 
   def normalize_option_value(k, v)
-      when k in ~w(das arr sound_volume round_seconds board_size) and is_binary(v) do
+      when k in ~w(das arr sound_volume round_seconds board_size custom_rows custom_cols custom_mines) and
+             is_binary(v) do
     case Integer.parse(v) do
       {n, _} -> n
       :error -> v
