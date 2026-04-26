@@ -126,8 +126,8 @@ defmodule HappyTriznWeb.GameLiveTest do
       # cursor 초기 (8, 8) — medium 16×16 중앙. 화살표 up → (7, 8).
       render_hook(view, "keydown", %{"key" => "ArrowUp"})
       html = render(view)
-      # cursor highlight = ring-2 ring-primary 클래스 적용된 셀 1개.
-      assert html =~ "ring-2 ring-primary"
+      # cursor highlight = outline outline-primary 적용된 셀 1개.
+      assert html =~ "outline-primary"
 
       # F → flag_cursor → 해당 셀 flagged.
       render_hook(view, "keydown", %{"key" => "f"})

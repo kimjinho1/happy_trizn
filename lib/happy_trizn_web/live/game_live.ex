@@ -267,14 +267,14 @@ defmodule HappyTriznWeb.GameLive do
                 <% cell.revealed and cell.mine -> %>
                   <div class={[
                     "w-7 h-7 bg-error text-base-100 flex items-center justify-center text-xs font-bold border border-base-100",
-                    cursor? && "ring-2 ring-primary"
+                    cursor? && "outline outline-2 outline-primary -outline-offset-2"
                   ]}>
                     💣
                   </div>
                 <% cell.revealed -> %>
                   <div class={[
                     "w-7 h-7 bg-base-200 flex items-center justify-center text-xs border border-base-100",
-                    cursor? && "ring-2 ring-primary"
+                    cursor? && "outline outline-2 outline-primary -outline-offset-2"
                   ]}>
                     {if cell.neighbors > 0, do: cell.neighbors, else: ""}
                   </div>
@@ -286,7 +286,7 @@ defmodule HappyTriznWeb.GameLive do
                     phx-value-c={c}
                     class={[
                       "w-7 h-7 bg-warning flex items-center justify-center text-xs border border-base-100",
-                      cursor? && "ring-2 ring-primary"
+                      cursor? && "outline outline-2 outline-primary -outline-offset-2"
                     ]}
                     title="좌클릭 = flag 해제"
                   >
@@ -304,7 +304,7 @@ defmodule HappyTriznWeb.GameLive do
                     data-c={c}
                     class={[
                       "w-7 h-7 bg-base-100 hover:bg-base-content/10 border border-base-300",
-                      cursor? && "ring-2 ring-primary"
+                      cursor? && "outline outline-2 outline-primary -outline-offset-2"
                     ]}
                   >
                   </button>
