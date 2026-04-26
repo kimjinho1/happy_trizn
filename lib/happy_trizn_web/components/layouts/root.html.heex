@@ -45,43 +45,75 @@
         <span class="text-base-content/80 font-medium">{assigns[:page_title]}</span>
       <% end %>
 
-      <div class="ml-auto flex items-center gap-2">
-        <%= if assigns[:current_nickname] do %>
-          <a href="/history" class="btn btn-ghost btn-md" title="내 기록">🏆 기록</a>
-          <a href="/settings/games" class="btn btn-ghost btn-md" title="게임 옵션">⚙️ 옵션</a>
-        <% end %>
+      <div class="ml-auto flex items-center gap-1">
         <%= if user = assigns[:current_user] do %>
-          <a href="/dm" class="btn btn-ghost btn-md text-xl relative" title="DM">
-            💬 <% unread = HappyTrizn.Messages.unread_count(user) %>
+          <a href="/dm" class="btn btn-ghost btn-md px-2 relative" title="DM">
+            💬 DM
+            <% unread = HappyTrizn.Messages.unread_count(user) %>
             <%= if unread > 0 do %>
               <span class="badge badge-error badge-xs absolute -top-1 -right-1 dm-unread-badge">
                 {if unread > 300, do: "300+", else: unread}
               </span>
             <% end %>
           </a>
-          <a
-            href="/me"
-            class="flex items-center gap-2 hover:opacity-80 transition"
-            title="마이페이지"
-          >
-            <%= if user.avatar_url do %>
-              <img
-                src={user.avatar_url}
-                alt={user.nickname}
-                class="w-9 h-9 rounded-full object-cover ring-2 ring-base-300"
-              />
-            <% else %>
-              <div class="w-9 h-9 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center ring-2 ring-base-300">
-                {String.first(user.nickname) |> String.upcase()}
-              </div>
-            <% end %>
-            <span class="hidden sm:inline">{user.nickname}</span>
-          </a>
-          <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-md">로그아웃</.link>
+        <% end %>
+        <%= if assigns[:current_nickname] do %>
+          <a href="/history" class="btn btn-ghost btn-md px-2" title="내 기록">🏆 기록</a>
+          <a href="/settings/games" class="btn btn-ghost btn-md px-2" title="게임 옵션">⚙️ 옵션</a>
+        <% end %>
+        <%= if user = assigns[:current_user] do %>
+          <div class="dropdown dropdown-end">
+            <div
+              tabindex="0"
+              role="button"
+              class="btn btn-ghost btn-md px-2 flex items-center gap-2"
+              title="메뉴"
+            >
+              <%= if user.avatar_url do %>
+                <img
+                  src={user.avatar_url}
+                  alt={user.nickname}
+                  class="w-8 h-8 rounded-full object-cover ring-2 ring-base-300"
+                />
+              <% else %>
+                <div class="w-8 h-8 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center ring-2 ring-base-300 text-sm">
+                  {String.first(user.nickname) |> String.upcase()}
+                </div>
+              <% end %>
+              <span class="hidden sm:inline">{user.nickname}</span>
+              <span class="text-xs">▾</span>
+            </div>
+            <ul
+              tabindex="0"
+              class="dropdown-content menu bg-base-100 rounded-box z-[50] w-44 p-2 shadow border border-base-300"
+            >
+              <li><a href="/me">👤 마이페이지</a></li>
+              <li>
+                <.link href={~p"/logout"} method="delete">🚪 로그아웃</.link>
+              </li>
+            </ul>
+          </div>
         <% else %>
           <%= if guest_nick = assigns[:current_nickname] do %>
-            <span class="text-sm text-base-content/70">(게스트) <strong>{guest_nick}</strong></span>
-            <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-md">로그아웃</.link>
+            <div class="dropdown dropdown-end">
+              <div
+                tabindex="0"
+                role="button"
+                class="btn btn-ghost btn-md px-2 flex items-center gap-2"
+                title="메뉴"
+              >
+                <span class="hidden sm:inline">(게스트) {guest_nick}</span>
+                <span class="text-xs">▾</span>
+              </div>
+              <ul
+                tabindex="0"
+                class="dropdown-content menu bg-base-100 rounded-box z-[50] w-44 p-2 shadow border border-base-300"
+              >
+                <li>
+                  <.link href={~p"/logout"} method="delete">🚪 로그아웃</.link>
+                </li>
+              </ul>
+            </div>
           <% end %>
         <% end %>
       </div>
