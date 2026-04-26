@@ -511,11 +511,12 @@ defmodule HappyTrizn.Games.Tetris do
     new_level = div(new_lines, @lines_per_level) + 1
 
     # 라인 안 지운 lock 일 때만 board 에 pending 적용 — jstris 표준.
+    # top_out 시에도 가비지 적용된 board 사용 — UI 에 "가비지로 졌다" 명확히 보임.
     {board_with_garbage, top_out_garbage, garbage_applied} =
       if cleared == 0 and pending_after_cancel > 0 do
         case Board.add_garbage(cleared_board, pending_after_cancel) do
           {:ok, b} -> {b, false, pending_after_cancel}
-          {:error, :top_out} -> {cleared_board, true, 0}
+          {:top_out, b} -> {b, true, pending_after_cancel}
         end
       else
         {cleared_board, false, 0}
