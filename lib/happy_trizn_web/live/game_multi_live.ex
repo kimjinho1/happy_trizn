@@ -1116,7 +1116,7 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp game_room_chat(assigns) do
     ~H"""
-    <div class="bg-base-200 rounded-lg flex flex-col h-[480px] lg:h-[520px]">
+    <div class="bg-base-200 rounded-lg flex flex-col" style="height: 480px;">
       <header class="px-3 py-2 border-b border-base-300 text-sm font-semibold flex items-center gap-2">
         💬 <span>게임방 채팅</span>
         <span class="text-xs font-normal text-base-content/50">방 닫히면 사라짐</span>
@@ -1125,7 +1125,7 @@ defmodule HappyTriznWeb.GameMultiLive do
       <div
         id="game-chat-scroll"
         phx-hook="ChatScroll"
-        class="flex-1 overflow-y-auto px-3 py-2 flex flex-col-reverse gap-1 text-sm"
+        class="flex-1 min-h-0 overflow-y-auto px-3 py-2 flex flex-col-reverse gap-1 text-sm"
       >
         <%= if @messages == [] do %>
           <div class="text-xs text-base-content/40 text-center my-auto">아직 메시지 없음</div>
@@ -1654,10 +1654,10 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp skribbl_chat(assigns) do
     ~H"""
-    <div class="bg-base-200 rounded p-3 flex flex-col" style="max-height: 400px;">
+    <div class="bg-base-200 rounded p-3 flex flex-col" style="height: 400px;">
       <h3 class="font-semibold mb-2 text-sm">채팅 / 추측</h3>
 
-      <div class="flex-1 overflow-y-auto space-y-1 mb-2 text-xs">
+      <div class="flex-1 min-h-0 overflow-y-auto space-y-1 mb-2 text-xs">
         <%= for m <- Enum.reverse(@messages) do %>
           <div>
             <span class="font-mono text-base-content/70">{m.nickname}:</span>

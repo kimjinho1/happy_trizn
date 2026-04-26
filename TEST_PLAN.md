@@ -1,10 +1,10 @@
 # Test Plan
 
-Branch tracking. 최근 갱신: Sprint 3f (Snake.io) + 3h (2048/Minesweeper 옵션 보강) 머지 후.
+Branch tracking. 최근 갱신: Sprint 4a (DM + 알림) + 4b (친구 게임 초대) + 4c (채팅창 height 고정) 머지 후.
 
 ## Status
 
-**513 tests, 0 failures**.
+**569 tests, 0 failures**.
 
 ```bash
 docker compose up -d
@@ -31,7 +31,9 @@ MIX_ENV=test bin/mix test
 | **PersonalRecords** | personal_records_test (apply_stats max / metadata merge / leaderboard) | 8 |
 | Registry | registry_test | 5 |
 | **UserGameSettings** | user_game_settings_test (defaults 모든 게임 / get_for normalize / upsert / reset / list / `2048 → games_2048 alias`) | 18 |
-| **Lobby LiveView** | lobby_live_test (인증 / 채팅 / 친구 / 방 / 글로벌 nav / 캐치마인드 badge) | 27 |
+| **Lobby LiveView** | lobby_live_test (인증 / 채팅 / 친구 / 방 / 글로벌 nav / 캐치마인드 badge / 친구 게임 초대 DM 자동 발송) | 29 |
+| **DM LiveView** | dm_live_test (인증 / 친구 list / thread mount + mark_read / send / PubSub 실시간 / unread badge / DM bubble URL link / 알림 hook) | 14 |
+| **Messages context** | messages_test (send / list_thread / unread_count / mark_thread_read / cap 300+) | 14 |
 | **Game Multi LiveView** | game_multi_live_test (Tetris + Skribbl + Bomberman + Snake.io 통합 + 게임방 ephemeral chat broadcast) | 56 |
 | **Game Settings LiveView** | game_settings_live_test (인증 / index / Tetris show / 제너릭 폼 / save / reset / `/settings/games/2048` slug alias) | 18 |
 | **History LiveView** | history_live_test (인증 / index / leaderboard / invalid slug) | 5 |
@@ -41,7 +43,8 @@ MIX_ENV=test bin/mix test
 - `/` — 게스트 입장
 - `/register` — `@trizn.kr` 가입
 - `/login` — 로그인
-- `/lobby` — 로비 (채팅 / 친구 / 방 / 게임 카테고리 / 🏆 / ⚙️)
+- `/lobby` — 로비 (채팅 / 친구 / 방 / 게임 카테고리 / 🏆 / ⚙️ / 친구 초대)
+- `/dm` + `/dm/:peer_id` — DM 1:1 (unread badge / 실시간 알림 / URL 자동 link)
 - `/game/:game_type/:room_id` — 멀티 게임 (Tetris ✅, 캐치마인드 ✅)
 - `/play/:game_type` — 싱글 (2048, Minesweeper, Pac-Man stub)
 - `/settings/games[/:game_type]` — 사용자 옵션
@@ -77,7 +80,11 @@ MIX_ENV=test bin/mix test
 - 가비지 overflow 22행 초과 방어 ✅
 - 한/영 IME 게임 키 인식 ✅ (e.code 기반)
 - 모달 ✕ / backdrop / 저장 후 닫힘 ✅
-- 채팅 input 자동 reset (Lobby + Skribbl) ✅
+- 채팅 input 자동 reset (Lobby + Skribbl + DM) ✅
+- 채팅창 height 고정 (DM 60vh / 게임방 480px / Skribbl 400px) — overflow scroll, 무한 grow 방지 ✅
+- DM body URL `/game/<slug>/<room_id>` 자동 link 분해 ✅
+- 친구 초대 — 방 list 에서 modal → 다중 친구 선택 → DM 자동 발송 ✅
+- DM unread badge 글로벌 top nav (300+ cap) ✅
 - HTTP-only mount → GameSession 미터치 ✅
 - GenServer freeze (mailbox 폭주) — perf fix ✅
 - match_result dedupe ✅
