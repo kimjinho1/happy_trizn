@@ -567,67 +567,78 @@ defmodule HappyTriznWeb.LobbyLive do
                 </p>
               <% true -> %>
                 <%= if @pending_received != [] do %>
-                  <div class="text-sm font-semibold mt-3">받은 요청 ({length(@pending_received)})</div>
-                  <%= for f <- @pending_received do %>
-                    <div class="flex items-center justify-between text-base py-1.5 border-b">
-                      <span>{f.requester.nickname}</span>
-                      <div class="flex gap-1">
-                        <button
-                          phx-click="accept_friend"
-                          phx-value-friendship-id={f.id}
-                          class="btn btn-sm btn-success"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          phx-click="reject_friend"
-                          phx-value-friendship-id={f.id}
-                          class="btn btn-sm btn-error"
-                        >
-                          ✗
-                        </button>
+                  <div class="mt-3 -mx-3 px-3 py-1 bg-warning/20 border-y border-warning/40 text-sm font-bold flex items-center gap-2">
+                    🔔 받은 요청
+                    <span class="badge badge-warning badge-sm">{length(@pending_received)}</span>
+                  </div>
+                  <div class="divide-y divide-base-300">
+                    <%= for f <- @pending_received do %>
+                      <div class="flex items-center justify-between text-base py-1.5">
+                        <span>{f.requester.nickname}</span>
+                        <div class="flex gap-1">
+                          <button
+                            phx-click="accept_friend"
+                            phx-value-friendship-id={f.id}
+                            class="btn btn-sm btn-success"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            phx-click="reject_friend"
+                            phx-value-friendship-id={f.id}
+                            class="btn btn-sm btn-error"
+                          >
+                            ✗
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  <% end %>
-                <% end %>
-
-                <div class="text-sm font-semibold mt-3">친구 ({length(@friends)})</div>
-                <%= if @friends == [] do %>
-                  <p class="text-xs text-base-content/40">아직 없음</p>
-                <% else %>
-                  <%= for u <- @friends do %>
-                    <div class="flex items-center justify-between text-base py-1.5">
-                      <span class="truncate">{u.nickname}</span>
-                      <.link
-                        navigate={~p"/dm/#{u.id}"}
-                        class="btn btn-sm btn-ghost text-xl"
-                        title="DM 보내기"
-                      >
-                        💬
-                      </.link>
-                    </div>
-                  <% end %>
-                <% end %>
-
-                <div class="text-sm font-semibold mt-3">
-                  {if @show_all_users, do: "모든 사용자", else: "추천 친구 (최대 10)"}
-                </div>
-                <%= for u <- (if @show_all_users, do: @all_users, else: @recommend) do %>
-                  <div class="flex items-center justify-between text-base py-1.5">
-                    <span>{u.nickname}</span>
-                    <%= if u.id != @user.id do %>
-                      <button
-                        phx-click="send_friend_request"
-                        phx-value-user-id={u.id}
-                        class="btn btn-sm btn-outline"
-                      >
-                        +
-                      </button>
                     <% end %>
                   </div>
                 <% end %>
 
-                <button phx-click="toggle_show_all" class="btn btn-ghost btn-sm text-base mt-2">
+                <div class="mt-3 -mx-3 px-3 py-1 bg-base-300 text-sm font-bold flex items-center gap-2">
+                  👥 친구 <span class="badge badge-sm">{length(@friends)}</span>
+                </div>
+                <%= if @friends == [] do %>
+                  <p class="text-sm text-base-content/40 py-1">아직 없음</p>
+                <% else %>
+                  <div class="divide-y divide-base-300">
+                    <%= for u <- @friends do %>
+                      <div class="flex items-center justify-between text-base py-1">
+                        <span class="truncate">{u.nickname}</span>
+                        <.link
+                          navigate={~p"/dm/#{u.id}"}
+                          class="btn btn-sm btn-ghost leading-none"
+                          title="DM 보내기"
+                        >
+                          💬
+                        </.link>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+
+                <div class="mt-3 -mx-3 px-3 py-1 bg-base-300/50 text-sm font-bold flex items-center gap-2">
+                  ✨ {if @show_all_users, do: "모든 사용자", else: "추천 친구"}
+                </div>
+                <div class="divide-y divide-base-300">
+                  <%= for u <- (if @show_all_users, do: @all_users, else: @recommend) do %>
+                    <div class="flex items-center justify-between text-base py-1">
+                      <span>{u.nickname}</span>
+                      <%= if u.id != @user.id do %>
+                        <button
+                          phx-click="send_friend_request"
+                          phx-value-user-id={u.id}
+                          class="btn btn-sm btn-outline"
+                        >
+                          +
+                        </button>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+
+                <button phx-click="toggle_show_all" class="btn btn-ghost btn-sm text-base mt-2 w-full">
                   {if @show_all_users, do: "추천만 보기", else: "더보기 →"}
                 </button>
             <% end %>
