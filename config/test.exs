@@ -55,3 +55,7 @@ config :happy_trizn, :admin,
 # Mongo url nil → Application.start 시 Mongo supervisor 안 띄움.
 # Chat 모듈은 best-effort 라 :mongo 프로세스 없으면 skip.
 config :happy_trizn, :mongo, url: nil, pool_size: 1
+
+# GameEvents Broadway pipeline — test 환경에서는 Application 자동 부팅 skip.
+# 개별 테스트가 필요 시 `start_supervised!` 로 직접 띄움.
+config :happy_trizn, :game_events, enabled: false

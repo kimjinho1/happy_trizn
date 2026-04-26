@@ -242,6 +242,13 @@ defmodule HappyTrizn.Games.GameSession do
     })
 
     update_personal_records(state, results, winner_user_id)
+
+    # Sprint 4d — Broadway 비동기 큐로 game_events Mongo 적재 (분석/감사용).
+    HappyTrizn.GameEvents.emit(state.game_type, state.room_id, :match_completed, %{
+      winner_user_id: winner_user_id,
+      duration_ms: duration,
+      player_count: map_size(state.players)
+    })
   rescue
     e ->
       require Logger

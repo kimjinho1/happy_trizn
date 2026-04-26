@@ -30,6 +30,12 @@ defmodule HappyTrizn.Application do
             {Mongo,
              [name: :mongo, url: mongo_url, pool_size: Keyword.get(mongo_cfg, :pool_size, 5)]}
         ),
+        # GameEvents Broadway pipeline — Producer → batcher → Mongo bulk insert.
+        # Mongo 미연결이라도 Producer 큐는 정상 — batch handler 가 silent skip.
+        # test.exs 에서 game_events: [enabled: false] → 미시작.
+        if(game_events_enabled?(),
+          do: HappyTrizn.GameEvents.Pipeline
+        ),
         # Phoenix endpoint must be last
         HappyTriznWeb.Endpoint
       ]
@@ -47,5 +53,10 @@ defmodule HappyTrizn.Application do
   def config_change(changed, _new, removed) do
     HappyTriznWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp game_events_enabled? do
+    Application.get_env(:happy_trizn, :game_events, [])
+    |> Keyword.get(:enabled, true)
   end
 end
