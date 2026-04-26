@@ -154,6 +154,8 @@ defmodule HappyTriznWeb.GameMultiLive do
   defp key_to_action("tetris", "ArrowDown"), do: "soft_drop"
   defp key_to_action("tetris", " "), do: "hard_drop"
   defp key_to_action("tetris", "Spacebar"), do: "hard_drop"
+  defp key_to_action("tetris", "Space"), do: "hard_drop"
+  defp key_to_action("tetris", "space"), do: "hard_drop"
   defp key_to_action("tetris", "z"), do: "rotate_ccw"
   defp key_to_action("tetris", "Z"), do: "rotate_ccw"
   defp key_to_action("tetris", "x"), do: "rotate_cw"

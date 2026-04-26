@@ -203,7 +203,11 @@ defmodule HappyTrizn.UserGameSettings do
         base
 
       %Setting{key_bindings: kb, options: opts} ->
-        merged_bindings = Map.merge(base.bindings, kb || %{})
+        merged_bindings =
+          base.bindings
+          |> Map.merge(kb || %{})
+          |> normalize_bindings()
+
         merged_options = Map.merge(base.options, opts || %{})
 
         %{
@@ -215,6 +219,23 @@ defmodule HappyTrizn.UserGameSettings do
         }
     end
   end
+
+  # 저장된 키 list 의 친화 표기 ("Space"/"space" 등) 를 KeyboardEvent.key 정규형 (" ") 으로 변환.
+  # 과거 parse_key 도입 전에 저장된 row 도 안전하게 매칭.
+  defp normalize_bindings(bindings) when is_map(bindings) do
+    Map.new(bindings, fn {action, keys} ->
+      {action, normalize_key_list(keys)}
+    end)
+  end
+
+  defp normalize_key_list(keys) when is_list(keys), do: Enum.map(keys, &normalize_key/1)
+  defp normalize_key_list(_), do: []
+
+  defp normalize_key("Space"), do: " "
+  defp normalize_key("space"), do: " "
+  defp normalize_key("SPACE"), do: " "
+  defp normalize_key("Tab"), do: "\t"
+  defp normalize_key(k), do: k
 
   @doc """
   Upsert 사용자 옵션. (등록자 only)

@@ -111,16 +111,23 @@ const Hooks = {
       try {
         const bindings = JSON.parse(this.el.dataset.keyBindings || "{}")
         // key → action lookup map (한 키는 마지막 매칭 action 으로).
+        // normalize: "Space"/"space" → " ", "Tab" → "\t", 그 외 lower → 원본 + lower 둘 다 등록.
         this.keyToAction = {}
         for (const [action, keys] of Object.entries(bindings)) {
           if (!Array.isArray(keys)) continue
           for (const k of keys) {
-            this.keyToAction[k] = action
+            const norm = this.normalizeKey(k)
+            this.keyToAction[norm] = action
           }
         }
       } catch (_e) {
         this.keyToAction = {}
       }
+    },
+    normalizeKey(k) {
+      if (k === "Space" || k === "space" || k === "SPACE") return " "
+      if (k === "Tab") return "\t"
+      return k
     },
     onKeyDown(e) {
       const action = this.keyToAction[e.key]

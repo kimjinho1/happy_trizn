@@ -61,6 +61,19 @@ defmodule HappyTrizn.UserGameSettingsTest do
       assert UserGameSettings.get_for(user, "tetris") == UserGameSettings.defaults("tetris")
     end
 
+    test "친화 표기 (\"Space\"/\"space\") 자동 정규화 → \" \"" do
+      user = user_fixture()
+
+      {:ok, _} =
+        UserGameSettings.upsert(user, "tetris", %{
+          key_bindings: %{"hard_drop" => ["Space", "space"]},
+          options: %{}
+        })
+
+      result = UserGameSettings.get_for(user, "tetris")
+      assert result.bindings["hard_drop"] == [" ", " "]
+    end
+
     test "row 있으면 default merge" do
       user = user_fixture()
 
