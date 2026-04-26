@@ -23,6 +23,7 @@ MIX_ENV=test bin/mix test
 | **캐치마인드 (Skribbl)** | skribbl_test (state / join / start / choose / stroke / guess / tick / round-robin / total_rounds / word_pool 카테고리 + `:over → leave/restart → :waiting 리셋`) | 34 |
 | **Bomberman** | bomberman_test (init / spawn corner / move / place_bomb / fuse / chain / item drop / game_over / `:over → leave/restart → :waiting 리셋`) | 22 |
 | **Snake.io** | snake_io_test (meta / init / join / leave / set_dir / 180° 무시 / tick 전진 / 벽 충돌 / 자기 몸 / tail follow 허용 / food eat / kill credit / respawn 60 tick / best_length) | 19 |
+| **Pac-Man** | pacman_test (28×31 maze / pellet count / power pellet / ghost AI 4종 / scatter↔chase / frightened / death / restart) | 24 |
 | GameSession | game_session_test (lifecycle / dedupe / terminate cleanup / match_record top_out) | 12 |
 | 다른 게임 stub | stub_games_test (Bomberman/Snake/Pacman/Skribbl 인터페이스 검증) | 12 |
 | 2048 | games_2048_test (board_size 4/5/6 + restart 보존 + 키보드 input) | 25+ |
@@ -46,7 +47,7 @@ MIX_ENV=test bin/mix test
 - `/lobby` — 로비 (채팅 / 친구 / 방 / 게임 카테고리 / 🏆 / ⚙️ / 친구 초대)
 - `/dm` + `/dm/:peer_id` — DM 1:1 (unread badge / 실시간 알림 / URL 자동 link)
 - `/game/:game_type/:room_id` — 멀티 게임 (Tetris ✅, 캐치마인드 ✅)
-- `/play/:game_type` — 싱글 (2048, Minesweeper, Pac-Man stub)
+- `/play/:game_type` — 싱글 (2048, Minesweeper, Pac-Man ✅)
 - `/settings/games[/:game_type]` — 사용자 옵션
 - `/history` + `/history/leaderboard/:game_type` — 매치 히스토리 / 리더보드
 - `/admin/login` — Admin
