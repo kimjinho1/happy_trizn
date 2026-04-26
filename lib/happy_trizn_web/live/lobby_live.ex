@@ -31,6 +31,7 @@ defmodule HappyTriznWeb.LobbyLive do
           PubSub.subscribe(HappyTrizn.PubSub, @chat_topic)
           Rooms.subscribe_lobby()
           if user, do: Friends.subscribe(user)
+          HappyTriznWeb.Presence.subscribe()
         end
 
         {:ok,
@@ -46,6 +47,7 @@ defmodule HappyTriznWeb.LobbyLive do
          |> assign(:games_single, GameRegistry.list_single())
          |> assign(:page_title, "로비")
          |> assign(:invite_modal_room, nil)
+         |> assign(:online_user_ids, HappyTriznWeb.Presence.online_user_ids())
          |> load_friends_data()
          |> load_rooms()}
     end
@@ -289,6 +291,11 @@ defmodule HappyTriznWeb.LobbyLive do
 
   def handle_info({:room_created, _room}, socket), do: {:noreply, load_rooms(socket)}
   def handle_info({:room_closed, _room}, socket), do: {:noreply, load_rooms(socket)}
+
+  # Sprint 4g — presence diff. 누가 접속/이탈하면 online list 갱신.
+  def handle_info(%{event: "presence_diff"}, socket) do
+    {:noreply, assign(socket, :online_user_ids, HappyTriznWeb.Presence.online_user_ids())}
+  end
 
   def handle_info(_, socket), do: {:noreply, socket}
 
@@ -604,8 +611,22 @@ defmodule HappyTriznWeb.LobbyLive do
                 <% else %>
                   <div class="divide-y divide-base-300">
                     <%= for u <- @friends do %>
+                      <% online? = MapSet.member?(@online_user_ids, u.id) %>
                       <div class="flex items-center justify-between text-base py-1">
-                        <span class="truncate">{u.nickname}</span>
+                        <span class="flex items-center gap-1.5 truncate">
+                          <span
+                            class={[
+                              "inline-block w-2 h-2 rounded-full shrink-0",
+                              if(online?,
+                                do: "bg-success ring-2 ring-success/30",
+                                else: "bg-base-content/20"
+                              )
+                            ]}
+                            title={if online?, do: "접속 중", else: "오프라인"}
+                          >
+                          </span>
+                          <span class="truncate">{u.nickname}</span>
+                        </span>
                         <.link
                           navigate={~p"/dm/#{u.id}"}
                           class="btn btn-sm btn-ghost leading-none"

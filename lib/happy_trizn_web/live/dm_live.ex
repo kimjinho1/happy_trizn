@@ -25,7 +25,11 @@ defmodule HappyTriznWeb.DmLive do
         {:ok, socket |> put_flash(:error, "로그인 사용자만") |> redirect(to: ~p"/lobby")}
 
       true ->
-        if connected?(socket), do: Messages.subscribe(user)
+        if connected?(socket) do
+          Messages.subscribe(user)
+          HappyTriznWeb.Presence.subscribe()
+        end
+
         action = if params["peer_id"], do: :thread, else: :index
         socket = assign(socket, :live_action, action)
 
@@ -33,6 +37,7 @@ defmodule HappyTriznWeb.DmLive do
          socket
          |> assign(:user, user)
          |> assign(:page_title, "💬 DM")
+         |> assign(:online_user_ids, HappyTriznWeb.Presence.online_user_ids())
          |> load_action(action, params)}
     end
   end
@@ -154,6 +159,11 @@ defmodule HappyTriznWeb.DmLive do
     {:noreply, socket}
   end
 
+  # Sprint 4g — presence diff. 누가 접속/이탈하면 online list 갱신.
+  def handle_info(%{event: "presence_diff"}, socket) do
+    {:noreply, assign(socket, :online_user_ids, HappyTriznWeb.Presence.online_user_ids())}
+  end
+
   def handle_info(_, socket), do: {:noreply, socket}
 
   # ============================================================================
@@ -189,7 +199,16 @@ defmodule HappyTriznWeb.DmLive do
                       !(t.unread > 0) && "hover:bg-base-300"
                     ]}
                   >
-                    <.dm_avatar user={t.peer} size={42} />
+                    <div class="relative shrink-0">
+                      <.dm_avatar user={t.peer} size={42} />
+                      <%= if MapSet.member?(@online_user_ids, t.peer.id) do %>
+                        <span
+                          class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success ring-2 ring-base-200"
+                          title="접속 중"
+                        >
+                        </span>
+                      <% end %>
+                    </div>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2">
                         <span class={[
@@ -230,9 +249,23 @@ defmodule HappyTriznWeb.DmLive do
               >
                 ←
               </.link>
-              <.dm_avatar user={@peer} size={44} />
+              <div class="relative shrink-0">
+                <.dm_avatar user={@peer} size={44} />
+                <%= if MapSet.member?(@online_user_ids, @peer.id) do %>
+                  <span
+                    class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-success ring-2 ring-base-100"
+                    title="접속 중"
+                  >
+                  </span>
+                <% end %>
+              </div>
               <div class="min-w-0">
-                <div class="font-bold text-lg truncate">{@peer.nickname}</div>
+                <div class="font-bold text-lg truncate flex items-center gap-2">
+                  {@peer.nickname}
+                  <%= if MapSet.member?(@online_user_ids, @peer.id) do %>
+                    <span class="text-xs text-success font-normal">접속 중</span>
+                  <% end %>
+                </div>
                 <div class="text-sm text-base-content/50 truncate">{@peer.email}</div>
               </div>
             </header>

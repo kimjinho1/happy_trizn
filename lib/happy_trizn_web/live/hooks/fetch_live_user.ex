@@ -12,6 +12,7 @@ defmodule HappyTriznWeb.Live.Hooks.FetchLiveUser do
   alias HappyTrizn.Accounts
   alias HappyTrizn.Accounts.Session
   alias HappyTriznWeb.Plugs.FetchCurrentUser
+  alias HappyTriznWeb.Presence
 
   def on_mount(:default, _params, session, socket) do
     encoded = session["session_token"] || session[:session_token]
@@ -27,6 +28,11 @@ defmodule HappyTriznWeb.Live.Hooks.FetchLiveUser do
         _ ->
           {nil, nil, nil}
       end
+
+    # Sprint 4g — 로그인 사용자의 LV 접속 시 presence track. 연결 종료 시 자동 해제.
+    if user && Phoenix.LiveView.connected?(socket) do
+      Presence.track_user(self(), user.id)
+    end
 
     {:cont, assign(socket, current_user: user, current_session: sess, current_nickname: nickname)}
   end
