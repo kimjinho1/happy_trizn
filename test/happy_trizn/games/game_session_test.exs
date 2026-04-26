@@ -104,6 +104,62 @@ defmodule HappyTrizn.Games.GameSessionTest do
     end
   end
 
+  describe "match_results 자동 저장 (game_over 시)" do
+    test "Tetris 1v1 한 명 leave → winner 결정 → match_results row 생성" do
+      Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(HappyTrizn.Repo, {:shared, self()})
+
+      {:ok, host} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "mr_h_#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "mr_h_#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, opp} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "mr_o_#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "mr_o_#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "tetris",
+          name: "match_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room.id),
+          room_id: room.id,
+          game_type: "tetris"
+        )
+
+      :ok = GameSession.player_join(pid, "p1", %{user_id: host.id, nickname: host.nickname})
+      :ok = GameSession.player_join(pid, "p2", %{user_id: opp.id, nickname: opp.nickname})
+
+      # countdown 끝낼 때까지 기다림 (3000ms 대신 강제 force).
+      # GenServer state 직접 조작 — 테스트용.
+      :sys.replace_state(pid, fn state ->
+        gs = state.game_state
+        %{state | game_state: %{gs | status: :playing, countdown_ms: 0}}
+      end)
+
+      # p2 가 leave → p1 winner → game_over → match_result 저장 + GameSession stop
+      ref = Process.monitor(pid)
+      GameSession.player_leave(pid, "p2", :disconnect)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 1000
+
+      # match_results 에 winner=host 인 row 있어야
+      [r] = HappyTrizn.MatchResults.recent("tetris", 50)
+      assert r.winner_id == host.id
+      assert r.room_id == room.id
+      assert r.game_type == "tetris"
+    end
+  end
+
   describe "terminate cleanup (room close)" do
     test "GameSession 종료 시 Rooms.close_by_id 호출 → 방 status closed" do
       Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)

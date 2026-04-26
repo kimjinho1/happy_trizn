@@ -136,6 +136,56 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert state.status == :practice
     end
 
+    test "2번째 player 입장 → 카운트다운 배너 (시작까지 N…)", %{conn: conn, room: room} do
+      # host A
+      {:ok, view_a, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      # B 입장
+      bob = user_fixture(nickname: "bob_cd_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _view_b, _} = live(conn_b, ~p"/game/tetris/#{room.id}")
+
+      # A 화면에 countdown 표기 도달 (PubSub broadcast 전파 후)
+      Process.sleep(50)
+      html = render(view_a)
+      assert html =~ "시작까지"
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      assert state.status == :countdown
+      # 양쪽 모두 fresh state — score 0
+      Enum.each(state.players, fn {_, p} -> assert p.score == 0 end)
+    end
+
+    test "글로벌 🏠 홈 링크 게임 화면에도 노출", %{conn: conn, room: room} do
+      conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
+      html = Phoenix.ConnTest.html_response(conn, 200)
+      assert html =~ "🏠"
+    end
+
+    test "ghost piece + grid class render", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # standard grid class (default)
+      assert html =~ "border-base-100"
+      # 옵션 hold/next preview 컴포넌트
+      assert html =~ "홀드"
+      assert html =~ "다음"
+    end
+
+    test "옵션 링크 새 탭 (target=_blank)", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "target=\"_blank\""
+      assert html =~ "/settings/games/tetris"
+    end
+
+    test "tetris 일 때 phx-window-keyup 비활성 (JS hook 만 키 처리)", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # 더블파이어 방지 — server keyup handler 없어야
+      refute html =~ "phx-window-keyup=\"key\""
+      # JS hook 은 살아있어야
+      assert html =~ "phx-hook=\"TetrisInput\""
+    end
+
     test "HTTP-only mount (connected? = false) 는 GameSession 안 건드림", %{conn: conn, room: room} do
       # disconnected GET 요청만 — websocket 없음 (Phoenix.ConnTest 가 fully render)
       conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
