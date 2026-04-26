@@ -536,6 +536,22 @@ defmodule HappyTrizn.Games.TetrisTest do
     end
   end
 
+  describe "next 큐 (upcoming)" do
+    test "public_player.nexts 5개 piece" do
+      state = join2()
+      pp = Tetris.public_player(state.players["p1"])
+      assert is_list(pp.nexts)
+      assert length(pp.nexts) == 5
+      Enum.each(pp.nexts, fn t -> assert t in [:i, :o, :t, :s, :z, :l, :j] end)
+    end
+
+    test "upcoming/2 ordering — head = next, 그 다음 bag 순서" do
+      state = join2()
+      p = state.players["p1"]
+      assert Tetris.upcoming(p, 5) == [p.next | p.bag] |> Enum.take(5)
+    end
+  end
+
   describe "stats / public_stats" do
     test "public_stats 에 pps/kpp/apm + 카운터들 포함" do
       state = join2()

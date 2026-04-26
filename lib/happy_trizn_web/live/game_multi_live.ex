@@ -536,14 +536,17 @@ defmodule HappyTriznWeb.GameMultiLive do
         <h3 class="font-semibold mb-2">나 ({@player_id |> String.slice(0..7)})</h3>
         <%= if @me do %>
           <div class="flex gap-2 items-start">
-            <.tetris_board board={with_ghost_and_current(@me, @ghost?)} grid={@grid} />
+            <!-- 좌측: 홀드 -->
             <div class="flex flex-col gap-2">
               <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
-              <.piece_preview label="다음" piece={@me.next} />
               <%= if Map.get(@me, :lock_delay_ms) do %>
                 <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
               <% end %>
             </div>
+            <!-- 중앙: 보드 -->
+            <.tetris_board board={with_ghost_and_current(@me, @ghost?)} grid={@grid} />
+            <!-- 우측: 다음 큐 -->
+            <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
           </div>
           <div class="text-sm mt-2 space-y-1">
             <div>점수: <strong>{@me.score}</strong></div>
@@ -575,15 +578,15 @@ defmodule HappyTriznWeb.GameMultiLive do
         <h3 class="font-semibold mb-2">상대</h3>
         <%= if @other do %>
           <div class="flex gap-2 items-start">
-            <.tetris_board board={with_ghost_and_current(@other, false)} grid={@grid} />
             <div class="flex flex-col gap-2">
               <.piece_preview
                 label="홀드"
                 piece={@other.hold}
                 dim={Map.get(@other, :hold_used, false)}
               />
-              <.piece_preview label="다음" piece={@other.next} />
             </div>
+            <.tetris_board board={with_ghost_and_current(@other, false)} grid={@grid} />
+            <.next_queue nexts={Map.get(@other, :nexts, [@other.next])} />
           </div>
           <div class="text-sm mt-2 space-y-1">
             <div>점수: {@other.score} · 라인: {@other.lines} · 레벨: {@other.level}</div>
@@ -646,6 +649,27 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp piece_preview_cells(type) do
     HappyTrizn.Games.Tetris.Piece.cells(type, 0)
+  end
+
+  attr :nexts, :list, required: true
+
+  defp next_queue(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-1 bg-base-200 p-2 rounded min-w-[80px]">
+      <div class="text-xs text-base-content/60 mb-1 text-center">다음</div>
+      <%= for piece <- @nexts || [] do %>
+        <div class="grid grid-cols-4 gap-px">
+          <%= for {r, c} <- piece_preview_cells(piece) do %>
+            <div
+              class={["w-3 h-3", cell_color(piece)]}
+              style={"grid-row: #{r + 1}; grid-column: #{c + 1};"}
+            >
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    """
   end
 
   # 1. board, 2. ghost (옵션 켜졌고 origin != landing 시), 3. current piece — 순으로 overlay.

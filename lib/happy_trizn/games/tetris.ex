@@ -931,6 +931,8 @@ defmodule HappyTrizn.Games.Tetris do
       board: p.board,
       current: p.current,
       next: p.next,
+      # 다음 5개 (현재 next + bag 의 앞부분) — UI 가 우측에 큐로 표시.
+      nexts: upcoming(p, 5),
       hold: p.hold,
       hold_used: p.hold_used,
       score: p.score,
@@ -943,6 +945,11 @@ defmodule HappyTrizn.Games.Tetris do
       lock_delay_ms: p.lock_delay_ms,
       pieces_placed: p.pieces_placed
     }
+  end
+
+  @doc "다음 N 조각 list — current 제외, 다음으로 나올 순서대로."
+  def upcoming(%{next: next, bag: bag}, n) do
+    [next | bag] |> Enum.take(n)
   end
 
   # ============================================================================
