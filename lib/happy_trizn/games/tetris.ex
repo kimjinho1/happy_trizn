@@ -69,7 +69,9 @@ defmodule HappyTrizn.Games.Tetris do
   # ============================================================================
 
   @impl true
-  def handle_player_join(player_id, _meta, %{players: players} = state) do
+  def handle_player_join(player_id, meta, %{players: players} = state) do
+    nickname = Map.get(meta || %{}, :nickname) || "p#{String.slice(player_id, 0..4)}"
+
     cond do
       Map.has_key?(players, player_id) ->
         {:ok, state, []}
@@ -78,13 +80,17 @@ defmodule HappyTrizn.Games.Tetris do
         {:reject, :full}
 
       true ->
-        new_player = new_player_state()
+        new_player = new_player_state(nickname)
         new_players = Map.put(players, player_id, new_player)
 
         # 2번째 player join → 양쪽 모두 fresh state 로 reset + 3-2-1 countdown 시작.
         # 1번째는 :waiting (혼자 대기). solo 연습은 "start_practice" action 으로 진입.
         if map_size(new_players) == 2 do
-          reset_players = Map.new(new_players, fn {pid, _} -> {pid, new_player_state()} end)
+          # reset 시 기존 nickname 보존.
+          reset_players =
+            Map.new(new_players, fn {pid, p} ->
+              {pid, new_player_state(p.nickname)}
+            end)
 
           new_state = %{
             state
@@ -136,7 +142,8 @@ defmodule HappyTrizn.Games.Tetris do
           Map.has_key?(state.players, player_id) ->
         # 솔로 연습 모드 진입. :over 에서 진입 시 fresh state 로 reset.
         # 다른 사람 join 하면 자동으로 :countdown → :playing.
-        reset_player = new_player_state()
+        existing_nick = state.players[player_id].nickname
+        reset_player = new_player_state(existing_nick)
 
         new_state = %{
           state
@@ -163,7 +170,8 @@ defmodule HappyTrizn.Games.Tetris do
         {:ok, state, []}
 
       true ->
-        reset_players = Map.new(state.players, fn {pid, _} -> {pid, new_player_state()} end)
+        reset_players =
+          Map.new(state.players, fn {pid, p} -> {pid, new_player_state(p.nickname)} end)
 
         cond do
           map_size(reset_players) == 2 ->
@@ -981,6 +989,7 @@ defmodule HappyTrizn.Games.Tetris do
   @doc false
   def public_player(p) do
     %{
+      nickname: Map.get(p, :nickname, "anon"),
       board: p.board,
       current: p.current,
       next: p.next,
@@ -1010,12 +1019,13 @@ defmodule HappyTrizn.Games.Tetris do
   # Player init + 7-bag
   # ============================================================================
 
-  defp new_player_state do
+  defp new_player_state(nickname \\ "anon") do
     bag = new_bag()
     {first_piece, bag1} = take_from_bag(bag)
     {next_piece, bag2} = take_from_bag(bag1)
 
     %{
+      nickname: nickname,
       board: Board.new(),
       current: %{type: first_piece, rotation: 0, origin: Piece.spawn_origin(first_piece)},
       next: next_piece,

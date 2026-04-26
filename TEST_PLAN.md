@@ -95,6 +95,7 @@ MIX_ENV=test bin/mix test
 - match_completed 이벤트 game_session 에서 자동 emit ✅
 - Tetris Finesse — spawn 직후 piece_inputs 0 리셋 / hold 시 새 piece 도 리셋 / soft_drop·hard_drop·hold 는 finesse 카운트 안 함 ✅
 - 모바일 반응형 (Sprint 3k) — DM 단일창 toggle (peer 선택 시 sidebar 숨김 + ← 버튼) / Tetris·Bomberman 셀 크기 sm: 분기 / Snake canvas `max-w-full h-auto` ✅
+- Tetris jstris 식 layout (Sprint 3l) — 내 보드 좌측 full (cell w-6 sm:w-7) / 상대 mini board grid (w-3 cell, nickname + top_out ✕ overlay) 우측 위 / 채팅 우측 아래 (height 280px) / grid 라인 base-content/5 (은은) ✅
 
 ## E2E 미구현 (계획)
 
