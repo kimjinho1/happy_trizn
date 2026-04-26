@@ -1807,7 +1807,7 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp skribbl_chat(assigns) do
     ~H"""
-    <div class="bg-base-200 rounded p-3 flex flex-col" style="height: 500px;">
+    <div class="bg-base-200 rounded p-3 flex flex-col" style="height: 410px;">
       <h3 class="font-semibold mb-2 text-sm">채팅 / 추측</h3>
 
       <div class="flex-1 min-h-0 overflow-y-auto space-y-1 mb-2 text-xs">
