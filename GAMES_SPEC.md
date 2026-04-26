@@ -392,24 +392,32 @@ direct_messages (?) — DM
 | **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ✅ |
 | **3h** | 2048 키보드 입력 (화살표 / WASD / HJKL) | ✅ |
 | **3h** | Settings slug ↔ game_type alias 정규화 (`2048` → `games_2048`) | ✅ |
-| **3i** | Finesse 분석 (현재 stub 0) | ⏳ |
-| **3j** | JS Tetris canvas (블록 스킨 / DAS-ARR client-side timing — 현재 server timing) | ⏳ |
-| **3k** | 모바일 반응형 (canvas / 옵션 모달 / 채팅) | ⏳ |
-| **4** | DM Channel + 알림 시스템 + Broadway Mongo 큐 (game_events) | ⏳ |
+| **3i** | Tetris Finesse 분석 — spawn → lock 사이 left/right/rotate* 입력 수 vs optimal, violations 카운터 + UI 뱃지 | ✅ |
+| **3j** | JS Tetris canvas (HTML5 Canvas opt-in renderer) + 4 skin (default_jstris/vivid/monochrome/neon) | ✅ |
+| **3k** | 모바일 반응형 (LiveView padding p-3 sm:p-6 / DM 단일창 toggle / 게임판 cell 크기 sm: 분기) | ✅ |
+| **3l** | Tetris jstris 식 multi-player UI (mini board grid + 채팅 우측) + N-player (max 8) + 가비지 random alive 타겟팅 + ranking modal (🥇🥈🥉) + live HUD (PPS/APM/VS/KPP) | ✅ |
+| **3l-6/7** | Bomberman + Skribbl 도 ranking modal 통일 (game_over.ranking + 본인 row primary highlight) | ✅ |
+| **3m** | 스도쿠 (싱글) — 9×9 valid 자동 생성 (base + symmetry transforms) + 난이도 3종 + 충돌 감지 highlight | ✅ |
+| **4a/b/c** | DM 1:1 + 친구 게임 초대 + 채팅창 height 고정 | ✅ |
+| **4d** | Broadway Mongo 큐 (game_events) — Producer GenStage + batcher 100/1s, Mongo 다운 시 silent skip | ✅ |
+| **4f** | 지뢰찾기 (Minesweeper rename) — phx-value string→int 강제 + cursor + 화살표/Space/Enter/F + MinesweeperCell hook 우클릭 | ✅ |
+| **4g** | Presence (Phoenix.Presence) — 친구 접속중 🟢 dot. fetch_live_user hook 자동 track | ✅ |
+| **4h** | Lobby/DM/Nav UX 풀세트 (헤더 통합 / 닉네임 dropdown / 페이지네이션 / 친구 섹션 시각 구분) | ✅ |
+| **4e** | 사내 서버 배포 + HTTPS (Caddy/nginx) | ⏳ |
 
 ---
 
 ## 우선순위 (남은 작업)
 
-1. **Pac-Man 풀 구현** (3g) — 싱글 + ghost AI (Blinky/Pinky/Inky/Clyde).
-2. **모바일 반응형** (3k) — 캔버스 / 모달 / 채팅 layout.
-3. **JS Tetris canvas + skin** (3j) — 더 화려한 렌더 (현재 LiveView grid).
-4. **Finesse 분석** (3i) — Tetris finesse_violations 카운트.
-5. **DM + 알림** (4) — 친구 1:1 채팅, 게임 초대.
+1. **사내 서버 배포 + HTTPS** (4e) — Caddy 또는 nginx + Let's Encrypt.
+2. **E2E** — Playwright (Tetris 1v1, Skribbl, DM 알림, 모바일 viewport).
+3. **가비지 동시 다중 타겟** — Tetris N-player 분산 ATK distributor.
+4. **모바일 게임 컨트롤** — 가상 D-pad / tap & long-press.
+5. **Spectator 모드** — 진행 중 게임 관전.
 
 ## 테스트 현황
 
-- **513 tests, 0 failures** (Sprint 3f / 3h 머지 후 기준).
+- **658 tests, 0 failures** (Sprint 3m + 4f + 4g + 4h 머지 후 기준).
 - ExUnit 단위/통합 + LiveView 테스트.
 - 새로 추가: Bomberman + Skribbl `:over → leave/restart → :waiting 리셋`, Snake.io 19 tests, 게임방 채팅 broadcast.
 - E2E (Playwright) 미구현 (TEST_PLAN.md 참조).
