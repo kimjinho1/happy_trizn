@@ -108,7 +108,7 @@ defmodule HappyTrizn.Games.StubGamesTest do
       assert m.slug == "pacman"
       assert m.mode == :single
       assert m.max_players == 1
-      assert m.tick_interval_ms == 110
+      assert m.tick_interval_ms == 125
     end
 
     test "init state — :playing + 28×31 + walls/dots/pellets/ghost 4" do
