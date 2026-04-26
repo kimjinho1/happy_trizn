@@ -358,11 +358,11 @@ defmodule HappyTriznWeb.LobbyLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="min-h-screen p-3 sm:p-6 max-w-7xl mx-auto">
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div class="min-h-screen p-2 sm:p-3 max-w-7xl mx-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
         <!-- 왼쪽: 게임 카테고리 + 방 생성 -->
         <section class="card bg-base-200 lg:col-span-1">
-          <div class="card-body">
+          <div class="card-body p-3">
             <h2 class="card-title text-lg">방 만들기</h2>
             <%= if @user do %>
               <form phx-submit="create_room" class="space-y-2">
@@ -407,7 +407,8 @@ defmodule HappyTriznWeb.LobbyLive do
               <%= for g <- @games_single do %>
                 <.link
                   navigate={~p"/play/#{g.slug}"}
-                  class="btn btn-md btn-outline btn-primary justify-start text-base"
+                  class="btn btn-sm btn-outline btn-primary justify-start text-sm whitespace-nowrap"
+                  title={g.name}
                 >
                   {single_game_emoji(g.slug)} {g.name}
                 </.link>
@@ -422,7 +423,7 @@ defmodule HappyTriznWeb.LobbyLive do
     <!-- 가운데: 방 리스트 + 채팅 -->
         <section class="lg:col-span-2 space-y-4">
           <div class="card bg-base-200">
-            <div class="card-body">
+            <div class="card-body p-3">
               <h2 class="card-title text-lg">활성 방 ({length(@rooms)})</h2>
               <%= if @rooms == [] do %>
                 <p class="text-base-content/50 text-sm py-4 text-center">열린 방 없음. 직접 만들어보세요.</p>
@@ -513,11 +514,11 @@ defmodule HappyTriznWeb.LobbyLive do
           </div>
 
           <div class="card bg-base-200">
-            <div class="card-body">
+            <div class="card-body p-3">
               <h2 class="card-title text-lg">글로벌 채팅</h2>
               <div
                 id="chat-messages"
-                class="h-64 overflow-y-auto flex flex-col-reverse gap-1 bg-base-100 rounded p-3 text-sm"
+                class="h-80 overflow-y-auto flex flex-col-reverse gap-1 bg-base-100 rounded p-3 text-base"
                 phx-hook="ChatScroll"
               >
                 <%= if @messages == [] do %>
@@ -542,11 +543,11 @@ defmodule HappyTriznWeb.LobbyLive do
                   name="message"
                   value={@input}
                   placeholder="메시지..."
-                  class="input input-bordered input-sm flex-1"
+                  class="input input-bordered input-md flex-1 text-base"
                   maxlength={@max_message_length}
                   autocomplete="off"
                 />
-                <button type="submit" class="btn btn-primary btn-sm" disabled={@rate_limited}>
+                <button type="submit" class="btn btn-primary btn-md text-base" disabled={@rate_limited}>
                   보내기
                 </button>
               </form>
@@ -556,7 +557,7 @@ defmodule HappyTriznWeb.LobbyLive do
         
     <!-- 오른쪽: 친구 사이드바 -->
         <section class="card bg-base-200 lg:col-span-1">
-          <div class="card-body">
+          <div class="card-body p-3">
             <h2 class="card-title text-lg">친구</h2>
 
             <%= cond do %>
@@ -599,7 +600,7 @@ defmodule HappyTriznWeb.LobbyLive do
                       <span class="truncate">{u.nickname}</span>
                       <.link
                         navigate={~p"/dm/#{u.id}"}
-                        class="btn btn-sm btn-ghost"
+                        class="btn btn-sm btn-ghost text-xl"
                         title="DM 보내기"
                       >
                         💬
@@ -626,7 +627,7 @@ defmodule HappyTriznWeb.LobbyLive do
                   </div>
                 <% end %>
 
-                <button phx-click="toggle_show_all" class="btn btn-ghost btn-xs mt-1">
+                <button phx-click="toggle_show_all" class="btn btn-ghost btn-sm text-base mt-2">
                   {if @show_all_users, do: "추천만 보기", else: "더보기 →"}
                 </button>
             <% end %>
