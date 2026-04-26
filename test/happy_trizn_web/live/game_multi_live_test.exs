@@ -238,5 +238,113 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       # GameSession 시작 안 됨 (connected 일 때만 시작)
       assert HappyTrizn.Games.GameSession.whereis_room(room.id) == nil
     end
+
+    test "다음 큐 (5 piece) UI 노출 + 좌측 holdpane 분리", %{conn: conn, room: room} do
+      {:ok, _, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # next_queue 컴포넌트 marker
+      assert html =~ ">다음<"
+      # hold 좌측 라벨
+      assert html =~ ">홀드<"
+    end
+
+    test "pending garbage spoiler bar — 빨간 indicator 가 board 옆에 노출", %{
+      conn: conn,
+      room: room
+    } do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      # 강제로 player pending_garbage 5 셋업.
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      :sys.replace_state(pid, fn state ->
+        # 첫 player_id 찾아 pending_garbage 5 강제.
+        gs = state.game_state
+
+        new_players =
+          Map.new(gs.players, fn {id, p} -> {id, %{p | pending_garbage: 5}} end)
+
+        %{state | game_state: %{gs | players: new_players}}
+      end)
+
+      # PubSub broadcast push — re-render.
+      send(view.pid, {:game_event, {:player_state, "stub", %{}}})
+      Process.sleep(20)
+      html = render(view)
+
+      # spoiler bar (bg-error animate-pulse) 가 노출
+      assert html =~ "bg-error"
+      assert html =~ "animate-pulse"
+    end
+
+    test "🔄 다시 하기 버튼 클릭 → restart action → 라운드 리셋", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      # 강제로 :over + winner=현재 player 상태.
+      :sys.replace_state(pid, fn state ->
+        gs = state.game_state
+        [player_id] = Map.keys(gs.players)
+        %{state | game_state: %{gs | status: :over, winner: player_id}}
+      end)
+
+      send(view.pid, {:game_event, {:game_over, %{winner: nil, players: %{}}}})
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "다시 하기"
+
+      view |> element("button[phx-click='restart']") |> render_click()
+      Process.sleep(20)
+
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      # 1명 → :practice, 2명 → :countdown 으로 진입. 여기는 1명.
+      assert state.status == :practice
+    end
+
+    test "game_over_panel 에 winners_summary (닉네임 누적 우승) 표시", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      # game_over event 수동 push — winners_summary 포함.
+      send(
+        view.pid,
+        {:game_event,
+         {:game_over,
+          %{
+            winner: "p_other",
+            players: %{},
+            winners_summary: [
+              %{user_id: "u1", nickname: "alice", wins: 5},
+              %{user_id: "u2", nickname: "bob", wins: 2}
+            ]
+          }}}
+      )
+
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "alice"
+      assert html =~ "5회"
+      assert html =~ "bob"
+      assert html =~ "2회"
+      assert html =~ "방 누적 우승"
+    end
+
+    test "modal reset 버튼 → bindings/options 초기화 + 모달 유지", %{conn: conn, room: room, host: host} do
+      {:ok, _} =
+        HappyTrizn.UserGameSettings.upsert(host, "tetris", %{
+          key_bindings: %{"move_left" => ["q"]},
+          options: %{"das" => 99}
+        })
+
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+
+      view |> element("button[phx-click='modal_reset']") |> render_click()
+
+      result = HappyTrizn.UserGameSettings.get_for(host, "tetris")
+      # 기본값 복귀
+      assert result.das == 133
+      assert "ArrowLeft" in result.bindings["move_left"]
+      # 모달 유지 (form 그대로)
+      assert render(view) =~ "modal_save_binding"
+    end
   end
 end
