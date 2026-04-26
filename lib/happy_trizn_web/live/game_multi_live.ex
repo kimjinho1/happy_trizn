@@ -614,7 +614,7 @@ defmodule HappyTriznWeb.GameMultiLive do
       data-das={@key_settings.das}
       data-arr={@key_settings.arr}
       data-key-bindings={Jason.encode!(@key_settings.bindings)}
-      class="min-h-screen p-6 max-w-6xl mx-auto"
+      class="min-h-screen p-3 sm:p-6 max-w-6xl mx-auto"
     >
       <%= if @slug == "tetris" do %>
         <div
@@ -1080,9 +1080,15 @@ defmodule HappyTriznWeb.GameMultiLive do
             data-snakes={Jason.encode!(@snakes_payload)}
             data-food={Jason.encode!(@food_payload)}
             data-me-id={@player_id}
-            class="bg-slate-900 rounded-xl shadow-2xl ring-2 ring-slate-700 p-1 inline-block"
+            class="bg-slate-900 rounded-xl shadow-2xl ring-2 ring-slate-700 p-1 inline-block max-w-full"
           >
-            <canvas id="snake-canvas" width="640" height="640" class="block"></canvas>
+            <canvas
+              id="snake-canvas"
+              width="640"
+              height="640"
+              class="block max-w-full h-auto"
+            >
+            </canvas>
           </div>
         </div>
 
@@ -1324,7 +1330,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         <div class="flex">
           <%= for c <- 0..(@cols - 1) do %>
             <div class={[
-              "w-12 h-12 flex items-center justify-center text-2xl transition-all",
+              "w-7 h-7 sm:w-12 sm:h-12 flex items-center justify-center text-base sm:text-2xl transition-all",
               bomberman_cell_class(@grid, r, c, @explosion_set)
             ]}>
               {Phoenix.HTML.raw(bomberman_cell_content(@state, r, c, @player_index))}
@@ -1825,7 +1831,7 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp piece_preview(assigns) do
     ~H"""
-    <div class={["bg-base-200 p-2 rounded text-center min-w-[80px]", @dim && "opacity-40"]}>
+    <div class={["bg-base-200 p-1 sm:p-2 rounded text-center min-w-[60px] sm:min-w-[80px]", @dim && "opacity-40"]}>
       <div class="text-xs text-base-content/60 mb-1">{@label}</div>
       <%= if @piece do %>
         <div class="grid grid-cols-4 gap-px">
@@ -1852,7 +1858,7 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp next_queue(assigns) do
     ~H"""
-    <div class="flex flex-col gap-1 bg-base-200 p-2 rounded min-w-[80px]">
+    <div class="flex flex-col gap-1 bg-base-200 p-1 sm:p-2 rounded min-w-[60px] sm:min-w-[80px]">
       <div class="text-xs text-base-content/60 mb-1 text-center">다음</div>
       <%= for piece <- @nexts || [] do %>
         <div class="grid grid-cols-4 gap-px">
@@ -1934,7 +1940,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         <%= for row <- @visible do %>
           <div class="flex">
             <%= for cell <- row do %>
-              <div class={["w-5 h-5", cell_color(cell), grid_class(@grid)]}></div>
+              <div class={["w-3 h-3 sm:w-5 sm:h-5", cell_color(cell), grid_class(@grid)]}></div>
             <% end %>
           </div>
         <% end %>

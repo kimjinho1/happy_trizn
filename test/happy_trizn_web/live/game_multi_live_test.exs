@@ -649,9 +649,9 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "Bomberman" or html =~ "봄버맨" or html =~ "폭탄"
       assert html =~ "phx-hook=\"BombermanInput\""
       assert html =~ "참가자"
-      # 셀 크기 키운 확인 — w-12 h-12 + text-2xl.
-      assert html =~ "w-12 h-12"
-      assert html =~ "text-2xl"
+      # 셀 크기 — Sprint 3k 모바일 반응형: 데스크탑 w-12 h-12, 모바일 w-7 h-7.
+      assert html =~ "sm:w-12 sm:h-12"
+      assert html =~ "sm:text-2xl"
     end
 
     test "플레이어 아바타 (이모지 + ring 컬러) 노출", %{conn: conn, room: room} do

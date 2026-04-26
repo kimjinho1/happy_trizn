@@ -163,11 +163,14 @@ defmodule HappyTriznWeb.DmLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-5xl mx-auto p-4">
-      <h1 class="text-2xl font-bold mb-4">💬 DM</h1>
+    <div class="max-w-5xl mx-auto p-2 sm:p-4">
+      <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">💬 DM</h1>
 
-      <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
-        <aside class="bg-base-200 rounded p-2 overflow-y-auto h-[70vh]">
+      <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-2 md:gap-4">
+        <aside class={[
+          "bg-base-200 rounded p-2 overflow-y-auto h-[40vh] md:h-[70vh]",
+          @peer && "hidden md:block"
+        ]}>
           <h2 class="text-sm font-semibold px-2 py-1 text-base-content/60">대화 상대</h2>
           <%= if @threads == [] do %>
             <div class="text-xs text-base-content/40 px-2 py-3">
@@ -220,10 +223,17 @@ defmodule HappyTriznWeb.DmLive do
         <main class="bg-base-100 rounded border border-base-300 flex flex-col">
           <%= if @peer do %>
             <header class="border-b border-base-300 p-3 flex items-center gap-2">
+              <.link
+                navigate={~p"/dm"}
+                class="btn btn-ghost btn-xs md:hidden"
+                title="대화 목록으로"
+              >
+                ←
+              </.link>
               <.dm_avatar user={@peer} size={40} />
-              <div>
-                <div class="font-bold">{@peer.nickname}</div>
-                <div class="text-xs text-base-content/50">{@peer.email}</div>
+              <div class="min-w-0">
+                <div class="font-bold truncate">{@peer.nickname}</div>
+                <div class="text-xs text-base-content/50 truncate">{@peer.email}</div>
               </div>
             </header>
 

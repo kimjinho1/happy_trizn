@@ -124,6 +124,23 @@ defmodule HappyTriznWeb.DmLiveTest do
     end
   end
 
+  describe "모바일 반응형 (Sprint 3k)" do
+    test "/dm — peer 미선택 시 sidebar 항상 표시", %{conn: conn} do
+      user = user_fixture(nickname: "alone_mob_#{System.unique_integer([:positive])}")
+      conn = log_in_user(conn, user)
+      {:ok, _view, html} = live(conn, ~p"/dm")
+      refute html =~ "hidden md:block"
+    end
+
+    test "/dm/:peer_id — peer 선택 시 모바일 sidebar 숨김 + ← 버튼 노출", %{conn: conn} do
+      {conn, _me, peer} = setup_friends(conn, System.unique_integer([:positive]))
+      {:ok, _view, html} = live(conn, ~p"/dm/#{peer.id}")
+      assert html =~ "hidden md:block"
+      assert html =~ "md:hidden"
+      assert html =~ "대화 목록으로"
+    end
+  end
+
   describe "DM 실시간 알림 hook" do
     test "lobby 같은 다른 LV 에서도 DM 도착 시 dm:notify push_event 발행", %{conn: conn} do
       {conn, me, peer} = setup_friends(conn, System.unique_integer([:positive]))
