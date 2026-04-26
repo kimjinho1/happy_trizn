@@ -121,8 +121,14 @@ defmodule HappyTrizn.UserGameSettings do
   defp do_defaults("minesweeper") do
     %{
       bindings: %{
-        "reveal" => ["click"],
-        "flag" => ["right_click", "f"]
+        # Sprint 4f — keyboard cursor 이동 + reveal/flag. game_live 가
+        # bindings 을 읽어 key → action mapping. 사용자 옵션에서 변경 가능.
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"],
+        "reveal" => ["click", " ", "Enter"],
+        "flag" => ["right_click", "f", "F"]
       },
       options: %{
         "difficulty" => "medium",
@@ -149,7 +155,10 @@ defmodule HappyTrizn.UserGameSettings do
       options: %{
         "sound_eat" => true,
         "sound_death" => true,
-        "sound_intro" => true
+        "sound_intro" => true,
+        # Sprint 4f-4 — tick interval (ms). 작을수록 빠름. 기본 125 (Pac-Man module 의 @tick_ms 와 일치).
+        # 50~300 범위. modal options form 에서 변경.
+        "tick_ms" => 125
       },
       das: 0,
       arr: 0,

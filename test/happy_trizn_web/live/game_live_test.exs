@@ -91,6 +91,14 @@ defmodule HappyTriznWeb.GameLiveTest do
       [board, _] = String.split(after_open, "</div>", parts: 2)
       board
     end
+
+    test "옵션 모달 — 2048 도 모달로 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/2048")
+      refute render(view) =~ "modal_save_options"
+
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_options"
+    end
   end
 
   describe "/play/minesweeper" do
@@ -98,25 +106,116 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, conn: log_in_user(conn, nil, "pms_#{System.unique_integer([:positive])}")}
     end
 
-    test "mount — 게스트 default = medium 프리셋 16×16 grid", %{conn: conn} do
+    test "mount — 지뢰찾기 (Sprint 4f rename) + medium 16×16 grid", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
-      assert html =~ "Minesweeper"
+      # 페이지 제목 = 지뢰찾기 (메타 name). slug "minesweeper" 는 URL/path 라 그대로.
+      assert html =~ "<h1 class=\"text-2xl font-bold\">지뢰찾기</h1>"
       assert html =~ "16×16"
       assert html =~ "지뢰 40개"
       # 256 hidden cell (16×16) 있어야
       assert html |> String.split("phx-value-action=\"reveal\"") |> length() == 257
     end
 
-    test "셀 reveal → state 변화", %{conn: conn} do
+    test "셀 reveal → state 변화 (string r/c 강제 — phx-value 시뮬)", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/play/minesweeper")
 
       view
       |> element("button[phx-value-action='reveal'][phx-value-r='5'][phx-value-c='5']")
       |> render_click()
 
-      # 클릭한 셀이 revealed (색 다른 div)
+      # 클릭한 셀이 revealed → button 안 보임 (div 로 교체).
       html = render(view)
-      assert html =~ "Minesweeper"
+      refute html =~ "phx-value-action=\"reveal\" phx-value-r=\"5\" phx-value-c=\"5\""
+    end
+
+    test "키보드 — 화살표 cursor 이동 + Space reveal + F flag (Sprint 4f)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/minesweeper")
+
+      # cursor 초기 (8, 8) — medium 16×16 중앙. 화살표 up → (7, 8).
+      render_hook(view, "keydown", %{"key" => "ArrowUp"})
+      html = render(view)
+      # cursor highlight = outline outline-primary 적용된 셀 1개.
+      assert html =~ "outline-primary"
+
+      # F → flag_cursor → 해당 셀 flagged.
+      render_hook(view, "keydown", %{"key" => "f"})
+      html = render(view)
+      assert html =~ "🚩"
+
+      # F 다시 → 해제.
+      render_hook(view, "keydown", %{"key" => "F"})
+      html = render(view)
+      refute html =~ "🚩"
+
+      # Space → reveal_cursor.
+      render_hook(view, "keydown", %{"key" => " "})
+      _html = render(view)
+      # cursor 위치 (7, 8) reveal — button 사라짐.
+      refute render(view) =~
+               "phx-value-action=\"reveal\" phx-value-r=\"7\" phx-value-c=\"8\""
+    end
+
+    test "data-keys 에 F / Space 포함 (Sprint 4f)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
+      assert html =~ "data-keys="
+      assert html =~ "f,F"
+      assert html =~ "Spacebar"
+    end
+
+    test "MinesweeperCell hook — 우클릭 flag 용", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
+      assert html =~ "phx-hook=\"MinesweeperCell\""
+    end
+
+    test "옵션 모달 — ⚙️ 버튼 클릭 시 모달 열림 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/minesweeper")
+      refute render(view) =~ "modal_save_binding"
+
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      assert html =~ "modal_save_binding"
+      assert html =~ "phx-click=\"close_settings\""
+      assert html =~ "modal_reset"
+    end
+
+    test "옵션 모달 — close_settings 닫음 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/minesweeper")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_binding"
+
+      view |> element("button[phx-click='close_settings']") |> render_click()
+      refute render(view) =~ "modal_save_binding"
+    end
+
+    test "사용자 binding 설정 → 새 키 즉시 반영 (Sprint 4f-2)", %{conn: conn} do
+      # 게스트 → 회원 user 가 binding 변경 시나리오.
+      user = user_fixture(nickname: "ms_kb_#{System.unique_integer([:positive])}")
+
+      # flag 키를 "g" 로 변경. (schema field = key_bindings)
+      {:ok, _} =
+        HappyTrizn.UserGameSettings.upsert(user, "minesweeper", %{
+          key_bindings: %{
+            "move_up" => ["ArrowUp"],
+            "move_down" => ["ArrowDown"],
+            "move_left" => ["ArrowLeft"],
+            "move_right" => ["ArrowRight"],
+            "reveal" => [" "],
+            "flag" => ["g"]
+          }
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _} = live(conn, ~p"/play/minesweeper")
+
+      # g 누르면 cursor 위치에 flag.
+      render_hook(view, "keydown", %{"key" => "g"})
+      html = render(view)
+      assert html =~ "🚩"
+
+      # f 는 더 이상 안 먹음 (binding 에서 빠짐).
+      render_hook(view, "keydown", %{"key" => "f"})
+      # 위 g 로 토글된 flag 가 그대로 — f 가 안 먹었으므로.
+      assert render(view) =~ "🚩"
     end
   end
 
@@ -138,6 +237,15 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, _view, html} = live(conn, ~p"/play/pacman")
       assert html =~ "phx-hook=\"GameKeyCapture\""
       assert html =~ "ArrowUp"
+    end
+
+    test "옵션 모달 — Pac-Man 도 모달 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/pacman")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      # tick_ms 옵션 노출 (Sprint 4f-4 — 사용자 속도 조절).
+      assert html =~ "tick_ms"
+      assert html =~ "modal_save_options"
     end
 
     test "방향 키 → set_dir input forward (page 살아있음)", %{conn: conn} do

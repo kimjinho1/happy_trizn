@@ -4,7 +4,7 @@ Branch tracking. 최근 갱신: Sprint 3 100% 완료 (3j Tetris Canvas + skin) +
 
 ## Status
 
-**609 tests, 0 failures**.
+**620 tests, 0 failures**.
 
 ```bash
 docker compose up -d
@@ -28,7 +28,7 @@ MIX_ENV=test bin/mix test
 | GameSession | game_session_test (lifecycle / dedupe / terminate cleanup / match_record top_out) | 12 |
 | 다른 게임 stub | stub_games_test (Bomberman/Snake/Pacman/Skribbl 인터페이스 검증) | 12 |
 | 2048 | games_2048_test (board_size 4/5/6 + restart 보존 + 키보드 input) | 25+ |
-| Minesweeper | minesweeper_test (난이도 easy/medium/hard/custom + clamp + restart 보존) | 19+ |
+| 지뢰찾기 (Minesweeper) | minesweeper_test (난이도 easy/medium/hard/custom + clamp + restart + 지뢰찾기 rename + phx-value string→int + cursor 4 방향 + boundary clamp + reveal/flag_cursor) | 27 |
 | **MatchResults** | match_results_test (record/for_user/recent/winners_summary) | 12 |
 | **PersonalRecords** | personal_records_test (apply_stats max / metadata merge / leaderboard) | 8 |
 | Registry | registry_test | 5 |
@@ -103,6 +103,7 @@ MIX_ENV=test bin/mix test
 - Bomberman ranking modal (Sprint 3l-6) — game_over.ranking, dead_at monotonic 순서, 🥇🥈🥉 + 본인 row primary highlight + 생존/💥 표시 ✅
 - Skribbl ranking modal (Sprint 3l-7) — 점수 내림차순, 🥇🥈🥉 + 본인 row primary highlight + 점수 표시 (Tetris/Bomberman 와 일관) ✅
 - Tetris JS Canvas + skin (Sprint 3j) — block_skin 4종 (default_jstris/vivid/monochrome/neon), tetris_renderer "dom" 기본 / "canvas" opt-in, JS hook TetrisCanvas 가 data-board JSON 받아 redraw ✅
+- 지뢰찾기 (Sprint 4f) — meta name 한글 "지뢰찾기", phx-value string r/c → int 강제, 화살표 cursor 이동 + boundary clamp + Space/Enter reveal_cursor + F flag_cursor + MinesweeperCell hook 우클릭 ✅
 
 ## E2E 미구현 (계획)
 

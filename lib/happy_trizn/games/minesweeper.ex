@@ -42,7 +42,7 @@ defmodule HappyTrizn.Games.Minesweeper do
   @impl true
   def meta do
     %{
-      name: "Minesweeper",
+      name: "지뢰찾기",
       slug: "minesweeper",
       mode: :single,
       max_players: 1,
@@ -65,6 +65,8 @@ defmodule HappyTrizn.Games.Minesweeper do
 
   @impl true
   def handle_input(_player_id, %{"action" => "reveal", "r" => r, "c" => c}, state) do
+    {r, c} = {to_int(r), to_int(c)}
+
     cond do
       state.over -> {:ok, state, []}
       not in_bounds?(state, r, c) -> {:ok, state, []}
@@ -73,6 +75,8 @@ defmodule HappyTrizn.Games.Minesweeper do
   end
 
   def handle_input(_player_id, %{"action" => "flag", "r" => r, "c" => c}, state) do
+    {r, c} = {to_int(r), to_int(c)}
+
     cond do
       state.over ->
         {:ok, state, []}
@@ -94,6 +98,28 @@ defmodule HappyTrizn.Games.Minesweeper do
     end
   end
 
+  # 키보드 cursor 이동 (방향 키). cursor 가 boundary 안에서만 움직임.
+  def handle_input(_player_id, %{"action" => "move_cursor", "dir" => dir}, state) do
+    {cr, cc} = state.cursor
+    {dr, dc} = dir_to_delta(dir)
+    new_r = max(0, min(state.rows - 1, cr + dr))
+    new_c = max(0, min(state.cols - 1, cc + dc))
+    new_state = %{state | cursor: {new_r, new_c}}
+    {:ok, new_state, [{:state_changed, new_state}]}
+  end
+
+  # cursor 위치에서 reveal — Space/Enter 키.
+  def handle_input(player_id, %{"action" => "reveal_cursor"}, state) do
+    {r, c} = state.cursor
+    handle_input(player_id, %{"action" => "reveal", "r" => r, "c" => c}, state)
+  end
+
+  # cursor 위치에서 flag toggle — F 키.
+  def handle_input(player_id, %{"action" => "flag_cursor"}, state) do
+    {r, c} = state.cursor
+    handle_input(player_id, %{"action" => "flag", "r" => r, "c" => c}, state)
+  end
+
   def handle_input(_player_id, %{"action" => "restart"}, state) do
     diff = Map.get(state, :difficulty)
     rows = Map.get(state, :rows, @default_rows)
@@ -104,6 +130,16 @@ defmodule HappyTrizn.Games.Minesweeper do
   end
 
   def handle_input(_, _, state), do: {:ok, state, []}
+
+  # phx-value-* 는 string 으로 전송됨 — int 강제. test 는 int 직접 사용 가능.
+  defp to_int(n) when is_integer(n), do: n
+  defp to_int(s) when is_binary(s), do: String.to_integer(s)
+
+  defp dir_to_delta("up"), do: {-1, 0}
+  defp dir_to_delta("down"), do: {1, 0}
+  defp dir_to_delta("left"), do: {0, -1}
+  defp dir_to_delta("right"), do: {0, 1}
+  defp dir_to_delta(_), do: {0, 0}
 
   @impl true
   def tick(state), do: {:ok, state, []}
@@ -143,6 +179,8 @@ defmodule HappyTrizn.Games.Minesweeper do
       cells: cells,
       mines_placed: false,
       over: nil,
+      # 키보드 cursor 위치 — 화살표 이동, Space/Enter reveal, F flag.
+      cursor: {div(rows, 2), div(cols, 2)},
       started_at: DateTime.utc_now()
     }
   end

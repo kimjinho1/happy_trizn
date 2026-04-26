@@ -34,6 +34,11 @@ defmodule HappyTrizn.UserGameSettingsTest do
       assert opts["tetris_renderer"] == "dom"
     end
 
+    test "pacman Sprint 4f-4 — tick_ms 125 default" do
+      opts = UserGameSettings.defaults("pacman").options
+      assert opts["tick_ms"] == 125
+    end
+
     test "각 게임 별 defaults 존재" do
       for slug <- ~w(tetris bomberman skribbl snake_io games_2048 minesweeper pacman) do
         d = UserGameSettings.defaults(slug)
