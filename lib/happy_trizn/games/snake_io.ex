@@ -46,10 +46,11 @@ defmodule HappyTrizn.Games.SnakeIo do
 
   # 월드 크기 — io 게임 느낌. 클라이언트는 본인 head 중심 viewport 만 보여줌.
   @grid_size 200
-  @tick_ms 50
+  @tick_ms 80
   @max_players 16
   @initial_length 3
-  @respawn_ticks 60
+  # 사망 후 ticks → 자동 부활 (3초 정도 유지: 80ms × 38 ≒ 3초).
+  @respawn_ticks 38
   @food_per_player 8
   @food_min 60
 

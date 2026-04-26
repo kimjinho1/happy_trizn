@@ -1063,19 +1063,20 @@ defmodule HappyTriznWeb.GameMultiLive do
       tabindex="0"
       class="outline-none"
     >
-      <div class="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-[auto_260px] gap-4 justify-start">
         <div>
           <.snake_status state={@state} me={@me} />
           <div
             id="snake-canvas-host"
             phx-hook="SnakeCanvas"
             data-grid-size={@grid_size}
+            data-tick-ms="80"
             data-snakes={Jason.encode!(@snakes_payload)}
             data-food={Jason.encode!(@food_payload)}
             data-me-id={@player_id}
-            class="bg-slate-900 rounded-xl shadow-2xl ring-2 ring-slate-700 p-1"
+            class="bg-slate-900 rounded-xl shadow-2xl ring-2 ring-slate-700 p-1 inline-block"
           >
-            <canvas id="snake-canvas" width="600" height="600" class="block w-full h-auto"></canvas>
+            <canvas id="snake-canvas" width="512" height="512" class="block"></canvas>
           </div>
         </div>
 

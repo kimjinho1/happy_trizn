@@ -19,7 +19,7 @@ defmodule HappyTrizn.Games.SnakeIoTest do
       assert m.mode == :multi
       assert m.max_players == 16
       assert m.min_players == 1
-      assert m.tick_interval_ms == 50
+      assert m.tick_interval_ms == 80
     end
 
     test "init 시 :playing + 빈 players + food 보장" do
@@ -248,7 +248,7 @@ defmodule HappyTrizn.Games.SnakeIoTest do
   end
 
   describe "respawn" do
-    test "사망 후 60 tick 지나면 자동 부활" do
+    test "사망 후 38 tick 지나면 자동 부활 (≒ 3초 @ 80ms)" do
       s = init_with(1)
       [{pid, _}] = Enum.to_list(s.players)
 
@@ -258,7 +258,7 @@ defmodule HappyTrizn.Games.SnakeIoTest do
           %{p | alive: false, died_at_tick: 0, body: [{50, 50}, {50, 51}, {50, 52}]}
         end)
 
-      s = %{s | tick_no: 60, food: MapSet.new(), food_target: 0}
+      s = %{s | tick_no: 38, food: MapSet.new(), food_target: 0}
 
       {:ok, ns, _} = SnakeIo.tick(s)
       assert ns.players[pid].alive
@@ -266,7 +266,7 @@ defmodule HappyTrizn.Games.SnakeIoTest do
       assert ns.players[pid].died_at_tick == nil
     end
 
-    test "사망 후 60 tick 미만이면 부활 X" do
+    test "사망 후 38 tick 미만이면 부활 X" do
       s = init_with(1)
       [{pid, _}] = Enum.to_list(s.players)
 
@@ -275,7 +275,7 @@ defmodule HappyTrizn.Games.SnakeIoTest do
           %{p | alive: false, died_at_tick: 0, body: [{50, 50}]}
         end)
 
-      s = %{s | tick_no: 30, food: MapSet.new(), food_target: 0}
+      s = %{s | tick_no: 20, food: MapSet.new(), food_target: 0}
 
       {:ok, ns, _} = SnakeIo.tick(s)
       refute ns.players[pid].alive
