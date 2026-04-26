@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/happy_trizn"
 import topbar from "../vendor/topbar"
 import {TetrisInput} from "./hooks/tetris_input"
 import {TetrisSound} from "./hooks/tetris_sound"
+import {SkribblCanvas} from "./hooks/skribbl_canvas"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -48,16 +49,22 @@ const Hooks = {
     }
   },
 
-  // 채팅 입력 form — server 가 "chat:reset_input" event 보내면 input value 비움.
-  // morphdom 은 typed input 의 value property 안 건드림. server-driven 명시 reset.
+  // 채팅 / 입력 form — server 가 "chat:reset_input" event 보내면 모든 text input
+  // value 비움. morphdom 은 typed input value 안 건드림 → 명시 reset.
   ChatReset: {
     mounted() {
       this.handleEvent("chat:reset_input", () => {
-        const input = this.el.querySelector('input[name="message"]')
-        if (input) {
-          input.value = ""
-          input.focus()
-        }
+        // input[name=message] 우선, 없으면 form 안 모든 type=text input.
+        const named = this.el.querySelector('input[name="message"]')
+        const inputs = named ? [named] : this.el.querySelectorAll('input[type="text"], textarea')
+        let focused = false
+        inputs.forEach((i) => {
+          i.value = ""
+          if (!focused && !i.disabled) {
+            i.focus()
+            focused = true
+          }
+        })
       })
     },
   },
@@ -66,6 +73,8 @@ const Hooks = {
   TetrisInput,
   // Tetris 효과음 — WebAudio 합성 (./hooks/tetris_sound.js).
   TetrisSound,
+  // Skribbl 캔버스 — drawer 그리기 + 모든 사람 보기.
+  SkribblCanvas,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

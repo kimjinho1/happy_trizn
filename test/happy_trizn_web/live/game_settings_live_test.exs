@@ -131,7 +131,7 @@ defmodule HappyTriznWeb.GameSettingsLiveTest do
 
     test "skribbl 옵션 폼 + chat_sound 체크박스", %{conn: conn} do
       {:ok, _, html} = live(conn, ~p"/settings/games/skribbl")
-      assert html =~ "Skribbl"
+      assert html =~ "캐치마인드"
       assert html =~ "chat_sound"
       assert html =~ "round_seconds"
     end

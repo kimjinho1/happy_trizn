@@ -44,6 +44,7 @@ defmodule HappyTriznWeb.LobbyLive do
          |> assign(:show_all_users, false)
          |> assign(:games_multi, GameRegistry.list_multi())
          |> assign(:games_single, GameRegistry.list_single())
+         |> assign(:page_title, "로비")
          |> load_friends_data()
          |> load_rooms()}
     end
@@ -264,6 +265,14 @@ defmodule HappyTriznWeb.LobbyLive do
     assign(socket, rooms: Rooms.list_open(limit: 50))
   end
 
+  # game_type slug → 사용자 친화 이름 (캐치마인드, Tetris 등). 없으면 slug 그대로.
+  defp game_display_name(slug) do
+    case GameRegistry.get_meta(slug) do
+      %{name: name} -> name
+      _ -> slug
+    end
+  end
+
   # ============================================================================
   # Render
   # ============================================================================
@@ -362,7 +371,7 @@ defmodule HappyTriznWeb.LobbyLive do
                   <%= for room <- @rooms do %>
                     <div class="flex items-center justify-between p-2 bg-base-100 rounded text-sm">
                       <div class="flex items-center gap-2">
-                        <span class="badge badge-sm">{room.game_type}</span>
+                        <span class="badge badge-sm">{game_display_name(room.game_type)}</span>
                         <span class="font-semibold">{room.name}</span>
                         <%= if room.password_hash do %>
                           <span class="text-xs" title="비밀번호 방">🔒</span>

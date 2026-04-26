@@ -71,7 +71,8 @@ defmodule HappyTriznWeb.GameMultiLive do
                  |> assign(:key_settings, UserGameSettings.get_for(user, slug))
                  |> assign(:settings_open, false)
                  |> assign(:result, nil)
-                 |> assign(:joined, false)}
+                 |> assign(:joined, false)
+                 |> assign(:page_title, meta.name)}
               end
 
             _ ->
@@ -96,20 +97,32 @@ defmodule HappyTriznWeb.GameMultiLive do
           :ok ->
             GameSession.subscribe_room(room_id)
             key_settings = UserGameSettings.get_for(user, slug)
+            initial_state = GameSession.get_state(pid)
 
-            {:ok,
-             socket
-             |> assign(:slug, slug)
-             |> assign(:meta, meta)
-             |> assign(:room_id, room_id)
-             |> assign(:session_pid, pid)
-             |> assign(:player_id, player_id)
-             |> assign(:nickname, nickname)
-             |> assign(:game_state, GameSession.get_state(pid))
-             |> assign(:key_settings, key_settings)
-             |> assign(:settings_open, false)
-             |> assign(:result, nil)
-             |> assign(:joined, true)}
+            socket =
+              socket
+              |> assign(:slug, slug)
+              |> assign(:meta, meta)
+              |> assign(:room_id, room_id)
+              |> assign(:session_pid, pid)
+              |> assign(:player_id, player_id)
+              |> assign(:nickname, nickname)
+              |> assign(:game_state, initial_state)
+              |> assign(:key_settings, key_settings)
+              |> assign(:settings_open, false)
+              |> assign(:result, nil)
+              |> assign(:joined, true)
+              |> assign(:page_title, meta.name)
+
+            # Skribbl 늦게 join 한 사람 — 현재까지 strokes 다시 그려야.
+            socket =
+              if slug == "skribbl" and is_list(Map.get(initial_state, :strokes)) do
+                push_event(socket, "skribbl:strokes_replay", %{strokes: initial_state.strokes})
+              else
+                socket
+              end
+
+            {:ok, socket}
 
           {:reject, reason} ->
             {:ok, socket |> put_flash(:error, "입장 거부: #{reason}") |> redirect(to: ~p"/lobby")}
@@ -144,6 +157,37 @@ defmodule HappyTriznWeb.GameMultiLive do
     })
 
     {:noreply, assign(socket, :result, nil)}
+  end
+
+  # ============================================================================
+  # Skribbl events
+  # ============================================================================
+
+  def handle_event("skribbl_start_game", _, socket) do
+    skribbl_input(socket, %{"action" => "start_game"})
+    {:noreply, socket}
+  end
+
+  def handle_event("skribbl_choose_word", %{"word" => word}, socket) do
+    skribbl_input(socket, %{"action" => "choose_word", "word" => word})
+    {:noreply, socket}
+  end
+
+  def handle_event("skribbl_stroke", %{"stroke" => stroke}, socket) do
+    skribbl_input(socket, %{"action" => "stroke", "stroke" => stroke})
+    {:noreply, socket}
+  end
+
+  def handle_event("skribbl_clear", _, socket) do
+    skribbl_input(socket, %{"action" => "clear_canvas"})
+    {:noreply, socket}
+  end
+
+  def handle_event("skribbl_chat", %{"text" => text}, socket) do
+    skribbl_input(socket, %{"action" => "guess", "text" => text})
+
+    # 입력창 비움 — morphdom 은 typed input value 안 건드림. ChatReset hook 이 받음.
+    {:noreply, push_event(socket, "chat:reset_input", %{})}
   end
 
   # ============================================================================
@@ -237,6 +281,10 @@ defmodule HappyTriznWeb.GameMultiLive do
     end
 
     {:noreply, socket}
+  end
+
+  defp skribbl_input(socket, payload) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, payload)
   end
 
   # Tetris 기본 키 바인딩 (server-side fallback — JS DAS/ARR 훅이 우선).
@@ -340,6 +388,78 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   def handle_info({:game_event, {:locked, pid}}, socket) do
     socket = if pid == socket.assigns.player_id, do: sfx(socket, "lock"), else: socket
+    {:noreply, refresh_state(socket)}
+  end
+
+  # ============================================================================
+  # Skribbl events
+  # ============================================================================
+
+  def handle_info({:game_event, {:stroke, stroke}}, socket) do
+    {:noreply, push_event(socket, "skribbl:stroke", stroke)}
+  end
+
+  def handle_info({:game_event, {:strokes_cleared, _}}, socket) do
+    {:noreply, push_event(socket, "skribbl:clear", %{})}
+  end
+
+  def handle_info({:game_event, {:round_start, _}}, socket) do
+    {:noreply, refresh_state(socket) |> push_event("skribbl:clear", %{})}
+  end
+
+  def handle_info({:game_event, {:word_chosen, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:word_choices, %{drawer: drawer, choices: choices}}}, socket) do
+    # word_choices 는 drawer 만 보면 됨 — 모든 client refresh, render 가 drawer 일 때만 표시.
+    socket =
+      if drawer == socket.assigns.player_id do
+        # 단어 선택 modal 즉시 보이게 — refresh + assign 처리.
+        new_state =
+          socket.assigns.game_state
+          |> Map.put(:word_choices, choices)
+          |> Map.put(:drawer_id, drawer)
+
+        assign(socket, :game_state, new_state)
+      else
+        refresh_state(socket)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:game_event, {:correct_guess, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:round_end, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:tick, ms}}, socket) when is_integer(ms) do
+    # time_left_ms 만 갱신 — get_state 안 함.
+    new_state = Map.put(socket.assigns.game_state, :time_left_ms, ms)
+    {:noreply, assign(socket, :game_state, new_state)}
+  end
+
+  def handle_info({:game_event, {:message, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:game_finished, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:player_joined, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:player_left, _}}, socket) do
+    {:noreply, refresh_state(socket)}
+  end
+
+  def handle_info({:game_event, {:drawer_left, _}}, socket) do
     {:noreply, refresh_state(socket)}
   end
 
@@ -700,6 +820,69 @@ defmodule HappyTriznWeb.GameMultiLive do
     """
   end
 
+  defp game_view(%{slug: "skribbl"} = assigns) do
+    state = ensure_skribbl_state(assigns.state)
+    me_id = assigns.player_id
+    is_drawer? = state.drawer_id == me_id
+    word_choices = if state.status == :choosing, do: Map.get(state, :word_choices, []), else: []
+    me = Map.get(state.players, me_id) || %{}
+    can_chat? = state.status not in [:waiting, :over] and is_nil(Map.get(me, :guessed_at))
+
+    assigns =
+      assign(assigns,
+        state: state,
+        is_drawer?: is_drawer?,
+        word_choices: word_choices,
+        me: me,
+        can_chat?: can_chat?
+      )
+
+    ~H"""
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+      <div class="space-y-3">
+        <.skribbl_status state={@state} is_drawer?={@is_drawer?} player_id={@player_id} />
+
+        <div class="relative bg-base-200 rounded p-2">
+          <canvas
+            id="skribbl-canvas"
+            phx-hook="SkribblCanvas"
+            data-is-drawer={to_string(@is_drawer?)}
+            width="800"
+            height="500"
+            class="w-full bg-white rounded shadow"
+          >
+          </canvas>
+
+          <%= if @is_drawer? and @state.status == :drawing do %>
+            <.skribbl_tools />
+          <% end %>
+
+          <%= if @state.status == :choosing and @is_drawer? do %>
+            <.skribbl_word_chooser choices={@word_choices} />
+          <% end %>
+        </div>
+      </div>
+
+      <aside class="space-y-3">
+        <.skribbl_scoreboard players={@state.players} drawer={@state.drawer_id} />
+        <.skribbl_chat
+          messages={Map.get(@state, :messages, [])}
+          can_chat?={@can_chat?}
+          status={@state.status}
+        />
+      </aside>
+    </div>
+
+    <%= if @state.status == :round_end do %>
+      <.skribbl_round_end_modal state={@state} />
+    <% end %>
+
+    <%= if @state.status == :over do %>
+      <.skribbl_game_over_modal state={@state} player_id={@player_id} />
+    <% end %>
+    """
+  end
+
   defp game_view(assigns) do
     ~H"""
     <div class="card bg-base-200">
@@ -710,6 +893,331 @@ defmodule HappyTriznWeb.GameMultiLive do
       </div>
     </div>
     """
+  end
+
+  attr :state, :map, required: true
+  attr :is_drawer?, :boolean, required: true
+  attr :player_id, :string, required: true
+
+  defp skribbl_status(assigns) do
+    seconds = max(div(Map.get(assigns.state, :time_left_ms, 0) || 0, 1000), 0)
+    drawer = Map.get(assigns.state.players, assigns.state.drawer_id) || %{}
+    drawer_nick = Map.get(drawer, :nickname, "—")
+
+    word_display =
+      cond do
+        assigns.state.status in [:drawing] and assigns.is_drawer? -> assigns.state.word
+        assigns.state.status in [:drawing] -> word_blanks(assigns.state.word)
+        assigns.state.status == :round_end -> "정답: #{assigns.state.word}"
+        true -> nil
+      end
+
+    assigns =
+      assign(assigns, seconds: seconds, drawer_nick: drawer_nick, word_display: word_display)
+
+    ~H"""
+    <div class="flex items-center justify-between bg-base-200 rounded p-3">
+      <div>
+        <div class="text-xs text-base-content/60">
+          상태 · 라운드 {Map.get(@state, :round_no, 0)} / {HappyTrizn.Games.Skribbl.total_rounds()}
+        </div>
+        <div class="font-semibold">
+          <%= case @state.status do %>
+            <% :waiting -> %>
+              대기 중 — 2명 이상 시 시작 가능
+            <% :choosing -> %>
+              {@drawer_nick} 가 단어 고르는 중
+            <% :drawing -> %>
+              {@drawer_nick} 그리는 중
+            <% :round_end -> %>
+              라운드 종료
+            <% :over -> %>
+              게임 종료
+          <% end %>
+        </div>
+      </div>
+
+      <%= if @word_display do %>
+        <div class="text-center">
+          <div class="text-xs text-base-content/60">단어</div>
+          <div class="font-mono text-lg tracking-widest">{@word_display}</div>
+        </div>
+      <% end %>
+
+      <div class="text-right">
+        <div class="text-xs text-base-content/60">남은 시간</div>
+        <div class={["font-bold text-lg", @seconds <= 10 && "text-error"]}>
+          {@seconds}초
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-xs text-base-content/50 italic">
+        💡 점수: 빨리 맞출수록 50~150점, 그림 그린 사람도 맞춘 사람당 +50점.
+        총 {HappyTrizn.Games.Skribbl.total_rounds()} 라운드.
+      </p>
+
+      <%= if @state.status in [:waiting, :over] and map_size(@state.players) >= 2 do %>
+        <button phx-click="skribbl_start_game" class="btn btn-primary btn-sm">
+          🎨 게임 시작
+        </button>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp skribbl_tools(assigns) do
+    colors = ~w(#000000 #ff4444 #4488ff #44cc44 #ffaa22 #aa55ff #ffffff)
+    sizes = [2, 4, 8, 14]
+    assigns = assign(assigns, colors: colors, sizes: sizes)
+
+    ~H"""
+    <div class="absolute top-2 left-2 bg-base-100 rounded shadow p-1 flex gap-1">
+      <%= for c <- @colors do %>
+        <button
+          type="button"
+          data-skribbl-color={c}
+          class="w-6 h-6 rounded border border-base-content/30"
+          style={"background-color: #{c}"}
+        >
+        </button>
+      <% end %>
+      <span class="border-l border-base-300 mx-1"></span>
+      <%= for s <- @sizes do %>
+        <button type="button" data-skribbl-size={s} class="btn btn-xs btn-ghost">
+          {s}
+        </button>
+      <% end %>
+      <button type="button" phx-click="skribbl_clear" class="btn btn-xs btn-ghost ml-1">
+        🗑️
+      </button>
+    </div>
+    """
+  end
+
+  attr :choices, :list, required: true
+
+  defp skribbl_word_chooser(assigns) do
+    ~H"""
+    <div class="absolute inset-0 flex items-center justify-center bg-black/50 rounded">
+      <div class="bg-base-100 rounded-lg shadow-xl p-6 max-w-md w-full">
+        <h3 class="text-lg font-bold mb-3">단어 선택</h3>
+        <p class="text-sm text-base-content/60 mb-4">3개 중 하나 골라서 그려줘.</p>
+        <div class="flex gap-2">
+          <%= for w <- @choices do %>
+            <button
+              phx-click="skribbl_choose_word"
+              phx-value-word={w}
+              class="btn btn-primary flex-1"
+            >
+              {w}
+            </button>
+          <% end %>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :players, :map, required: true
+  attr :drawer, :string, default: nil
+
+  defp skribbl_scoreboard(assigns) do
+    sorted =
+      assigns.players
+      |> Enum.sort_by(fn {_, p} -> -p.score end)
+
+    assigns = assign(assigns, sorted: sorted)
+
+    ~H"""
+    <div class="bg-base-200 rounded p-3">
+      <h3 class="font-semibold mb-2 text-sm">참가자 + 점수</h3>
+      <ul class="space-y-1">
+        <%= for {{id, p}, idx} <- Enum.with_index(@sorted) do %>
+          <li class="flex items-center justify-between text-sm">
+            <span class="flex items-center gap-1">
+              <span class="text-base-content/60">{idx + 1}.</span>
+              <span class="font-mono">{p.nickname}</span>
+              <%= if id == @drawer do %>
+                <span class="badge badge-xs badge-primary">그림</span>
+              <% end %>
+              <%= if Map.get(p, :guessed_at) do %>
+                <span class="badge badge-xs badge-success">정답</span>
+              <% end %>
+            </span>
+            <strong>{p.score}</strong>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+    """
+  end
+
+  attr :messages, :list, required: true
+  attr :can_chat?, :boolean, required: true
+  attr :status, :atom, required: true
+
+  defp skribbl_chat(assigns) do
+    ~H"""
+    <div class="bg-base-200 rounded p-3 flex flex-col" style="max-height: 400px;">
+      <h3 class="font-semibold mb-2 text-sm">채팅 / 추측</h3>
+
+      <div class="flex-1 overflow-y-auto space-y-1 mb-2 text-xs">
+        <%= for m <- Enum.reverse(@messages) do %>
+          <div>
+            <span class="font-mono text-base-content/70">{m.nickname}:</span>
+            {m.text}
+          </div>
+        <% end %>
+      </div>
+
+      <form
+        id="skribbl-chat-form"
+        phx-hook="ChatReset"
+        phx-submit="skribbl_chat"
+        class="flex gap-1"
+      >
+        <input
+          type="text"
+          name="text"
+          placeholder={if @status == :drawing, do: "추측 입력...", else: "채팅..."}
+          maxlength="200"
+          autocomplete="off"
+          class="input input-bordered input-sm flex-1"
+          disabled={not @can_chat?}
+          value=""
+        />
+        <button type="submit" class="btn btn-sm btn-primary" disabled={not @can_chat?}>전송</button>
+      </form>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+
+  defp skribbl_round_end_modal(assigns) do
+    seconds = max(div(assigns.state.time_left_ms || 0, 1000), 0)
+    word = assigns.state.word
+
+    guessed =
+      assigns.state.players
+      |> Enum.filter(fn {_, p} -> p.guessed_at end)
+      |> Enum.map(fn {_, p} -> p end)
+      |> Enum.sort_by(& &1.guessed_at, DateTime)
+
+    assigns = assign(assigns, seconds: seconds, word: word, guessed: guessed)
+
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class="bg-base-100 rounded-xl shadow-2xl max-w-md w-full p-6 border-4 border-info">
+        <div class="text-center mb-3">
+          <div class="text-3xl mb-1">📢</div>
+          <div class="text-lg font-semibold">정답 공개</div>
+          <div class="text-3xl font-bold mt-2 text-success font-mono">{@word}</div>
+        </div>
+
+        <div class="mb-4">
+          <div class="text-sm font-semibold text-base-content/70 mb-1">맞춘 사람</div>
+          <%= if @guessed == [] do %>
+            <p class="text-base-content/50 text-sm">아무도 못 맞춤 😅</p>
+          <% else %>
+            <ol class="space-y-1 text-sm">
+              <%= for {p, idx} <- Enum.with_index(@guessed) do %>
+                <li class="flex justify-between">
+                  <span>
+                    <span class="badge badge-sm">#{idx + 1}</span>
+                    <span class="font-mono ml-2">{p.nickname}</span>
+                  </span>
+                  <strong>{p.score}점</strong>
+                </li>
+              <% end %>
+            </ol>
+          <% end %>
+        </div>
+
+        <div class="text-center text-xs text-base-content/60">
+          다음 라운드 시작까지 <strong>{@seconds}초</strong>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp skribbl_game_over_modal(assigns) do
+    winner_id = assigns.state.winner_id
+    winner = winner_id && Map.get(assigns.state.players, winner_id)
+    me_won? = winner_id == assigns.player_id
+
+    sorted =
+      assigns.state.players |> Enum.sort_by(fn {_, p} -> -p.score end) |> Enum.take(8)
+
+    assigns = assign(assigns, winner: winner, me_won?: me_won?, sorted: sorted)
+
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class={[
+        "rounded-xl shadow-2xl max-w-md w-full p-6 border-4",
+        if(@me_won?, do: "bg-success/30 border-success", else: "bg-base-100 border-base-300")
+      ]}>
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2">{if @me_won?, do: "🏆", else: "🎉"}</div>
+          <div class="text-2xl font-bold">
+            <%= cond do %>
+              <% @me_won? -> %>
+                승리!
+              <% @winner -> %>
+                {@winner.nickname} 우승
+              <% true -> %>
+                게임 종료
+            <% end %>
+          </div>
+        </div>
+
+        <ol class="mb-4 space-y-1 text-sm">
+          <%= for {{_, p}, idx} <- Enum.with_index(@sorted) do %>
+            <li class="flex justify-between">
+              <span>
+                <span class="badge badge-sm">#{idx + 1}</span>
+                <span class="font-mono ml-2">{p.nickname}</span>
+              </span>
+              <strong>{p.score}점</strong>
+            </li>
+          <% end %>
+        </ol>
+
+        <button phx-click="skribbl_start_game" class="btn btn-primary w-full">
+          🔄 다시 하기
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  defp word_blanks(nil), do: ""
+
+  defp word_blanks(word) when is_binary(word) do
+    String.graphemes(word) |> Enum.map(fn _ -> "_" end) |> Enum.join(" ")
+  end
+
+  # HTTP 첫 mount 의 placeholder %{status: :waiting, players: %{}} 보강.
+  # Skribbl 의 모든 필드 default — render crash 방지.
+  defp ensure_skribbl_state(state) do
+    state
+    |> Map.put_new(:status, :waiting)
+    |> Map.put_new(:players, %{})
+    |> Map.put_new(:drawer_id, nil)
+    |> Map.put_new(:word, nil)
+    |> Map.put_new(:word_choices, [])
+    |> Map.put_new(:word_revealed, false)
+    |> Map.put_new(:time_left_ms, 0)
+    |> Map.put_new(:strokes, [])
+    |> Map.put_new(:messages, [])
+    |> Map.put_new(:round_no, 0)
+    |> Map.put_new(:winner_id, nil)
   end
 
   attr :label, :string, required: true
@@ -875,36 +1383,55 @@ defmodule HappyTriznWeb.GameMultiLive do
     assigns = assign(assigns, winner: winner, me_won?: me_won?, summary: summary)
 
     ~H"""
-    <div class={[
-      "rounded-lg border-2 p-4 mb-4",
-      if(@me_won?, do: "bg-success/20 border-success", else: "bg-base-200 border-base-300")
-    ]}>
-      <div class="flex items-center justify-between gap-3 mb-3">
-        <div class="text-lg font-bold">
-          <%= cond do %>
-            <% @me_won? -> %>
-              🏆 승리!
-            <% is_binary(@winner) -> %>
-              😢 패배
-            <% true -> %>
-              💀 게임 종료
-          <% end %>
-        </div>
-        <button phx-click="restart" class="btn btn-primary btn-sm">🔄 다시 하기</button>
-      </div>
-
-      <%= if @summary != [] do %>
-        <div class="text-sm">
-          <div class="font-semibold text-base-content/70 mb-1">방 누적 우승</div>
-          <div class="flex flex-wrap gap-2">
-            <%= for entry <- @summary do %>
-              <span class="badge badge-lg">
-                {entry.nickname} · <strong class="ml-1">{entry.wins}회</strong>
-              </span>
+    <!-- Fullscreen popup overlay — 게임 끝났을 때 명확히 보이도록 화면 중앙에. -->
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class={[
+        "rounded-xl shadow-2xl max-w-md w-full p-6 border-4",
+        if(@me_won?,
+          do: "bg-success/30 border-success",
+          else: "bg-base-100 border-base-300"
+        )
+      ]}>
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2">
+            <%= cond do %>
+              <% @me_won? -> %>
+                🏆
+              <% is_binary(@winner) -> %>
+                😢
+              <% true -> %>
+                💀
+            <% end %>
+          </div>
+          <div class="text-2xl font-bold">
+            <%= cond do %>
+              <% @me_won? -> %>
+                승리!
+              <% is_binary(@winner) -> %>
+                패배
+              <% true -> %>
+                게임 종료
             <% end %>
           </div>
         </div>
-      <% end %>
+
+        <%= if @summary != [] do %>
+          <div class="mb-4">
+            <div class="font-semibold text-base-content/70 mb-2 text-center">방 누적 우승</div>
+            <div class="flex flex-wrap gap-2 justify-center">
+              <%= for entry <- @summary do %>
+                <span class="badge badge-lg">
+                  {entry.nickname} · <strong class="ml-1">{entry.wins}회</strong>
+                </span>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <button phx-click="restart" class="btn btn-primary w-full">
+          🔄 다시 하기
+        </button>
+      </div>
     </div>
     """
   end

@@ -157,10 +157,11 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       Enum.each(state.players, fn {_, p} -> assert p.score == 0 end)
     end
 
-    test "글로벌 🏠 홈 링크 게임 화면에도 노출", %{conn: conn, room: room} do
+    test "글로벌 top nav (Happy Trizn + 게임명) 게임 화면에도 노출", %{conn: conn, room: room} do
       conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
       html = Phoenix.ConnTest.html_response(conn, 200)
-      assert html =~ "🏠"
+      assert html =~ "Happy Trizn"
+      assert html =~ "Tetris"
     end
 
     test "ghost piece + grid class render", %{conn: conn, room: room} do
@@ -464,6 +465,164 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert "ArrowLeft" in result.bindings["move_left"]
       # 모달 유지 (form 그대로)
       assert render(view) =~ "modal_save_binding"
+    end
+  end
+
+  describe "/game/skribbl/:id — Skribbl 통합" do
+    setup %{conn: conn} do
+      Rooms.clear_kick_bans()
+      host = user_fixture(nickname: "sk_host_#{System.unique_integer([:positive])}")
+
+      {:ok, room} =
+        Rooms.create(host, %{
+          game_type: "skribbl",
+          name: "sk_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, conn: log_in_user(conn, host), host: host, room: room}
+    end
+
+    test "마운트 + canvas hook + 참가자 표시", %{conn: conn, room: room} do
+      {:ok, _, html} = live(conn, ~p"/game/skribbl/#{room.id}")
+      assert html =~ "phx-hook=\"SkribblCanvas\""
+      assert html =~ "참가자"
+      assert html =~ "채팅"
+    end
+
+    test "혼자면 시작 버튼 안 보임 (2명 이상 필요)", %{conn: conn, room: room} do
+      {:ok, _, html} = live(conn, ~p"/game/skribbl/#{room.id}")
+      refute html =~ "phx-click=\"skribbl_start_game\""
+    end
+
+    test "2명 모인 후 start_game → :choosing 진입 + word_choices broadcast", %{
+      conn: conn,
+      host: host,
+      room: room
+    } do
+      {:ok, view_a, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+
+      bob = user_fixture(nickname: "sk_b_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _view_b, _} = live(conn_b, ~p"/game/skribbl/#{room.id}")
+
+      Process.sleep(20)
+      html = render(view_a)
+      assert html =~ "phx-click=\"skribbl_start_game\""
+
+      view_a |> element("button[phx-click='skribbl_start_game']") |> render_click()
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      assert state.status == :choosing
+      assert length(state.word_choices) == 3
+      _ = host
+    end
+
+    test "stroke event 보내면 다른 사용자 push_event 받음", %{conn: conn, host: _host, room: room} do
+      {:ok, view_a, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      bob = user_fixture(nickname: "sk_str_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, view_b, _} = live(conn_b, ~p"/game/skribbl/#{room.id}")
+      Process.sleep(20)
+
+      view_a |> element("button[phx-click='skribbl_start_game']") |> render_click()
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      drawer_id = state.drawer_id
+      [first | _] = state.word_choices
+
+      # drawer 가 단어 고름 → :drawing
+      drawer_view = if drawer_id == view_a.id, do: view_a, else: view_b
+
+      HappyTrizn.Games.GameSession.handle_input(pid, drawer_id, %{
+        "action" => "choose_word",
+        "word" => first
+      })
+
+      Process.sleep(20)
+
+      # drawer 가 stroke 입력
+      stroke = %{
+        "from" => %{"x" => 1, "y" => 1},
+        "to" => %{"x" => 10, "y" => 10},
+        "color" => "#000000",
+        "size" => 4
+      }
+
+      HappyTrizn.Games.GameSession.handle_input(pid, drawer_id, %{
+        "action" => "stroke",
+        "stroke" => stroke
+      })
+
+      # 양쪽 view 모두 push_event "skribbl:stroke" 받아야
+      assert_push_event(view_a, "skribbl:stroke", _)
+      assert_push_event(view_b, "skribbl:stroke", _)
+
+      _ = drawer_view
+    end
+
+    test "글로벌 top nav (Happy Trizn + 캐치마인드) skribbl 화면에도 노출", %{conn: conn, room: room} do
+      conn = Phoenix.ConnTest.get(conn, ~p"/game/skribbl/#{room.id}")
+      html = Phoenix.ConnTest.html_response(conn, 200)
+      assert html =~ "Happy Trizn"
+      assert html =~ "캐치마인드"
+    end
+
+    test "skribbl_chat 후 chat:reset_input push (입력창 자동 비움)", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      view |> render_hook("skribbl_chat", %{"text" => "안녕"})
+      assert_push_event(view, "chat:reset_input", %{})
+    end
+
+    test "round_end 시 정답 공개 popup 모달 표시", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      bob = user_fixture(nickname: "sk_re_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _, _} = live(conn_b, ~p"/game/skribbl/#{room.id}")
+      Process.sleep(20)
+
+      view |> element("button[phx-click='skribbl_start_game']") |> render_click()
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      # 강제로 round_end 상태 만듦.
+      :sys.replace_state(pid, fn s ->
+        gs = s.game_state
+        new_gs = %{gs | status: :round_end, word: "사과", time_left_ms: 5000, word_revealed: true}
+        %{s | game_state: new_gs}
+      end)
+
+      send(view.pid, {:game_event, {:round_end, %{reason: :timeout, word: "사과"}}})
+      Process.sleep(20)
+      html = render(view)
+
+      # popup overlay (정답 공개 + 단어 + 다음 라운드 까지)
+      assert html =~ "정답 공개"
+      assert html =~ "사과"
+    end
+
+    test ":over 시 game_over popup + 다시 하기 버튼", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      bob = user_fixture(nickname: "sk_o_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _, _} = live(conn_b, ~p"/game/skribbl/#{room.id}")
+      Process.sleep(20)
+
+      view |> element("button[phx-click='skribbl_start_game']") |> render_click()
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      :sys.replace_state(pid, fn s ->
+        gs = s.game_state
+        # 강제 :over.
+        winner_id = gs.players |> Map.keys() |> List.first()
+        new_gs = %{gs | status: :over, winner_id: winner_id}
+        %{s | game_state: new_gs}
+      end)
+
+      send(view.pid, {:game_event, {:game_finished, %{winner: nil}}})
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "다시 하기"
     end
   end
 end

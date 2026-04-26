@@ -21,12 +21,13 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       assert html =~ "글로벌 채팅"
     end
 
-    test "글로벌 🏠 홈 링크 root layout 에 노출", %{conn: conn} do
+    test "글로벌 브랜드 + 페이지 타이틀 root layout 에 노출", %{conn: conn} do
       conn = Phoenix.ConnTest.get(conn, ~p"/lobby")
       html = Phoenix.ConnTest.html_response(conn, 200)
-      assert html =~ "🏠"
-      # fixed 위치 (top/left) — root layout 의 home 버튼 marker
-      assert html =~ "fixed"
+      assert html =~ "Happy Trizn"
+      assert html =~ "href=\"/lobby\""
+      # 페이지 타이틀 (lobby 는 "로비")
+      assert html =~ "로비"
     end
 
     test "🏆 기록 링크 lobby 헤더 노출", %{conn: conn} do
@@ -216,6 +217,23 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       {:ok, _view, html} = live(conn, ~p"/lobby")
       assert html =~ "lobby_visible_room"
       assert html =~ "활성 방"
+    end
+
+    test "활성 방 badge 가 game_type slug 대신 친화 이름 (Tetris)", %{conn: conn} do
+      {:ok, _, html} = live(conn, ~p"/lobby")
+      # tetris 방 — badge 에 "Tetris" 노출 (slug "tetris" 대신 meta.name).
+      assert html =~ "Tetris"
+    end
+
+    test "skribbl 방은 캐치마인드 로 표시", %{conn: conn, alice: alice} do
+      {:ok, _} =
+        HappyTrizn.Rooms.create(alice, %{
+          game_type: "skribbl",
+          name: "sk_lobby_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, _, html} = live(conn, ~p"/lobby")
+      assert html =~ "캐치마인드"
     end
 
     test "join_room → /game/:type/:id 리다이렉트", %{conn: conn, room: room} do

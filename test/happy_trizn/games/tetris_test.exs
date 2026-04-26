@@ -465,15 +465,15 @@ defmodule HappyTrizn.Games.TetrisTest do
       assert {:game_start, %{}} in broadcasts
     end
 
-    test "countdown 중 한 명 leave → :waiting 복귀 + 카운트 cancel" do
+    test "countdown 중 한 명 leave → 남은 사람 :practice 자동 전환" do
       state = join2_countdown()
       assert state.status == :countdown
 
       {:ok, s, broadcasts} = Tetris.handle_player_leave("p2", :disconnect, state)
-      assert s.status == :waiting
+      assert s.status == :practice
       assert s.countdown_ms == nil
       assert map_size(s.players) == 1
-      assert {:countdown_cancel, %{}} in broadcasts
+      assert Enum.any?(broadcasts, fn {tag, _} -> tag == :practice_started end)
     end
 
     test ":countdown 중 input 무시 (status not in [:playing, :practice])" do
@@ -536,18 +536,19 @@ defmodule HappyTrizn.Games.TetrisTest do
       assert {:ok, ^state, []} = Tetris.handle_input("ghost", %{"action" => "restart"}, state)
     end
 
-    test "winner 결정 시 winners_history 자동 추가" do
+    test "1v1 게임 중 한 명 leave → 남은 사람 :practice 자동 전환 (winner 결정 X, 게임 영향 X)" do
       state = join2()
-      # p2 leave → p1 winner
-      {:ok, ns, _} = Tetris.handle_player_leave("p2", :disconnect, state)
-      assert ns.status == :over
-      assert ns.winner == "p1"
-      assert length(ns.winners_history) == 1
-      [entry | _] = ns.winners_history
-      assert entry.winner_id == "p1"
-      assert entry.primary_id == "p1"
-      assert is_integer(entry.score)
+      {:ok, ns, broadcasts} = Tetris.handle_player_leave("p2", :disconnect, state)
+      # winner 안 정해짐 — 그냥 솔로 연습 모드.
+      assert ns.status == :practice
+      assert ns.winner == nil
+      assert map_size(ns.players) == 1
+      assert Map.has_key?(ns.players, "p1")
+      assert Enum.any?(broadcasts, fn {tag, _} -> tag == :practice_started end)
     end
+  end
+
+  describe "leave 후 솔로 전환" do
   end
 
   describe "lock delay" do
@@ -789,11 +790,12 @@ defmodule HappyTrizn.Games.TetrisTest do
   end
 
   describe "handle_player_leave" do
-    test "playing 중 1명 떠나면 남은 사람 winner" do
+    test "playing 중 1명 떠나면 남은 사람 :practice 자동 (winner X, 게임 영향 X)" do
       {:ok, ns, broadcasts} = Tetris.handle_player_leave("p1", :disconnect, join2())
-      assert ns.status == :over
-      assert ns.winner == "p2"
-      assert {:winner, "p2"} in broadcasts
+      assert ns.status == :practice
+      assert ns.winner == nil
+      assert map_size(ns.players) == 1
+      assert Enum.any?(broadcasts, fn {tag, _} -> tag == :practice_started end)
     end
 
     test "waiting 중 떠나면 winner 안 결정" do
