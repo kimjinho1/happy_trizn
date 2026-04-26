@@ -146,20 +146,45 @@ defmodule HappyTrizn.Games.GameSessionTest do
         %{state | game_state: %{gs | status: :playing, countdown_ms: 0}}
       end)
 
-      # p2 가 leave → p1 winner → game_over → match_result 저장.
-      # GenServer 는 stop 안 함 (남은 player 가 다시 하기 가능).
-      GameSession.player_leave(pid, "p2", :disconnect)
-      # cast 처리 대기.
+      # p2 가 top_out 하면 p1 winner. leave 가 아닌 top_out 으로 시뮬.
+      :sys.replace_state(pid, fn state ->
+        gs = state.game_state
+        new_players = Map.update!(gs.players, "p2", fn p -> %{p | top_out: true} end)
+        # finish_round → :over + winner.
+        winner = "p1"
+
+        history_entry = %{
+          winner_id: winner,
+          primary_id: winner,
+          at: DateTime.utc_now() |> DateTime.truncate(:second),
+          score: 100,
+          lines: 5,
+          level: 1,
+          pieces_placed: 1
+        }
+
+        new_gs = %{
+          gs
+          | players: new_players,
+            status: :over,
+            winner: winner,
+            winners_history: [history_entry]
+        }
+
+        %{state | game_state: new_gs}
+      end)
+
+      # input trigger 로 check_and_finish 호출 → match_result 저장.
+      GameSession.handle_input(pid, "p1", %{"action" => "left"})
       _ = :sys.get_state(pid)
 
-      # match_results 에 winner=host 인 row 있어야
       [r] = HappyTrizn.MatchResults.recent("tetris", 50)
       assert r.winner_id == host.id
       assert r.room_id == room.id
       assert r.game_type == "tetris"
 
-      # GenServer 살아있어야 (다시 하기 가능)
       assert Process.alive?(pid)
+      _ = opp
     end
 
     test "winner 결정 후에도 game_over 다시 검사해도 dedupe — match_result 1개만 저장" do
@@ -191,12 +216,33 @@ defmodule HappyTrizn.Games.GameSessionTest do
 
       :sys.replace_state(pid, fn state ->
         gs = state.game_state
-        %{state | game_state: %{gs | status: :playing, countdown_ms: 0}}
+        new_players = Map.update!(gs.players, "p2", fn p -> %{p | top_out: true} end)
+
+        history_entry = %{
+          winner_id: "p1",
+          primary_id: "p1",
+          at: DateTime.utc_now() |> DateTime.truncate(:second),
+          score: 100,
+          lines: 5,
+          level: 1,
+          pieces_placed: 1
+        }
+
+        new_gs = %{
+          gs
+          | players: new_players,
+            status: :over,
+            winner: "p1",
+            winners_history: [history_entry]
+        }
+
+        %{state | game_state: new_gs}
       end)
 
-      GameSession.player_leave(pid, "p2", :disconnect)
+      # 첫 trigger.
+      GameSession.handle_input(pid, "p1", %{"action" => "left"})
       _ = :sys.get_state(pid)
-      # 추가 input 이 발생해도 (game_over 재검사) match_result 또 저장 안 됨.
+      # 또 trigger — dedupe 로 추가 저장 안 함.
       GameSession.handle_input(pid, "p1", %{"action" => "left"})
       _ = :sys.get_state(pid)
 

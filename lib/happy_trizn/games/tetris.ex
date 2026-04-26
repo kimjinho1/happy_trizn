@@ -107,29 +107,18 @@ defmodule HappyTrizn.Games.Tetris do
     alive = new_players |> Enum.reject(fn {_, p} -> p.top_out end)
 
     cond do
-      state.status == :playing and length(alive) == 1 ->
-        winner = alive |> List.first() |> elem(0)
-        new_state = finish_round(state, new_players, winner)
-        {:ok, new_state, [{:winner, winner}]}
-
-      # countdown 중에 한 명 떠나면 cancel — 남은 player 는 대기 상태로 복귀.
-      state.status == :countdown and length(alive) == 1 ->
-        {remaining_id, _} = alive |> List.first()
-        # 남은 player 상태 fresh 로 (어차피 countdown 시 reset 했었음).
-        reset_player = new_player_state()
-        reset_players = Map.put(%{}, remaining_id, reset_player)
-
-        {:ok,
-         %{
-           state
-           | players: reset_players,
-             status: :waiting,
-             countdown_ms: nil,
-             winner: nil
-         }, [{:player_left, player_id}, {:countdown_cancel, %{}}]}
-
+      # 0명 → :over.
       map_size(new_players) == 0 ->
         {:ok, %{state | players: new_players, status: :over}, [{:player_left, player_id}]}
+
+      # 진행/카운트다운 중 한 명 떠나서 1명만 남음 — 그 1명에게 게임 영향 안 줌.
+      # 자동으로 솔로 연습 (:practice) 모드로 전환. 점수/board 그대로 유지 (:playing 케이스).
+      # countdown 케이스는 board 가 fresh 였으니 그대로 :practice 진입.
+      state.status in [:playing, :countdown, :practice] and length(alive) == 1 ->
+        new_state = %{state | players: new_players, status: :practice, countdown_ms: nil}
+
+        {:ok, new_state,
+         [{:player_left, player_id}, {:practice_started, elem(List.first(alive), 0)}]}
 
       true ->
         {:ok, %{state | players: new_players}, [{:player_left, player_id}]}
@@ -143,10 +132,20 @@ defmodule HappyTrizn.Games.Tetris do
   @impl true
   def handle_input(player_id, %{"action" => "start_practice"}, state) do
     cond do
-      state.status == :waiting and map_size(state.players) == 1 and
+      state.status in [:waiting, :over] and map_size(state.players) == 1 and
           Map.has_key?(state.players, player_id) ->
-        # 솔로 연습 모드 진입. 다른 사람 join 하면 자동으로 :countdown → :playing.
-        {:ok, %{state | status: :practice}, [{:practice_started, player_id}]}
+        # 솔로 연습 모드 진입. :over 에서 진입 시 fresh state 로 reset.
+        # 다른 사람 join 하면 자동으로 :countdown → :playing.
+        reset_player = new_player_state()
+
+        new_state = %{
+          state
+          | status: :practice,
+            players: Map.put(%{}, player_id, reset_player),
+            winner: nil
+        }
+
+        {:ok, new_state, [{:practice_started, player_id}]}
 
       true ->
         {:ok, state, []}
