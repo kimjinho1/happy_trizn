@@ -1540,7 +1540,31 @@ defmodule HappyTriznWeb.GameMultiLive do
     winner_id = assigns.state.winner_id
     winner = winner_id && Map.get(assigns.state.players, winner_id)
     me_won? = winner_id == assigns.player_id
-    assigns = assign(assigns, winner: winner, me_won?: me_won?)
+
+    # Bomberman.bomberman_ranking 와 같은 로직 — game_view 에는 raw state 만 있음.
+    ranking =
+      assigns.state.players
+      |> Enum.map(fn {id, p} ->
+        %{
+          player_id: id,
+          nickname: Map.get(p, :nickname, "anon"),
+          alive: p.alive,
+          dead_at: Map.get(p, :dead_at),
+          is_winner: id == winner_id
+        }
+      end)
+      |> Enum.sort_by(fn e ->
+        cond do
+          e.is_winner -> {0, 0}
+          e.alive -> {1, 0}
+          is_nil(e.dead_at) -> {2, 0}
+          true -> {3, -e.dead_at}
+        end
+      end)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {e, rank} -> Map.put(e, :rank, rank) end)
+
+    assigns = assign(assigns, winner: winner, me_won?: me_won?, ranking: ranking)
 
     ~H"""
     <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
@@ -1561,6 +1585,29 @@ defmodule HappyTriznWeb.GameMultiLive do
             <% end %>
           </div>
         </div>
+
+        <%= if @ranking != [] do %>
+          <div class="mb-4">
+            <div class="font-semibold text-base-content/70 mb-2 text-center">최종 순위</div>
+            <div class="space-y-1 text-sm">
+              <%= for entry <- @ranking do %>
+                <div class={[
+                  "flex items-center gap-2 px-3 py-1.5 rounded",
+                  entry.player_id == @player_id && "bg-primary/20 ring-1 ring-primary",
+                  entry.player_id != @player_id && "bg-base-200"
+                ]}>
+                  <span class="font-bold w-6 text-center">
+                    {rank_emoji(entry.rank)}
+                  </span>
+                  <span class="flex-1 truncate font-medium">{entry.nickname}</span>
+                  <span class="text-xs text-base-content/60">
+                    {if entry.alive, do: "생존", else: "💥"}
+                  </span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
 
         <button phx-click="bomberman_start" class="btn btn-primary w-full">
           🔄 다시 하기
