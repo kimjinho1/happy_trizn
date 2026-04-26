@@ -31,7 +31,7 @@ defmodule HappyTriznWeb.GameLive do
           {:ok, socket |> put_flash(:error, "이 게임은 멀티 — 방을 만들어 주세요") |> redirect(to: ~p"/lobby")}
         else
           module = GameRegistry.get_module(slug)
-          options = load_options(socket.assigns[:current_user], slug)
+          options = UserGameSettings.get_for(socket.assigns[:current_user], slug).options
           {:ok, game_state} = module.init(options)
           # 싱글 게임은 player_id = nickname.
           {:ok, game_state, _} = module.handle_player_join(nickname, %{}, game_state)
@@ -69,18 +69,6 @@ defmodule HappyTriznWeb.GameLive do
     {:noreply, assign(socket, game_state: fresh, result: nil)}
   end
 
-  # ============================================================================
-  # 사용자 옵션 → init/1 config map
-  # ============================================================================
-
-  # 2048 의 settings_key 는 historical 이유로 "games_2048" (slug 와 다름).
-  defp settings_key("2048"), do: "games_2048"
-  defp settings_key(slug), do: slug
-
-  defp load_options(user, slug) do
-    UserGameSettings.get_for(user, settings_key(slug)).options
-  end
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -89,6 +77,7 @@ defmodule HappyTriznWeb.GameLive do
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
         <div class="flex items-center gap-2">
           <span class="text-sm text-base-content/70">{@nickname}</span>
+          <.link navigate={~p"/settings/games/#{@slug}"} class="btn btn-ghost btn-sm">⚙️ 옵션</.link>
           <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
         </div>
       </header>
@@ -105,7 +94,7 @@ defmodule HappyTriznWeb.GameLive do
       </div>
 
       <p class="text-xs text-base-content/40 mt-4">
-        옵션 변경은 로비 → 게임 옵션 (board 크기 / 난이도). 변경 후 다시 시작 시 적용.
+        ⚙️ 옵션 에서 변경 (board 크기 / 난이도). 저장 후 다시 시작 시 적용.
       </p>
     </div>
     """

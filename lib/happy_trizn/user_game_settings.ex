@@ -25,12 +25,23 @@ defmodule HappyTrizn.UserGameSettings do
   # Defaults — 게임별
   # ============================================================================
 
+  # slug ↔ settings game_type 정규화. 라우터/Registry 는 slug ("2048") 사용 하지만
+  # DB schema 의 valid_game_types / defaults case 는 "games_2048" 키 사용. 모든
+  # public API entry 에서 통일.
+  @doc false
+  def normalize_game_type("2048"), do: "games_2048"
+  def normalize_game_type(slug), do: slug
+
   @doc """
   게임별 기본 key bindings + options 반환.
 
-  새 게임 추가 시 case 절 확장.
+  새 게임 추가 시 case 절 확장. slug "2048" → "games_2048" 자동 정규화.
   """
-  def defaults("bomberman") do
+  def defaults(game_type) when is_binary(game_type) do
+    do_defaults(normalize_game_type(game_type))
+  end
+
+  defp do_defaults("bomberman") do
     %{
       bindings: %{
         "move_up" => ["ArrowUp", "w"],
@@ -53,7 +64,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults("skribbl") do
+  defp do_defaults("skribbl") do
     %{
       bindings: %{
         "send_chat" => ["Enter"]
@@ -70,7 +81,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults("snake_io") do
+  defp do_defaults("snake_io") do
     %{
       bindings: %{
         "move_up" => ["ArrowUp", "w", "k"],
@@ -89,7 +100,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults("games_2048") do
+  defp do_defaults("games_2048") do
     %{
       bindings: %{
         "move_up" => ["ArrowUp", "w", "k"],
@@ -107,7 +118,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults("minesweeper") do
+  defp do_defaults("minesweeper") do
     %{
       bindings: %{
         "reveal" => ["click"],
@@ -127,7 +138,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults("pacman") do
+  defp do_defaults("pacman") do
     %{
       bindings: %{
         "move_up" => ["ArrowUp", "w"],
@@ -146,7 +157,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults("tetris") do
+  defp do_defaults("tetris") do
     %{
       bindings: %{
         "move_left" => ["ArrowLeft", "j"],
@@ -186,7 +197,7 @@ defmodule HappyTrizn.UserGameSettings do
     }
   end
 
-  def defaults(_game_type) do
+  defp do_defaults(_game_type) do
     %{bindings: %{}, options: %{}, das: 133, arr: 10, soft_drop_speed: "medium"}
   end
 
@@ -206,6 +217,7 @@ defmodule HappyTrizn.UserGameSettings do
   def get_for(nil, game_type), do: defaults(game_type)
 
   def get_for(%{id: user_id}, game_type) do
+    game_type = normalize_game_type(game_type)
     base = defaults(game_type)
 
     case Repo.get_by(Setting, user_id: user_id, game_type: game_type) do
@@ -300,6 +312,7 @@ defmodule HappyTrizn.UserGameSettings do
   attrs = %{key_bindings: %{...}, options: %{...}}
   """
   def upsert(%{id: user_id}, game_type, attrs) do
+    game_type = normalize_game_type(game_type)
     # 신규 row 는 game_type 미설정 상태로 만들어 changeset 의 validate_inclusion 이 실행되도록.
     # (validate_change 는 cast 시 변경된 field 에만 동작 — 미리 채워두면 검증 누락.)
     setting =
@@ -319,6 +332,8 @@ defmodule HappyTrizn.UserGameSettings do
 
   @doc "사용자의 게임 row 삭제 (옵션 초기화)."
   def reset(%{id: user_id}, game_type) do
+    game_type = normalize_game_type(game_type)
+
     from(s in Setting, where: s.user_id == ^user_id and s.game_type == ^game_type)
     |> Repo.delete_all()
 

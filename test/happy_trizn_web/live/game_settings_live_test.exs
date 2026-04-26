@@ -165,6 +165,40 @@ defmodule HappyTriznWeb.GameSettingsLiveTest do
     end
   end
 
+  describe "/settings/games/2048 — slug alias" do
+    setup %{conn: conn} do
+      user = user_fixture(nickname: "set2048_#{System.unique_integer([:positive])}")
+      {:ok, conn: log_in_user(conn, user), user: user}
+    end
+
+    test "마운트 + board_size 폼 보임", %{conn: conn} do
+      {:ok, _, html} = live(conn, ~p"/settings/games/2048")
+      assert html =~ "2048 옵션"
+      assert html =~ "board_size"
+    end
+
+    test "save_options board_size=5 → DB 저장 (game_type alias \"games_2048\")",
+         %{conn: conn, user: user} do
+      {:ok, view, _} = live(conn, ~p"/settings/games/2048")
+
+      view
+      |> form("form[phx-submit='save_options']", %{
+        "options" => %{
+          "board_size" => "5",
+          "theme" => "light"
+        }
+      })
+      |> render_submit()
+
+      result = UserGameSettings.get_for(user, "2048")
+      assert result.options["board_size"] == 5
+
+      # 정규화 — 정식 키로 읽어도 같음
+      result2 = UserGameSettings.get_for(user, "games_2048")
+      assert result2.options["board_size"] == 5
+    end
+  end
+
   describe "/settings/games/:game_type — invalid slug" do
     setup %{conn: conn} do
       user = user_fixture(nickname: "inv_slug_#{System.unique_integer([:positive])}")

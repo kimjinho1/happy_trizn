@@ -223,6 +223,12 @@ user_game_settings
 
 ## 2048 + Minesweeper ✅ 옵션 로직 보강 완료 (Sprint 3h)
 
+> Slug ↔ settings_key 정규화: `UserGameSettings.normalize_game_type/1` 가
+> slug `"2048"` → DB game_type `"games_2048"` 자동 변환. `defaults/get_for/upsert/reset`
+> 모두 alias 따라가서 `/settings/games/2048` 폼 + 저장이 정상 동작.
+
+
+
 ### 2048 ✅
 
 - N×N grid (4 / 5 / 6) + swipe + 합치기 + win 2048
