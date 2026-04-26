@@ -16,6 +16,7 @@ config :happy_trizn, :games, [
   HappyTrizn.Games.Games2048,
   HappyTrizn.Games.Minesweeper,
   HappyTrizn.Games.PacMan,
+  HappyTrizn.Games.Sudoku,
   HappyTrizn.Games.Tetris,
   HappyTrizn.Games.Bomberman,
   HappyTrizn.Games.Skribbl,

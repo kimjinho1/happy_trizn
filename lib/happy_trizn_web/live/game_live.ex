@@ -251,6 +251,19 @@ defmodule HappyTriznWeb.GameLive do
   defp key_to_action("pacman", k, _) when k in ~w(ArrowRight d D),
     do: %{"action" => "set_dir", "dir" => "right"}
 
+  # 스도쿠 (Sprint 3m) — 화살표 cursor 이동, 1-9 입력, 0/Backspace/Delete clear.
+  defp key_to_action("sudoku", key, bindings) do
+    cond do
+      key in Map.get(bindings, "move_up", []) -> %{"action" => "move_cursor", "dir" => "up"}
+      key in Map.get(bindings, "move_down", []) -> %{"action" => "move_cursor", "dir" => "down"}
+      key in Map.get(bindings, "move_left", []) -> %{"action" => "move_cursor", "dir" => "left"}
+      key in Map.get(bindings, "move_right", []) -> %{"action" => "move_cursor", "dir" => "right"}
+      key in Map.get(bindings, "clear", []) -> %{"action" => "clear_cursor"}
+      key in ~w(1 2 3 4 5 6 7 8 9) -> %{"action" => "enter", "n" => key}
+      true -> nil
+    end
+  end
+
   # 지뢰찾기 (Sprint 4f) — bindings 기반. 사용자 옵션에서 변경한 키 즉시 반영.
   defp key_to_action("minesweeper", key, bindings) do
     cond do
@@ -285,7 +298,7 @@ defmodule HappyTriznWeb.GameLive do
     <div
       id={"game-page-#{@slug}"}
       phx-hook="GameKeyCapture"
-      data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L,f,F, ,Spacebar,Enter"
+      data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L,f,F,Space,Spacebar,Enter,Backspace,Delete,0,1,2,3,4,5,6,7,8,9"
       class="min-h-screen p-3 sm:p-6 max-w-3xl mx-auto"
     >
       <header class="flex items-center justify-between mb-4">
@@ -537,6 +550,107 @@ defmodule HappyTriznWeb.GameLive do
       </div>
     </div>
     """
+  end
+
+  defp game_view(%{slug: "sudoku"} = assigns) do
+    {cur_r, cur_c} = Map.get(assigns.state, :cursor, {0, 0})
+    cur_n = Enum.at(Enum.at(assigns.state.user, cur_r), cur_c)
+    assigns = assign(assigns, cur_r: cur_r, cur_c: cur_c, cur_n: cur_n)
+
+    ~H"""
+    <div class="space-y-3">
+      <div class="text-sm">
+        난이도: <strong>{@state.difficulty}</strong> · clue: {@state.clues}
+      </div>
+      <div class="text-xs text-base-content/60">
+        키: 화살표 cursor · 1-9 입력 · 0/Backspace clear · 좌클릭 cursor 이동
+      </div>
+
+      <%= if @state.over == :win do %>
+        <div class="alert alert-success">🏆 풀었음!</div>
+      <% end %>
+
+      <div class="inline-block bg-base-300 p-1">
+        <%= for r <- 0..8 do %>
+          <div class="flex">
+            <%= for c <- 0..8 do %>
+              <% v = Enum.at(Enum.at(@state.user, r), c) %>
+              <% fixed? = Map.has_key?(@state.fixed, {r, c}) %>
+              <% cursor? = r == @cur_r and c == @cur_c %>
+              <% same_n? = not is_nil(@cur_n) and v == @cur_n and not cursor? %>
+              <% conflict? = sudoku_conflict?(@state.user, r, c, v) %>
+              <% box_top? = rem(r, 3) == 0 %>
+              <% box_left? = rem(c, 3) == 0 %>
+              <% box_right? = c == 8 %>
+              <% box_bot? = r == 8 %>
+              <button
+                phx-click="input"
+                phx-value-action="set_cursor"
+                phx-value-r={r}
+                phx-value-c={c}
+                class={[
+                  "w-9 h-9 flex items-center justify-center text-lg font-mono",
+                  fixed? && "bg-base-200 font-bold",
+                  not fixed? && "bg-base-100",
+                  cursor? && "outline outline-2 outline-primary -outline-offset-2",
+                  same_n? && "bg-primary/10",
+                  conflict? && not fixed? && "text-error",
+                  box_top? && "border-t-2 border-base-content/40",
+                  box_left? && "border-l-2 border-base-content/40",
+                  box_right? && "border-r-2 border-base-content/40",
+                  box_bot? && "border-b-2 border-base-content/40",
+                  not box_top? && "border-t border-base-300",
+                  not box_left? && "border-l border-base-300"
+                ]}
+              >
+                {v || ""}
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="flex flex-wrap gap-1">
+        <%= for n <- 1..9 do %>
+          <button
+            phx-click="input"
+            phx-value-action="enter"
+            phx-value-n={n}
+            class="btn btn-sm w-10"
+          >
+            {n}
+          </button>
+        <% end %>
+        <button phx-click="input" phx-value-action="clear_cursor" class="btn btn-sm btn-ghost">
+          ✕
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  # cell (r,c) 의 값 v 가 row/col/box 안에서 다른 cell 과 중복인지.
+  defp sudoku_conflict?(_user, _r, _c, nil), do: false
+
+  defp sudoku_conflict?(user, r, c, v) do
+    row_dup =
+      Enum.with_index(Enum.at(user, r))
+      |> Enum.any?(fn {x, ci} -> ci != c and x == v end)
+
+    col_dup =
+      Enum.with_index(0..8)
+      |> Enum.any?(fn {ri, _} -> ri != r and Enum.at(Enum.at(user, ri), c) == v end)
+
+    box_r = div(r, 3) * 3
+    box_c = div(c, 3) * 3
+
+    box_dup =
+      for ri <- box_r..(box_r + 2), ci <- box_c..(box_c + 2) do
+        if ri == r and ci == c, do: nil, else: Enum.at(Enum.at(user, ri), ci)
+      end
+      |> Enum.any?(&(&1 == v))
+
+    row_dup or col_dup or box_dup
   end
 
   defp game_view(%{slug: "pacman"} = assigns) do
