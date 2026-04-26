@@ -1030,6 +1030,98 @@ defmodule HappyTrizn.Games.TetrisTest do
     end
   end
 
+  describe "N-player ranking (Sprint 3l-3)" do
+    test "winner 1등 + 나머지 top_out_at 늦은 순 (오래 살아남은 사람이 위)" do
+      # 4명 셋업, 모두 top_out (winner = 마지막 살아남은 1명).
+      state = elem(Tetris.init(%{}), 1)
+
+      state =
+        Enum.reduce(1..4, state, fn i, acc ->
+          {:ok, new, _} = Tetris.handle_player_join("p#{i}", %{nickname: "p#{i}"}, acc)
+          new
+        end)
+        |> Map.put(:status, :over)
+        |> Map.put(:winner, "p3")
+
+      # top_out_at 시간 강제 셋업: p1 가장 일찍, p2 그다음, p4 그다음. p3 은 winner (top_out=false).
+      state =
+        state
+        |> put_in([:players, "p1", :top_out], true)
+        |> put_in([:players, "p1", :top_out_at], 100)
+        |> put_in([:players, "p2", :top_out], true)
+        |> put_in([:players, "p2", :top_out_at], 200)
+        |> put_in([:players, "p4", :top_out], true)
+        |> put_in([:players, "p4", :top_out_at], 300)
+
+      {:yes, result} = Tetris.game_over?(state)
+      ranks = result.ranking
+
+      assert length(ranks) == 4
+      assert Enum.at(ranks, 0).player_id == "p3"
+      assert Enum.at(ranks, 0).rank == 1
+      assert Enum.at(ranks, 0).is_winner
+      # p4 늦게 죽음 → 2위
+      assert Enum.at(ranks, 1).player_id == "p4"
+      assert Enum.at(ranks, 1).rank == 2
+      # p2 → 3위
+      assert Enum.at(ranks, 2).player_id == "p2"
+      assert Enum.at(ranks, 2).rank == 3
+      # p1 가장 먼저 죽음 → 4위
+      assert Enum.at(ranks, 3).player_id == "p1"
+      assert Enum.at(ranks, 3).rank == 4
+    end
+
+    test "winner nil (모두 top_out) — top_out_at 늦은 순으로 ranking" do
+      state = elem(Tetris.init(%{}), 1)
+
+      state =
+        Enum.reduce(1..2, state, fn i, acc ->
+          {:ok, new, _} = Tetris.handle_player_join("p#{i}", %{nickname: "p#{i}"}, acc)
+          new
+        end)
+        |> Map.put(:status, :over)
+        |> Map.put(:winner, nil)
+
+      state =
+        state
+        |> put_in([:players, "p1", :top_out], true)
+        |> put_in([:players, "p1", :top_out_at], 500)
+        |> put_in([:players, "p2", :top_out], true)
+        |> put_in([:players, "p2", :top_out_at], 100)
+
+      {:yes, result} = Tetris.game_over?(state)
+      ranks = result.ranking
+      # p1 늦게 죽음 → 1위.
+      assert Enum.at(ranks, 0).player_id == "p1"
+      assert Enum.at(ranks, 1).player_id == "p2"
+      refute Enum.at(ranks, 0).is_winner
+    end
+
+    test "ranking entry — nickname / score / lines / rank 포함" do
+      state = elem(Tetris.init(%{}), 1)
+      {:ok, state, _} = Tetris.handle_player_join("p1", %{nickname: "alice"}, state)
+      {:ok, state, _} = Tetris.handle_player_join("p2", %{nickname: "bob"}, state)
+
+      state =
+        state
+        |> Map.put(:status, :over)
+        |> Map.put(:winner, "p1")
+        |> put_in([:players, "p2", :top_out], true)
+        |> put_in([:players, "p2", :top_out_at], 100)
+        |> put_in([:players, "p1", :score], 9999)
+        |> put_in([:players, "p1", :lines], 42)
+
+      {:yes, result} = Tetris.game_over?(state)
+      [first | _] = result.ranking
+
+      assert first.nickname == "alice"
+      assert first.score == 9999
+      assert first.lines == 42
+      assert first.rank == 1
+      assert first.is_winner
+    end
+  end
+
   describe "N-player garbage targeting (Sprint 3l-2)" do
     # 4명 join 시 — 가비지 타겟이 살아있는 다른 player 중 random 1명.
     # 죽은 (top_out) player 는 제외.
