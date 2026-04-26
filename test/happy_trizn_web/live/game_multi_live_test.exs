@@ -466,6 +466,34 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       # 모달 유지 (form 그대로)
       assert render(view) =~ "modal_save_binding"
     end
+
+    test "Sprint 3l — 혼자 입장 시 상대 0명 안내", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "상대 (0명)"
+      assert html =~ "상대방 대기 중"
+    end
+
+    test "Sprint 3l — 2번째 join 시 상대 mini board 노출 (nickname + 점수)", %{
+      conn: conn,
+      host: host,
+      room: room
+    } do
+      {:ok, view_a, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      bob = user_fixture(nickname: "bob_mini_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _view_b, _} = live(conn_b, ~p"/game/tetris/#{room.id}")
+
+      Process.sleep(50)
+      html = render(view_a)
+      # 상대 카운트 1명.
+      assert html =~ "상대 (1명)"
+      # mini board cell 크기 — w-1.5 h-1.5.
+      assert html =~ "w-1.5 h-1.5"
+      # 상대 nickname 표시.
+      assert html =~ bob.nickname
+      _ = host
+    end
   end
 
   describe "/game/skribbl/:id — Skribbl 통합" do

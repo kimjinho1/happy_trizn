@@ -819,106 +819,149 @@ defmodule HappyTriznWeb.GameMultiLive do
     state = assigns.state
 
     me = Map.get(state.players, me_id)
-    other = state.players |> Enum.find(fn {id, _} -> id != me_id end)
-    other_player = if other, do: elem(other, 1), else: nil
+
+    opponents =
+      state.players
+      |> Enum.reject(fn {id, _} -> id == me_id end)
+      |> Enum.sort_by(fn {id, _} -> id end)
+      |> Enum.map(fn {_, p} -> p end)
 
     ghost? = Map.get(assigns.options, "ghost", true)
     grid = Map.get(assigns.options, "grid", "standard")
 
-    assigns = assign(assigns, me: me, other: other_player, ghost?: ghost?, grid: grid)
+    assigns = assign(assigns, me: me, opponents: opponents, ghost?: ghost?, grid: grid)
 
     ~H"""
-    <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <h3 class="font-semibold mb-2">나 ({@player_id |> String.slice(0..7)})</h3>
-          <%= if @me do %>
-            <div class="flex gap-2 items-start">
-              <!-- 좌측: 홀드 -->
-              <div class="flex flex-col gap-2">
-                <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
-                <%= if Map.get(@me, :lock_delay_ms) do %>
-                  <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
-                <% end %>
-              </div>
-              <!-- 중앙: 보드 -->
-              <.tetris_board
-                board={with_ghost_and_current(@me, @ghost?)}
-                grid={@grid}
-                pending={@me.pending_garbage}
-              />
-              <!-- 우측: 다음 큐 -->
-              <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
-            </div>
-            <div class="text-sm mt-2 space-y-1">
-              <div>점수: <strong>{@me.score}</strong></div>
-              <div>라인: {@me.lines} · 레벨: {@me.level}</div>
-              <div>
-                받을 가비지:
-                <span class={if @me.pending_garbage > 0, do: "text-error font-bold", else: ""}>
-                  {@me.pending_garbage}
-                </span>
-              </div>
-              <div class="flex gap-2 flex-wrap">
-                <%= if Map.get(@me, :combo, -1) >= 1 do %>
-                  <span class="badge badge-warning">콤보 ×{@me.combo}</span>
-                <% end %>
-                <%= if Map.get(@me, :b2b, false) do %>
-                  <span class="badge badge-info">B2B</span>
-                <% end %>
-                <%= if Map.get(@me, :finesse_violations, 0) > 0 do %>
-                  <span class="badge badge-error" title="불필요 입력 횟수 (낮을수록 효율적)">
-                    Finesse −{@me.finesse_violations}
-                  </span>
-                <% end %>
-              </div>
-              <%= if @me.top_out do %>
-                <div class="text-error font-bold">탑아웃</div>
+    <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
+      <!-- 왼쪽: 내 보드 (full size) -->
+      <div>
+        <h3 class="font-semibold mb-2">나 — {@nickname}</h3>
+        <%= if @me do %>
+          <div class="flex gap-2 items-start">
+            <!-- 홀드 -->
+            <div class="flex flex-col gap-2">
+              <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
+              <%= if Map.get(@me, :lock_delay_ms) do %>
+                <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
               <% end %>
             </div>
+            <!-- 보드 -->
+            <.tetris_board
+              board={with_ghost_and_current(@me, @ghost?)}
+              grid={@grid}
+              pending={@me.pending_garbage}
+            />
+            <!-- 다음 큐 -->
+            <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
+          </div>
+          <div class="text-sm mt-2 space-y-1">
+            <div>점수: <strong>{@me.score}</strong></div>
+            <div>라인: {@me.lines} · 레벨: {@me.level}</div>
+            <div>
+              받을 가비지:
+              <span class={if @me.pending_garbage > 0, do: "text-error font-bold", else: ""}>
+                {@me.pending_garbage}
+              </span>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <%= if Map.get(@me, :combo, -1) >= 1 do %>
+                <span class="badge badge-warning">콤보 ×{@me.combo}</span>
+              <% end %>
+              <%= if Map.get(@me, :b2b, false) do %>
+                <span class="badge badge-info">B2B</span>
+              <% end %>
+              <%= if Map.get(@me, :finesse_violations, 0) > 0 do %>
+                <span class="badge badge-error" title="불필요 입력 횟수 (낮을수록 효율적)">
+                  Finesse −{@me.finesse_violations}
+                </span>
+              <% end %>
+            </div>
+            <%= if @me.top_out do %>
+              <div class="text-error font-bold">탑아웃</div>
+            <% end %>
+          </div>
+        <% else %>
+          <div class="text-base-content/40">로딩...</div>
+        <% end %>
+      </div>
+
+      <!-- 오른쪽: 상대 mini boards (위) + chat (아래) -->
+      <div class="flex flex-col gap-3 min-w-0">
+        <div>
+          <h3 class="font-semibold mb-2 text-sm">
+            상대 ({length(@opponents)}명)
+          </h3>
+          <%= if @opponents == [] do %>
+            <div class="text-xs text-base-content/40 bg-base-200 rounded p-3">
+              상대방 대기 중...
+            </div>
           <% else %>
-            <div class="text-base-content/40">로딩...</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              <%= for op <- @opponents do %>
+                <.tetris_mini_board player={op} />
+              <% end %>
+            </div>
           <% end %>
         </div>
 
-        <div>
-          <h3 class="font-semibold mb-2">상대</h3>
-          <%= if @other do %>
-            <div class="flex gap-2 items-start">
-              <div class="flex flex-col gap-2">
-                <.piece_preview
-                  label="홀드"
-                  piece={@other.hold}
-                  dim={Map.get(@other, :hold_used, false)}
-                />
-              </div>
-              <.tetris_board
-                board={with_ghost_and_current(@other, false)}
-                grid={@grid}
-                pending={@other.pending_garbage}
-              />
-              <.next_queue nexts={Map.get(@other, :nexts, [@other.next])} />
-            </div>
-            <div class="text-sm mt-2 space-y-1">
-              <div>점수: {@other.score} · 라인: {@other.lines} · 레벨: {@other.level}</div>
-              <div class="flex gap-2">
-                <%= if Map.get(@other, :combo, -1) >= 1 do %>
-                  <span class="badge badge-warning">콤보 ×{@other.combo}</span>
-                <% end %>
-                <%= if Map.get(@other, :b2b, false) do %>
-                  <span class="badge badge-info">B2B</span>
-                <% end %>
-              </div>
-              <%= if @other.top_out do %>
-                <div class="text-error font-bold">탑아웃</div>
-              <% end %>
-            </div>
-          <% else %>
-            <div class="text-base-content/40">상대방 대기 중...</div>
+        <.game_room_chat messages={@messages} />
+      </div>
+    </div>
+    """
+  end
+
+  # ===========================================================================
+  # 상대 mini board — 10×20 board only, w-1.5 cells (~120px wide).
+  # nickname overlay + top_out 시 X overlay.
+  # ===========================================================================
+
+  attr :player, :map, required: true
+
+  defp tetris_mini_board(assigns) do
+    visible =
+      with_ghost_and_current(assigns.player, false)
+      |> Enum.drop(2)
+      |> Enum.take(20)
+
+    pending = min(Map.get(assigns.player, :pending_garbage, 0), 20)
+    nickname = Map.get(assigns.player, :nickname, "anon")
+    top_out? = Map.get(assigns.player, :top_out, false)
+
+    assigns =
+      assign(assigns, visible: visible, pending: pending, nickname: nickname, top_out?: top_out?)
+
+    ~H"""
+    <div class="bg-base-200 rounded p-1 relative">
+      <div class="text-xs font-semibold truncate text-center mb-1" title={@nickname}>
+        {@nickname}
+      </div>
+      <div class="inline-flex bg-base-300 p-px gap-px relative w-full justify-center">
+        <!-- pending garbage bar -->
+        <div class="flex flex-col-reverse w-1 bg-base-100 overflow-hidden">
+          <%= if @pending > 0 do %>
+            <%= for _ <- 1..@pending//1 do %>
+              <div class="h-1.5 bg-error"></div>
+            <% end %>
           <% end %>
         </div>
+        <div>
+          <%= for row <- @visible do %>
+            <div class="flex">
+              <%= for cell <- row do %>
+                <div class={["w-1.5 h-1.5", cell_color(cell)]}></div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+        <%= if @top_out? do %>
+          <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center text-error font-bold text-2xl">
+            ✕
+          </div>
+        <% end %>
       </div>
-      <.game_room_chat messages={@messages} />
+      <div class="text-[10px] text-center text-base-content/60 mt-1">
+        {@player.score} pts · L{@player.lines}
+      </div>
     </div>
     """
   end
