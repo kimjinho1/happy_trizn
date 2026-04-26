@@ -570,7 +570,7 @@ defmodule HappyTriznWeb.GameLive do
         <div class="alert alert-success">🏆 풀었음!</div>
       <% end %>
 
-      <div class="inline-block bg-base-300 p-1">
+      <div class="inline-block bg-base-content/40 p-0.5">
         <%= for r <- 0..8 do %>
           <div class="flex">
             <%= for c <- 0..8 do %>
@@ -579,10 +579,7 @@ defmodule HappyTriznWeb.GameLive do
               <% cursor? = r == @cur_r and c == @cur_c %>
               <% same_n? = not is_nil(@cur_n) and v == @cur_n and not cursor? %>
               <% conflict? = sudoku_conflict?(@state.user, r, c, v) %>
-              <% box_top? = rem(r, 3) == 0 %>
-              <% box_left? = rem(c, 3) == 0 %>
-              <% box_right? = c == 8 %>
-              <% box_bot? = r == 8 %>
+              <% bg = sudoku_cell_bg(cursor?, same_n?, fixed?) %>
               <button
                 phx-click="input"
                 phx-value-action="set_cursor"
@@ -590,17 +587,14 @@ defmodule HappyTriznWeb.GameLive do
                 phx-value-c={c}
                 class={[
                   "w-9 h-9 flex items-center justify-center text-lg font-mono",
-                  fixed? && "bg-base-200 font-bold",
-                  not fixed? && "bg-base-100",
-                  cursor? && "outline outline-2 outline-primary -outline-offset-2",
-                  same_n? && "bg-primary/10",
+                  "border border-base-content/15",
+                  bg,
+                  fixed? && "font-bold text-base-content",
+                  not fixed? && "text-primary",
                   conflict? && not fixed? && "text-error",
-                  box_top? && "border-t-2 border-base-content/40",
-                  box_left? && "border-l-2 border-base-content/40",
-                  box_right? && "border-r-2 border-base-content/40",
-                  box_bot? && "border-b-2 border-base-content/40",
-                  not box_top? && "border-t border-base-300",
-                  not box_left? && "border-l border-base-300"
+                  # 3×3 box 경계 — 안쪽 셀의 윗/왼쪽 border 만 두껍게.
+                  rem(r, 3) == 0 and r > 0 && "border-t-2 border-t-base-content/50",
+                  rem(c, 3) == 0 and c > 0 && "border-l-2 border-l-base-content/50"
                 ]}
               >
                 {v || ""}
@@ -628,6 +622,12 @@ defmodule HappyTriznWeb.GameLive do
     </div>
     """
   end
+
+  # 단일 bg class — cursor 가 가장 우선, 다음 same_n, 다음 fixed, 그 외 빈 셀.
+  defp sudoku_cell_bg(true, _, _), do: "bg-primary/30"
+  defp sudoku_cell_bg(false, true, _), do: "bg-primary/15"
+  defp sudoku_cell_bg(false, false, true), do: "bg-base-200"
+  defp sudoku_cell_bg(false, false, false), do: "bg-base-100"
 
   # cell (r,c) 의 값 v 가 row/col/box 안에서 다른 cell 과 중복인지.
   defp sudoku_conflict?(_user, _r, _c, nil), do: false
