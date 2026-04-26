@@ -44,6 +44,7 @@ defmodule HappyTriznWeb.LobbyLive do
          |> assign(:show_all_users, false)
          |> assign(:games_multi, GameRegistry.list_multi())
          |> assign(:games_single, GameRegistry.list_single())
+         |> assign(:page_title, "로비")
          |> load_friends_data()
          |> load_rooms()}
     end

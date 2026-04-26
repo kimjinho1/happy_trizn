@@ -157,10 +157,11 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       Enum.each(state.players, fn {_, p} -> assert p.score == 0 end)
     end
 
-    test "글로벌 🏠 홈 링크 게임 화면에도 노출", %{conn: conn, room: room} do
+    test "글로벌 top nav (Happy Trizn + 게임명) 게임 화면에도 노출", %{conn: conn, room: room} do
       conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
       html = Phoenix.ConnTest.html_response(conn, 200)
-      assert html =~ "🏠"
+      assert html =~ "Happy Trizn"
+      assert html =~ "Tetris"
     end
 
     test "ghost piece + grid class render", %{conn: conn, room: room} do
@@ -442,10 +443,11 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       _ = drawer_view
     end
 
-    test "글로벌 🏠 홈 링크 skribbl 화면에도 노출", %{conn: conn, room: room} do
+    test "글로벌 top nav (Happy Trizn + Skribbl) skribbl 화면에도 노출", %{conn: conn, room: room} do
       conn = Phoenix.ConnTest.get(conn, ~p"/game/skribbl/#{room.id}")
       html = Phoenix.ConnTest.html_response(conn, 200)
-      assert html =~ "🏠"
+      assert html =~ "Happy Trizn"
+      assert html =~ "Skribbl"
     end
 
     test "skribbl_chat 후 chat:reset_input push (입력창 자동 비움)", %{conn: conn, room: room} do

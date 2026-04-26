@@ -71,7 +71,8 @@ defmodule HappyTriznWeb.GameMultiLive do
                  |> assign(:key_settings, UserGameSettings.get_for(user, slug))
                  |> assign(:settings_open, false)
                  |> assign(:result, nil)
-                 |> assign(:joined, false)}
+                 |> assign(:joined, false)
+                 |> assign(:page_title, meta.name)}
               end
 
             _ ->
@@ -111,6 +112,7 @@ defmodule HappyTriznWeb.GameMultiLive do
               |> assign(:settings_open, false)
               |> assign(:result, nil)
               |> assign(:joined, true)
+              |> assign(:page_title, meta.name)
 
             # Skribbl 늦게 join 한 사람 — 현재까지 strokes 다시 그려야.
             socket =

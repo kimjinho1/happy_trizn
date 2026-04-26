@@ -31,14 +31,20 @@
     </script>
   </head>
   <body>
-    <a
-      href="/lobby"
-      class="fixed top-3 left-3 z-50 btn btn-circle btn-sm bg-base-200 hover:bg-base-300 shadow"
-      title="로비로"
-      aria-label="로비로"
-    >
-      🏠
-    </a>
+    <header class="sticky top-0 z-30 bg-base-100/95 backdrop-blur border-b border-base-300 px-4 py-2 flex items-center gap-3 shadow-sm">
+      <a
+        href="/lobby"
+        class="flex items-center gap-2 font-bold text-base hover:text-primary transition"
+        title="로비로"
+      >
+        <span class="text-xl">🎮</span>
+        <span>Happy Trizn</span>
+      </a>
+      <%= if assigns[:page_title] do %>
+        <span class="text-base-content/30">/</span>
+        <span class="text-base-content/80 font-medium">{assigns[:page_title]}</span>
+      <% end %>
+    </header>
     {@inner_content}
   </body>
 </html>
