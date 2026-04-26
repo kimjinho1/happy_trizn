@@ -44,13 +44,14 @@ defmodule HappyTrizn.Games.SnakeIo do
 
   @behaviour HappyTrizn.Games.GameBehaviour
 
-  @grid_size 100
+  # 월드 크기 — io 게임 느낌. 클라이언트는 본인 head 중심 viewport 만 보여줌.
+  @grid_size 200
   @tick_ms 50
   @max_players 16
   @initial_length 3
   @respawn_ticks 60
-  @food_per_player 5
-  @food_min 30
+  @food_per_player 8
+  @food_min 60
 
   @colors ~w(
     #ef4444 #3b82f6 #22c55e #facc15 #a855f7 #ec4899 #06b6d4 #f97316

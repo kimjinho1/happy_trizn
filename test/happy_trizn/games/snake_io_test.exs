@@ -26,8 +26,8 @@ defmodule HappyTrizn.Games.SnakeIoTest do
       {:ok, s} = SnakeIo.init(%{})
       assert s.status == :playing
       assert s.players == %{}
-      assert s.grid_size == 100
-      assert MapSet.size(s.food) >= 30
+      assert s.grid_size == 200
+      assert MapSet.size(s.food) >= 60
     end
   end
 

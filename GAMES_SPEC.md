@@ -209,9 +209,9 @@ user_game_settings
 
 ### 게임 로직 (구현)
 
-- 100×100 격자, 자유 입퇴장, 항상 :playing (캐주얼)
+- **200×200 월드 격자** (io 게임 느낌, 큰 맵), 자유 입퇴장, 항상 :playing (캐주얼)
 - 50ms tick (20fps)
-- food 항상 max(30, players × 5) 개 유지
+- food 항상 max(60, players × 8) 개 유지
 - food 먹으면 length +1 (grow 카운터로 다음 trim skip)
 - 충돌 (벽 / 자기 몸 / 타 snake 몸) → 사망 + body 절반 food drop
 - 머리 vs 머리 → 양쪽 사망
@@ -221,18 +221,27 @@ user_game_settings
 - best_length / kills 누적 — 리더보드.
 - `game_over?` 항상 `:no`.
 
-### UI (구현)
+### UI — 카메라 추적 viewport
 
-- canvas 600×600, 셀 6px (100×100).
+- 월드 200×200 → 클라가 본인 head 중심 **40×40 셀 viewport** (640×640 px) 만 그림.
+- 셀 16px (이전 6px → 2.7배 키움) — 조작 편함.
+- viewport 가 월드 가장자리 도달하면 clamp + 외곽 dark zone 표시.
 - 색 16종 자동 unique 분배 + 본인 head 흰색 ring.
 - 사망 snake 25% 알파.
 - 리더보드 best_length 정렬 + 본인 굵은 표시.
+- HUD: 좌상단 좌표 (`(r, c) / 200`).
 - 게임방 ephemeral chat (Tetris/Bomberman 과 동일).
+
+### Tick broadcast (구현)
+
+- `Snake.tick` 마다 `[{:snake_state, %{players, food, tick_no}}]` PubSub.
+- LiveView handle_info 가 payload 로 game_state 직접 갱신 (GenServer.call 안 함 — Tetris freeze 패턴 회피).
+- canvas 라 DOM diff 부담 X.
 
 ### JS hook (구현)
 
 - `snake_input.js` — 4 방향 + WASD, 25ms throttle, isFormTarget skip.
-- `snake_canvas.js` — mounted/updated 마다 dataset 파싱 + render.
+- `snake_canvas.js` — mounted/updated 마다 dataset 파싱 + 본인 head 중심 카메라 + viewport 그리기.
 
 ---
 

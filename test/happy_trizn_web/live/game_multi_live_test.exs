@@ -797,8 +797,8 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "phx-hook=\"SnakeCanvas\""
       assert html =~ "리더보드"
       assert html =~ "게임방 채팅"
-      # 캔버스 — 100칸.
-      assert html =~ "data-grid-size=\"100\""
+      # 캔버스 — 200×200 월드 (클라 카메라가 viewport 일부만 그림).
+      assert html =~ "data-grid-size=\"200\""
     end
 
     test "set_dir → GameSession 에 forward", %{conn: conn, room: room} do
