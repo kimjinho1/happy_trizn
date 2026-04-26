@@ -17,9 +17,10 @@ defmodule HappyTrizn.Games.SkribblTest do
   end
 
   describe "meta + init" do
-    test "multi 2~8인" do
+    test "multi 2~8인 + 게임명 캐치마인드" do
       m = Skribbl.meta()
       assert m.slug == "skribbl"
+      assert m.name == "캐치마인드"
       assert m.mode == :multi
       assert m.max_players == 8
       assert m.min_players == 2
@@ -389,10 +390,33 @@ defmodule HappyTrizn.Games.SkribblTest do
   end
 
   describe "word_pool" do
-    test "단어 사전 100+ 개 + 모두 한국어 string" do
+    test "단어 사전 150+ 개 + 모두 한국어 string" do
       pool = Skribbl.word_pool()
-      assert length(pool) >= 50
+      assert length(pool) >= 150
       Enum.each(pool, fn w -> assert is_binary(w) end)
+    end
+
+    test "다양한 카테고리 — 일상 / 인기 게임 / 유명 만화애니 / 개발자" do
+      pool = Skribbl.word_pool()
+      # 카테고리 별 대표 키워드 포함 검증
+      assert "사과" in pool
+      assert "롤" in pool
+      assert "마리오" in pool
+      assert "진격의거인" in pool
+      assert "스파이더맨" in pool
+      assert "파이썬" in pool
+      assert "도커" in pool
+      assert "노래방" in pool
+    end
+
+    test "엘릭서 / MZ 슬랭 제외 (모두가 알 만한 것 만)" do
+      pool = Skribbl.word_pool()
+      refute "엘릭서" in pool
+      refute "킹받네" in pool
+      refute "갓생" in pool
+      refute "어쩔티비" in pool
+      refute "꾸안꾸" in pool
+      refute "현타" in pool
     end
   end
 end
