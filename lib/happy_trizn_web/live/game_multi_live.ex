@@ -828,8 +828,18 @@ defmodule HappyTriznWeb.GameMultiLive do
 
     ghost? = Map.get(assigns.options, "ghost", true)
     grid = Map.get(assigns.options, "grid", "standard")
+    skin = Map.get(assigns.options, "block_skin", "default_jstris")
+    renderer = Map.get(assigns.options, "tetris_renderer", "dom")
 
-    assigns = assign(assigns, me: me, opponents: opponents, ghost?: ghost?, grid: grid)
+    assigns =
+      assign(assigns,
+        me: me,
+        opponents: opponents,
+        ghost?: ghost?,
+        grid: grid,
+        skin: skin,
+        renderer: renderer
+      )
 
     ~H"""
     <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
@@ -840,19 +850,34 @@ defmodule HappyTriznWeb.GameMultiLive do
           <div class="flex gap-2 items-start">
             <!-- 홀드 -->
             <div class="flex flex-col gap-2">
-              <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
+              <.piece_preview
+                label="홀드"
+                piece={@me.hold}
+                dim={Map.get(@me, :hold_used, false)}
+                skin={@skin}
+              />
               <%= if Map.get(@me, :lock_delay_ms) do %>
                 <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
               <% end %>
             </div>
-            <!-- 보드 -->
-            <.tetris_board
-              board={with_ghost_and_current(@me, @ghost?)}
-              grid={@grid}
-              pending={@me.pending_garbage}
-            />
+            <!-- 보드 — DOM 또는 Canvas (옵션) -->
+            <%= if @renderer == "canvas" do %>
+              <.tetris_canvas
+                board={with_ghost_and_current(@me, @ghost?)}
+                grid={@grid}
+                pending={@me.pending_garbage}
+                skin={@skin}
+              />
+            <% else %>
+              <.tetris_board
+                board={with_ghost_and_current(@me, @ghost?)}
+                grid={@grid}
+                pending={@me.pending_garbage}
+                skin={@skin}
+              />
+            <% end %>
             <!-- 다음 큐 -->
-            <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
+            <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} skin={@skin} />
           </div>
           <div class="text-sm mt-2 space-y-1">
             <div>점수: <strong>{@me.score}</strong></div>
@@ -1964,6 +1989,7 @@ defmodule HappyTriznWeb.GameMultiLive do
   attr :label, :string, required: true
   attr :piece, :atom, default: nil
   attr :dim, :boolean, default: false
+  attr :skin, :string, default: "default_jstris"
 
   defp piece_preview(assigns) do
     ~H"""
@@ -1973,7 +1999,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         <div class="grid grid-cols-4 gap-px">
           <%= for {r, c} <- piece_preview_cells(@piece) do %>
             <div
-              class={["w-3 h-3", cell_color(@piece)]}
+              class={["w-3 h-3", cell_color(@piece, @skin)]}
               style={"grid-row: #{r + 1}; grid-column: #{c + 1};"}
             >
             </div>
@@ -1991,6 +2017,7 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   attr :nexts, :list, required: true
+  attr :skin, :string, default: "default_jstris"
 
   defp next_queue(assigns) do
     ~H"""
@@ -2001,7 +2028,7 @@ defmodule HappyTriznWeb.GameMultiLive do
           <div class="grid grid-cols-4 gap-px">
             <%= for {r, c} <- piece_preview_cells(piece) do %>
               <div
-                class={["w-3 h-3", cell_color(piece)]}
+                class={["w-3 h-3", cell_color(piece, @skin)]}
                 style={"grid-row: #{r + 1}; grid-column: #{c + 1};"}
               >
               </div>
@@ -2057,12 +2084,64 @@ defmodule HappyTriznWeb.GameMultiLive do
   attr :grid, :string, default: "standard"
   attr :pending, :integer, default: 0
 
+  # Sprint 3j — Canvas renderer (opt-in via tetris_renderer 옵션).
+  # board encoded JSON → data attr → JS hook 이 redraw.
+  defp tetris_canvas(assigns) do
+    encoded = encode_board_for_canvas(assigns.board) |> Jason.encode!()
+    pending_capped = min(assigns.pending, 20)
+    skin = Map.get(assigns, :skin, "default_jstris")
+    grid = Map.get(assigns, :grid, "standard")
+
+    assigns =
+      assign(assigns,
+        encoded: encoded,
+        pending_capped: pending_capped,
+        skin: skin,
+        grid: grid
+      )
+
+    ~H"""
+    <div class="inline-flex bg-base-300 p-1 gap-px">
+      <%= if @pending_capped > 0 do %>
+        <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
+          <%= for _ <- 1..@pending_capped//1 do %>
+            <div class="h-5 bg-error animate-pulse"></div>
+          <% end %>
+        </div>
+      <% end %>
+      <canvas
+        id="tetris-canvas-me"
+        phx-hook="TetrisCanvas"
+        data-board={@encoded}
+        data-skin={@skin}
+        data-grid={@grid}
+        data-cell-size="28"
+        class="block"
+      >
+      </canvas>
+    </div>
+    """
+  end
+
+  # board cell 인코딩 — atom / tuple → BSON 호환 string. nil 그대로.
+  defp encode_board_for_canvas(board) do
+    Enum.map(board, fn row ->
+      Enum.map(row, fn
+        nil -> nil
+        {:ghost, type} -> "g_#{type}"
+        atom when is_atom(atom) -> Atom.to_string(atom)
+        other -> other
+      end)
+    end)
+  end
+
   defp tetris_board(assigns) do
     # board overflow 방어 — drop hidden 2 + take visible 20. board state 가
     # 어쩌다 길이 비정상이어도 UI 는 20×10 보장.
     visible = assigns.board |> Enum.drop(2) |> Enum.take(20)
     pending_capped = min(assigns.pending, 20)
-    assigns = assign(assigns, visible: visible, pending_capped: pending_capped)
+    skin = Map.get(assigns, :skin, "default_jstris")
+    assigns = assign(assigns, visible: visible, pending_capped: pending_capped, skin: skin)
 
     ~H"""
     <div class="inline-flex bg-base-300 p-1 gap-px">
@@ -2078,7 +2157,12 @@ defmodule HappyTriznWeb.GameMultiLive do
         <%= for row <- @visible do %>
           <div class="flex">
             <%= for cell <- row do %>
-              <div class={["w-6 h-6 sm:w-7 sm:h-7", cell_color(cell), grid_class(@grid)]}></div>
+              <div class={[
+                "w-6 h-6 sm:w-7 sm:h-7",
+                cell_color(cell, @skin),
+                grid_class(@grid)
+              ]}>
+              </div>
             <% end %>
           </div>
         <% end %>
@@ -2096,27 +2180,66 @@ defmodule HappyTriznWeb.GameMultiLive do
   defp grid_class("full"), do: "border border-base-content/10"
   defp grid_class(_), do: "border border-base-content/5"
 
-  defp cell_color(nil), do: "bg-base-100"
-  defp cell_color(:i), do: "bg-cyan-400"
-  defp cell_color(:o), do: "bg-yellow-400"
-  defp cell_color(:t), do: "bg-purple-500"
-  defp cell_color(:s), do: "bg-green-500"
-  defp cell_color(:z), do: "bg-red-500"
-  defp cell_color(:l), do: "bg-orange-500"
-  defp cell_color(:j), do: "bg-blue-500"
-  defp cell_color(:garbage), do: "bg-gray-500"
+  # Sprint 3j — Skin system. cell_color/1 은 default_jstris 팔레트, cell_color/2 는 skin 명시.
+  # Tailwind 가 빌드 시 클래스 스캔하므로 모든 변형 명시적 작성 필요.
 
-  # Ghost — piece 와 같은 색이지만 50% opacity + 두꺼운 윤곽선. 잘 보임.
-  defp cell_color({:ghost, :i}), do: "bg-cyan-400/40 border-2 border-cyan-300"
-  defp cell_color({:ghost, :o}), do: "bg-yellow-400/40 border-2 border-yellow-300"
-  defp cell_color({:ghost, :t}), do: "bg-purple-500/40 border-2 border-purple-300"
-  defp cell_color({:ghost, :s}), do: "bg-green-500/40 border-2 border-green-300"
-  defp cell_color({:ghost, :z}), do: "bg-red-500/40 border-2 border-red-300"
-  defp cell_color({:ghost, :l}), do: "bg-orange-500/40 border-2 border-orange-300"
-  defp cell_color({:ghost, :j}), do: "bg-blue-500/40 border-2 border-blue-300"
-  defp cell_color({:ghost, _}), do: "bg-base-200 border-2 border-base-content/60"
+  defp cell_color(cell), do: cell_color(cell, "default_jstris")
 
-  defp cell_color(_), do: "bg-base-100"
+  # 빈 셀 + 가비지 — skin 무관 공통.
+  defp cell_color(nil, _), do: "bg-base-100"
+  defp cell_color(:garbage, _), do: "bg-gray-500"
+
+  # default_jstris (jstris 표준 색).
+  defp cell_color(:i, "default_jstris"), do: "bg-cyan-400"
+  defp cell_color(:o, "default_jstris"), do: "bg-yellow-400"
+  defp cell_color(:t, "default_jstris"), do: "bg-purple-500"
+  defp cell_color(:s, "default_jstris"), do: "bg-green-500"
+  defp cell_color(:z, "default_jstris"), do: "bg-red-500"
+  defp cell_color(:l, "default_jstris"), do: "bg-orange-500"
+  defp cell_color(:j, "default_jstris"), do: "bg-blue-500"
+
+  # vivid — 한 단계 더 진하게.
+  defp cell_color(:i, "vivid"), do: "bg-cyan-600"
+  defp cell_color(:o, "vivid"), do: "bg-yellow-500"
+  defp cell_color(:t, "vivid"), do: "bg-purple-700"
+  defp cell_color(:s, "vivid"), do: "bg-green-700"
+  defp cell_color(:z, "vivid"), do: "bg-red-700"
+  defp cell_color(:l, "vivid"), do: "bg-orange-600"
+  defp cell_color(:j, "vivid"), do: "bg-blue-700"
+
+  # monochrome — 회색 + 라이트/다크 단계.
+  defp cell_color(:i, "monochrome"), do: "bg-slate-300"
+  defp cell_color(:o, "monochrome"), do: "bg-slate-200"
+  defp cell_color(:t, "monochrome"), do: "bg-slate-500"
+  defp cell_color(:s, "monochrome"), do: "bg-slate-400"
+  defp cell_color(:z, "monochrome"), do: "bg-slate-600"
+  defp cell_color(:l, "monochrome"), do: "bg-slate-300"
+  defp cell_color(:j, "monochrome"), do: "bg-slate-700"
+
+  # neon — 네온/형광.
+  defp cell_color(:i, "neon"), do: "bg-cyan-300"
+  defp cell_color(:o, "neon"), do: "bg-yellow-300"
+  defp cell_color(:t, "neon"), do: "bg-fuchsia-400"
+  defp cell_color(:s, "neon"), do: "bg-lime-400"
+  defp cell_color(:z, "neon"), do: "bg-rose-400"
+  defp cell_color(:l, "neon"), do: "bg-amber-400"
+  defp cell_color(:j, "neon"), do: "bg-indigo-400"
+
+  # 알 수 없는 skin → default fallback.
+  defp cell_color(piece, _) when piece in [:i, :o, :t, :s, :z, :l, :j],
+    do: cell_color(piece, "default_jstris")
+
+  # Ghost — skin 무관 (현재). 향후 skin 별 ghost 도 추가 가능.
+  defp cell_color({:ghost, :i}, _), do: "bg-cyan-400/40 border-2 border-cyan-300"
+  defp cell_color({:ghost, :o}, _), do: "bg-yellow-400/40 border-2 border-yellow-300"
+  defp cell_color({:ghost, :t}, _), do: "bg-purple-500/40 border-2 border-purple-300"
+  defp cell_color({:ghost, :s}, _), do: "bg-green-500/40 border-2 border-green-300"
+  defp cell_color({:ghost, :z}, _), do: "bg-red-500/40 border-2 border-red-300"
+  defp cell_color({:ghost, :l}, _), do: "bg-orange-500/40 border-2 border-orange-300"
+  defp cell_color({:ghost, :j}, _), do: "bg-blue-500/40 border-2 border-blue-300"
+  defp cell_color({:ghost, _}, _), do: "bg-base-200 border-2 border-base-content/60"
+
+  defp cell_color(_, _), do: "bg-base-100"
 
   attr :result, :map, required: true
   attr :player_id, :string, required: true

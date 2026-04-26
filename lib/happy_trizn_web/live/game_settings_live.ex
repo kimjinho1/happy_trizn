@@ -239,6 +239,24 @@ defmodule HappyTriznWeb.GameSettingsLive do
                 <% end %>
               </select>
             </label>
+            <label class="label">
+              <span class="label-text">블록 스킨</span>
+              <select name="options[block_skin]" class="select select-bordered select-sm">
+                <%= for s <- ~w(default_jstris vivid monochrome neon) do %>
+                  <option value={s} selected={@settings.options["block_skin"] == s}>{s}</option>
+                <% end %>
+              </select>
+            </label>
+            <label class="label">
+              <span class="label-text">렌더러</span>
+              <select name="options[tetris_renderer]" class="select select-bordered select-sm">
+                <%= for r <- ~w(dom canvas) do %>
+                  <option value={r} selected={@settings.options["tetris_renderer"] == r}>
+                    {r}
+                  </option>
+                <% end %>
+              </select>
+            </label>
             <label class="label cursor-pointer">
               <span class="label-text">고스트</span>
               <input
