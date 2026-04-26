@@ -490,31 +490,39 @@ defmodule HappyTrizn.Games.Tetris do
 
     score_gain = base_score + b2b_bonus + combo_bonus
 
-    garbage_send =
+    raw_send =
       garbage_for_clear(cleared, tspin_kind)
       |> apply_b2b_bonus(is_b2b_eligible and player.b2b and cleared > 0)
       |> apply_combo_bonus(new_combo)
 
+    # Cancel — 라인 클리어 시 send 가 pending 부터 상쇄 (jstris 표준).
+    # cancel = min(send, pending). 남은 send 만 상대에게 보냄. pending 도 그만큼 감소.
+    {garbage_send, pending_after_cancel} =
+      if cleared > 0 and player.pending_garbage > 0 do
+        cancel = min(raw_send, player.pending_garbage)
+        {raw_send - cancel, player.pending_garbage - cancel}
+      else
+        {raw_send, player.pending_garbage}
+      end
+
     new_lines = player.lines + cleared
     new_level = div(new_lines, @lines_per_level) + 1
 
+    # 라인 안 지운 lock 일 때만 board 에 pending 적용 — jstris 표준.
     {board_with_garbage, top_out_garbage, garbage_applied} =
-      if cleared == 0 and player.pending_garbage > 0 do
-        case Board.add_garbage(cleared_board, player.pending_garbage) do
-          {:ok, b} -> {b, false, player.pending_garbage}
+      if cleared == 0 and pending_after_cancel > 0 do
+        case Board.add_garbage(cleared_board, pending_after_cancel) do
+          {:ok, b} -> {b, false, pending_after_cancel}
           {:error, :top_out} -> {cleared_board, true, 0}
         end
       else
         {cleared_board, false, 0}
       end
 
-    # cleared > 0 면 받은 garbage 가 cancel — line clear 가 받은 garbage 보다 적으면 wasted (jstris 정의).
-    pending_after = if cleared == 0, do: 0, else: player.pending_garbage
-
-    wasted_inc =
-      if cleared == 0,
-        do: 0,
-        else: max(player.pending_garbage - garbage_for_clear(cleared, tspin_kind), 0)
+    # 적용 후 pending 은 0 (no-clear 경로) / cancel 만 한 잔여 (clear 경로).
+    pending_after = if cleared == 0, do: 0, else: pending_after_cancel
+    # wasted = board 로 굳혀진 garbage (line clear 으로 cancel 못 한 양).
+    wasted_inc = garbage_applied
 
     spawn_origin = Piece.spawn_origin(player.next)
 

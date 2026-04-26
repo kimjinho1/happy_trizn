@@ -544,7 +544,11 @@ defmodule HappyTriznWeb.GameMultiLive do
               <% end %>
             </div>
             <!-- 중앙: 보드 -->
-            <.tetris_board board={with_ghost_and_current(@me, @ghost?)} grid={@grid} />
+            <.tetris_board
+              board={with_ghost_and_current(@me, @ghost?)}
+              grid={@grid}
+              pending={@me.pending_garbage}
+            />
             <!-- 우측: 다음 큐 -->
             <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
           </div>
@@ -585,7 +589,11 @@ defmodule HappyTriznWeb.GameMultiLive do
                 dim={Map.get(@other, :hold_used, false)}
               />
             </div>
-            <.tetris_board board={with_ghost_and_current(@other, false)} grid={@grid} />
+            <.tetris_board
+              board={with_ghost_and_current(@other, false)}
+              grid={@grid}
+              pending={@other.pending_garbage}
+            />
             <.next_queue nexts={Map.get(@other, :nexts, [@other.next])} />
           </div>
           <div class="text-sm mt-2 space-y-1">
@@ -711,24 +719,37 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   # 22x10 board → 20x10 (visible) 만 표시. grid 옵션: none / standard / partial / vertical / full.
+  # pending: 사용자가 받을 garbage 수 (board 좌측에 빨간 spoiler bar 로 표시).
   attr :board, :list, required: true
   attr :grid, :string, default: "standard"
+  attr :pending, :integer, default: 0
 
   defp tetris_board(assigns) do
     # board overflow 방어 — drop hidden 2 + take visible 20. board state 가
     # 어쩌다 길이 비정상이어도 UI 는 20×10 보장.
     visible = assigns.board |> Enum.drop(2) |> Enum.take(20)
-    assigns = assign(assigns, visible: visible)
+    pending_capped = min(assigns.pending, 20)
+    assigns = assign(assigns, visible: visible, pending_capped: pending_capped)
 
     ~H"""
-    <div class="inline-block bg-base-300 p-1">
-      <%= for row <- @visible do %>
-        <div class="flex">
-          <%= for cell <- row do %>
-            <div class={["w-5 h-5", cell_color(cell), grid_class(@grid)]}></div>
+    <div class="inline-flex bg-base-300 p-1 gap-px">
+      <!-- pending garbage spoiler bar — board 좌측, 받을 양만큼 빨갛게 채움. 아래부터 위로. -->
+      <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
+        <%= for _ <- 1..max(@pending_capped, 1)//1 do %>
+          <%= if @pending_capped > 0 do %>
+            <div class="h-5 bg-error animate-pulse"></div>
           <% end %>
-        </div>
-      <% end %>
+        <% end %>
+      </div>
+      <div>
+        <%= for row <- @visible do %>
+          <div class="flex">
+            <%= for cell <- row do %>
+              <div class={["w-5 h-5", cell_color(cell), grid_class(@grid)]}></div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
     </div>
     """
   end

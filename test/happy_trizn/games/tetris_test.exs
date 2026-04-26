@@ -601,6 +601,65 @@ defmodule HappyTrizn.Games.TetrisTest do
     end
   end
 
+  describe "garbage cancel — line clear 시 pending 차감 + 상대 send 차감" do
+    test "single clear (send 0, pending 5) → cancel 0, pending 그대로 5" do
+      state = join2()
+      state = put_in(state.players["p1"].pending_garbage, 5)
+
+      # single line clear setup (board row 21 col 0..4, 6..9 garbage; col 5 만 비움)
+      base_row = List.duplicate(:garbage, 10) |> List.replace_at(5, nil)
+      board = List.replace_at(Board.new(), 21, base_row)
+      state = state |> force_board("p1", board)
+      state = force_piece(state, "p1", :i, 1, {18, 3})
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.lines == 1
+      # send 0 (single 보냄 0), cancel 0 → pending 5 유지
+      assert p.pending_garbage == 5
+    end
+
+    test "tetris (send 4, pending 5) → cancel 4, pending = 1" do
+      state = join2()
+      state = put_in(state.players["p1"].pending_garbage, 5)
+
+      # 4 lines clear setup (row 18..21, col 4 빈칸. I 세로 떨어뜨려 4-line clear)
+      base_row = fn -> List.duplicate(:garbage, 10) |> List.replace_at(4, nil) end
+      board = Board.new()
+      board = Enum.reduce(18..21, board, fn r, acc -> List.replace_at(acc, r, base_row.()) end)
+      state = state |> force_board("p1", board)
+      state = force_piece(state, "p1", :i, 1, {18, 2})
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.lines == 4
+      # tetris send = 4, cancel min(4, 5) = 4, pending 5 - 4 = 1
+      assert p.pending_garbage == 1
+    end
+
+    test "no clear → pending 모두 board 로 굳음 (잔여 0)" do
+      state = join2()
+      state = put_in(state.players["p1"].pending_garbage, 3)
+
+      # 빈 board, hard_drop → no clear → garbage 3 적용 + pending 0
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.pending_garbage == 0
+      assert p.garbage_received == 3
+      assert p.garbage_wasted == 3
+    end
+
+    test "no clear + pending 0 → board 그대로" do
+      state = join2()
+      assert state.players["p1"].pending_garbage == 0
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.pending_garbage == 0
+      assert p.garbage_received == 0
+    end
+  end
+
   describe "T-spin detection" do
     test "T piece 회전 후 lock + 3-corner filled → score for T-spin (no line)" do
       state = join2()
