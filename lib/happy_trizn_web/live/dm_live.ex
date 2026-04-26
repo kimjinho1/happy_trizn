@@ -296,7 +296,8 @@ defmodule HappyTriznWeb.DmLive do
 
   defp dm_bubble(assigns) do
     is_me = assigns.msg.from_user_id == assigns.me.id
-    assigns = assign(assigns, :is_me, is_me)
+    parts = body_with_links(assigns.msg.body || "")
+    assigns = assigns |> assign(:is_me, is_me) |> assign(:parts, parts)
 
     ~H"""
     <div class={["flex", @is_me && "justify-end"]}>
@@ -305,7 +306,22 @@ defmodule HappyTriznWeb.DmLive do
         @is_me && "bg-primary text-primary-content rounded-br-sm",
         !@is_me && "bg-base-200 rounded-bl-sm"
       ]}>
-        <div>{@msg.body}</div>
+        <div>
+          <%= for part <- @parts do %>
+            <%= case part do %>
+              <% {:text, t} -> %>
+                {t}
+              <% {:link, url} -> %>
+                <.link
+                  navigate={url}
+                  class="underline font-semibold hover:opacity-80"
+                  title="게임 방 입장"
+                >
+                  🎮 {url}
+                </.link>
+            <% end %>
+          <% end %>
+        </div>
         <div class="text-[10px] opacity-50 mt-1 text-right">
           {format_ts(@msg.inserted_at)}
         </div>
@@ -313,6 +329,27 @@ defmodule HappyTriznWeb.DmLive do
     </div>
     """
   end
+
+  # 본문 안 `/game/<slug>/<room_id>` 패턴을 link 로 분해.
+  # 결과: list of `{:text, str}` | `{:link, url}`.
+  @link_regex ~r{(/game/[a-zA-Z0-9_]+/[a-zA-Z0-9_-]+)}
+
+  defp body_with_links(body) when is_binary(body) do
+    case Regex.run(@link_regex, body, return: :index) do
+      nil ->
+        [{:text, body}]
+
+      [{start, len} | _] ->
+        before = String.slice(body, 0, start)
+        url = String.slice(body, start, len)
+        rest_start = start + len
+        rest = String.slice(body, rest_start, byte_size(body))
+
+        [{:text, before}, {:link, url}] ++ body_with_links(rest)
+    end
+  end
+
+  defp body_with_links(_), do: [{:text, ""}]
 
   defp dm_preview(nil), do: "(메시지 없음)"
   defp dm_preview(%{body: body}), do: String.slice(body || "", 0, 30)

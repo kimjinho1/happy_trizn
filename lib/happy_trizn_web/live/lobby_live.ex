@@ -45,6 +45,7 @@ defmodule HappyTriznWeb.LobbyLive do
          |> assign(:games_multi, GameRegistry.list_multi())
          |> assign(:games_single, GameRegistry.list_single())
          |> assign(:page_title, "로비")
+         |> assign(:invite_modal_room, nil)
          |> load_friends_data()
          |> load_rooms()}
     end
@@ -185,6 +186,59 @@ defmodule HappyTriznWeb.LobbyLive do
                 {:noreply, put_flash(socket, :error, "방 생성 실패")}
             end
         end
+    end
+  end
+
+  def handle_event("open_invite", %{"room-id" => room_id}, socket) do
+    case Rooms.get(room_id) do
+      nil -> {:noreply, put_flash(socket, :error, "방 없음")}
+      room -> {:noreply, assign(socket, :invite_modal_room, room)}
+    end
+  end
+
+  def handle_event("close_invite", _, socket) do
+    {:noreply, assign(socket, :invite_modal_room, nil)}
+  end
+
+  def handle_event("send_invites", params, socket) do
+    user = socket.assigns.user
+    room = socket.assigns.invite_modal_room
+    friend_ids = Map.get(params, "friend_ids", []) |> List.wrap()
+
+    cond do
+      is_nil(user) ->
+        {:noreply, put_flash(socket, :error, "로그인 사용자만")}
+
+      is_nil(room) ->
+        {:noreply, socket}
+
+      friend_ids == [] ->
+        {:noreply, put_flash(socket, :error, "친구를 선택하세요")}
+
+      true ->
+        url = "/game/#{room.game_type}/#{room.id}"
+        game_name = game_display_name(room.game_type)
+        body = "🎮 [#{game_name}] 방 초대: #{room.name} → #{url}"
+
+        sent =
+          friend_ids
+          |> Enum.reduce(0, fn fid, acc ->
+            case HappyTrizn.Accounts.get_user(fid) do
+              nil ->
+                acc
+
+              friend ->
+                case HappyTrizn.Messages.send(user, friend, body) do
+                  {:ok, _} -> acc + 1
+                  _ -> acc
+                end
+            end
+          end)
+
+        {:noreply,
+         socket
+         |> assign(:invite_modal_room, nil)
+         |> put_flash(:info, "초대 #{sent}명 전송")}
     end
   end
 
@@ -377,27 +431,39 @@ defmodule HappyTriznWeb.LobbyLive do
                           <span class="text-xs" title="비밀번호 방">🔒</span>
                         <% end %>
                       </div>
-                      <%= if room.password_hash do %>
-                        <form phx-submit="join_room" class="flex items-center gap-1">
-                          <input type="hidden" name="room-id" value={room.id} />
-                          <input
-                            type="password"
-                            name="password"
-                            placeholder="비번"
-                            class="input input-bordered input-xs w-24"
-                            required
-                          />
-                          <button type="submit" class="btn btn-xs btn-primary">입장</button>
-                        </form>
-                      <% else %>
-                        <button
-                          phx-click="join_room"
-                          phx-value-room-id={room.id}
-                          class="btn btn-xs btn-primary"
-                        >
-                          입장
-                        </button>
-                      <% end %>
+                      <div class="flex items-center gap-1">
+                        <%= if @user && @friends != [] do %>
+                          <button
+                            phx-click="open_invite"
+                            phx-value-room-id={room.id}
+                            class="btn btn-xs btn-ghost"
+                            title="친구 초대"
+                          >
+                            💌
+                          </button>
+                        <% end %>
+                        <%= if room.password_hash do %>
+                          <form phx-submit="join_room" class="flex items-center gap-1">
+                            <input type="hidden" name="room-id" value={room.id} />
+                            <input
+                              type="password"
+                              name="password"
+                              placeholder="비번"
+                              class="input input-bordered input-xs w-24"
+                              required
+                            />
+                            <button type="submit" class="btn btn-xs btn-primary">입장</button>
+                          </form>
+                        <% else %>
+                          <button
+                            phx-click="join_room"
+                            phx-value-room-id={room.id}
+                            class="btn btn-xs btn-primary"
+                          >
+                            입장
+                          </button>
+                        <% end %>
+                      </div>
                     </div>
                   <% end %>
                 </div>
@@ -526,6 +592,53 @@ defmodule HappyTriznWeb.LobbyLive do
           </div>
         </section>
       </div>
+
+      <%= if @invite_modal_room do %>
+        <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+          <div
+            id="invite-modal-box"
+            class="bg-base-100 rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto p-6"
+            phx-click-away="close_invite"
+          >
+            <header class="flex items-center justify-between mb-3">
+              <h2 class="text-lg font-bold">💌 친구 초대 — {@invite_modal_room.name}</h2>
+              <button phx-click="close_invite" class="btn btn-sm btn-ghost" type="button">✕</button>
+            </header>
+
+            <p class="text-xs text-base-content/60 mb-3">
+              {game_display_name(@invite_modal_room.game_type)} 방에 친구 초대.
+              선택된 친구에게 DM 으로 link 발송됩니다.
+            </p>
+
+            <%= if @friends == [] do %>
+              <p class="text-sm text-base-content/50 py-3">친구 없음 — 친구 추가 후 다시 시도.</p>
+            <% else %>
+              <form phx-submit="send_invites" class="space-y-2">
+                <input type="hidden" name="room-id" value={@invite_modal_room.id} />
+                <div class="space-y-1 max-h-64 overflow-y-auto">
+                  <%= for f <- @friends do %>
+                    <label class="flex items-center gap-2 p-2 bg-base-200 rounded cursor-pointer hover:bg-base-300">
+                      <input
+                        type="checkbox"
+                        name="friend_ids[]"
+                        value={f.id}
+                        class="checkbox checkbox-sm"
+                      />
+                      <span class="font-semibold">{f.nickname}</span>
+                    </label>
+                  <% end %>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                  <button type="button" phx-click="close_invite" class="btn btn-sm btn-ghost">
+                    취소
+                  </button>
+                  <button type="submit" class="btn btn-sm btn-primary">DM 보내기</button>
+                </div>
+              </form>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end

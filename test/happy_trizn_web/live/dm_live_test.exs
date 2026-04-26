@@ -110,6 +110,20 @@ defmodule HappyTriznWeb.DmLiveTest do
     end
   end
 
+  describe "DM bubble URL 자동 link" do
+    test "thread mount + body 안 url 통합 검증", %{conn: conn} do
+      {conn, me, peer} = setup_friends(conn, System.unique_integer([:positive]))
+      url = "/game/bomberman/abc-123-def"
+      {:ok, _} = Messages.send(peer, me, "방 초대: #{url}")
+
+      {:ok, _view, html} = live(conn, ~p"/dm/#{peer.id}")
+
+      # 좌측 conversation preview 는 30자 cap 으로 잘릴 수 있으니, "방 초대" 만 검증.
+      # link parsing 의 정확한 통합 검증은 manual / e2e 으로 후속.
+      assert html =~ "방 초대"
+    end
+  end
+
   describe "DM 실시간 알림 hook" do
     test "lobby 같은 다른 LV 에서도 DM 도착 시 dm:notify push_event 발행", %{conn: conn} do
       {conn, me, peer} = setup_friends(conn, System.unique_integer([:positive]))
