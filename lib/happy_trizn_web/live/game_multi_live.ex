@@ -166,11 +166,8 @@ defmodule HappyTriznWeb.GameMultiLive do
         {:ok, _} ->
           new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
 
-          {:noreply,
-           socket
-           |> assign(:key_settings, new_settings)
-           |> assign(:settings_open, false)
-           |> put_flash(:info, "저장됨")}
+          # 단일 키 저장은 모달 안 닫음 — 사용자가 여러 액션 연속 저장 가능.
+          {:noreply, socket |> assign(:key_settings, new_settings) |> put_flash(:info, "저장됨")}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "저장 실패")}
@@ -219,12 +216,8 @@ defmodule HappyTriznWeb.GameMultiLive do
     else
       :ok = UserGameSettings.reset(user, socket.assigns.slug)
       new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
-
-      {:noreply,
-       socket
-       |> assign(:key_settings, new_settings)
-       |> assign(:settings_open, false)
-       |> put_flash(:info, "초기화 완료")}
+      # reset 도 모달 유지 — 변경 사항 확인 후 사용자가 직접 닫음.
+      {:noreply, socket |> assign(:key_settings, new_settings) |> put_flash(:info, "초기화 완료")}
     end
   end
 

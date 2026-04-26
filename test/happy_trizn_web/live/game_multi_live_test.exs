@@ -184,20 +184,33 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "phx-click=\"close_settings\""
     end
 
-    test "모달 save_binding → key_settings 즉시 갱신 + 모달 자동 닫힘", %{conn: conn, room: room} do
+    test "모달 save_binding → key_settings 즉시 갱신 + 모달 유지 (단일 저장)", %{
+      conn: conn,
+      room: room
+    } do
       {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
       view |> element("button[phx-click='open_settings']") |> render_click()
-      assert render(view) =~ "modal_save_binding"
 
       view
       |> form("form[phx-submit='modal_save_binding']:nth-of-type(1)")
       |> render_submit(%{"action" => "hard_drop", "keys" => "Space, q"})
 
       html = render(view)
-      # data-key-bindings 에 새 키 반영
       assert html =~ "&quot;hard_drop&quot;:[&quot; &quot;,&quot;q&quot;]"
-      # 모달 자동 닫힘 (form 사라짐)
-      refute html =~ "phx-submit=\"modal_save_binding\""
+      # 단일 저장 후에도 모달 그대로 — 다른 키도 연속 저장 가능
+      assert html =~ "phx-submit=\"modal_save_binding\""
+    end
+
+    test "모달 save_options (옵션 저장 버튼) → 모달 닫힘", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_options"
+
+      view
+      |> form("form[phx-submit='modal_save_options']")
+      |> render_submit(%{"options" => %{"das" => "100"}})
+
+      refute render(view) =~ "modal_save_options"
     end
 
     test "모달 ✕ 버튼 → 닫힘", %{conn: conn, room: room} do
