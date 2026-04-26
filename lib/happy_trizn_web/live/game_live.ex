@@ -53,6 +53,8 @@ defmodule HappyTriznWeb.GameLive do
            |> assign(:nickname, nickname)
            |> assign(:options, options)
            |> assign(:bindings, bindings)
+           |> assign(:key_settings, settings)
+           |> assign(:settings_open, false)
            |> assign(:result, nil)}
         end
     end
@@ -95,6 +97,98 @@ defmodule HappyTriznWeb.GameLive do
     {:ok, fresh} = module.init(options)
     {:ok, fresh, _} = module.handle_player_join(nickname, %{}, fresh)
     {:noreply, assign(socket, game_state: fresh, result: nil)}
+  end
+
+  # ============================================================================
+  # 옵션 모달 (Sprint 4f-3 — game_multi 와 동일 패턴, 페이지 이동 X)
+  # ============================================================================
+
+  def handle_event("open_settings", _, socket) do
+    {:noreply, assign(socket, :settings_open, true)}
+  end
+
+  def handle_event("close_settings", _, socket) do
+    {:noreply, assign(socket, :settings_open, false)}
+  end
+
+  def handle_event("modal_save_binding", %{"action" => action, "keys" => keys_str}, socket) do
+    user = socket.assigns[:current_user]
+
+    if is_nil(user) do
+      {:noreply, put_flash(socket, :error, "게스트는 옵션 저장 불가")}
+    else
+      keys = UserGameSettings.parse_keys_input(keys_str)
+      new_bindings = Map.put(socket.assigns.key_settings.bindings, action, keys)
+
+      case UserGameSettings.upsert(user, socket.assigns.slug, %{
+             key_bindings: new_bindings,
+             options: socket.assigns.key_settings.options
+           }) do
+        {:ok, _} ->
+          new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
+
+          {:noreply,
+           socket
+           |> assign(:key_settings, new_settings)
+           |> assign(:bindings, new_settings.bindings)
+           |> put_flash(:info, "저장됨")}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "저장 실패")}
+      end
+    end
+  end
+
+  def handle_event("modal_save_options", params, socket) do
+    user = socket.assigns[:current_user]
+
+    if is_nil(user) do
+      {:noreply, put_flash(socket, :error, "게스트는 옵션 저장 불가")}
+    else
+      raw = Map.get(params, "options", %{})
+      base = socket.assigns.key_settings.options
+
+      new_options =
+        Enum.reduce(raw, base, fn {k, v}, acc ->
+          Map.put(acc, k, UserGameSettings.normalize_option_value(k, v))
+        end)
+
+      case UserGameSettings.upsert(user, socket.assigns.slug, %{
+             key_bindings: socket.assigns.key_settings.bindings,
+             options: new_options
+           }) do
+        {:ok, _} ->
+          new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
+
+          {:noreply,
+           socket
+           |> assign(:key_settings, new_settings)
+           |> assign(:options, new_settings.options)
+           |> assign(:settings_open, false)
+           |> put_flash(:info, "저장됨")}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "저장 실패")}
+      end
+    end
+  end
+
+  def handle_event("modal_reset", _, socket) do
+    user = socket.assigns[:current_user]
+
+    if is_nil(user) do
+      {:noreply, put_flash(socket, :error, "게스트는 reset 불가")}
+    else
+      :ok = UserGameSettings.reset(user, socket.assigns.slug)
+      new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
+
+      {:noreply,
+       socket
+       |> assign(:key_settings, new_settings)
+       |> assign(:bindings, new_settings.bindings)
+       |> assign(:options, new_settings.options)
+       |> put_flash(:info, "초기화 완료")}
+    end
   end
 
   def handle_event("keydown", %{"key" => key}, socket) do
@@ -185,7 +279,14 @@ defmodule HappyTriznWeb.GameLive do
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
         <div class="flex items-center gap-2">
           <span class="text-sm text-base-content/70">{@nickname}</span>
-          <.link navigate={~p"/settings/games/#{@slug}"} class="btn btn-ghost btn-sm">⚙️ 옵션</.link>
+          <button
+            phx-click="open_settings"
+            class="btn btn-ghost btn-sm"
+            title="옵션 모달 — 게임 유지"
+            type="button"
+          >
+            ⚙️ 옵션
+          </button>
           <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
         </div>
       </header>
@@ -202,8 +303,106 @@ defmodule HappyTriznWeb.GameLive do
       </div>
 
       <p class="text-xs text-base-content/40 mt-4">
-        ⚙️ 옵션 에서 변경 (board 크기 / 난이도). 저장 후 다시 시작 시 적용.
+        ⚙️ 옵션 클릭 → 모달에서 즉시 변경 (옵션 저장 시 자동 적용).
       </p>
+
+      <%= if @settings_open do %>
+        <.settings_modal slug={@slug} settings={@key_settings} />
+      <% end %>
+    </div>
+    """
+  end
+
+  # ============================================================================
+  # 옵션 모달 (Sprint 4f-3 — game_multi 와 동일 패턴, 코드는 모두 단일 게임용)
+  # ============================================================================
+
+  attr :slug, :string, required: true
+  attr :settings, :map, required: true
+
+  defp settings_modal(assigns) do
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+      <div
+        id="settings-modal-box"
+        class="bg-base-100 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
+        phx-click-away="close_settings"
+      >
+        <header class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold">⚙️ {String.upcase(@slug)} 옵션</h2>
+          <button phx-click="close_settings" class="btn btn-sm btn-ghost" type="button">✕</button>
+        </header>
+
+        <p class="text-xs text-base-content/60 mb-4">
+          저장 즉시 반영. 게임 그대로 진행 중.
+        </p>
+
+        <%= if map_size(@settings.bindings) > 0 do %>
+          <section class="mb-6">
+            <h3 class="font-semibold mb-2">키 바인딩</h3>
+            <p class="text-xs text-base-content/60 mb-2">
+              콤마(,)로 여러 키 등록. 예: <code>ArrowLeft, j</code>
+            </p>
+            <div class="space-y-2">
+              <%= for action <- @settings.bindings |> Map.keys() |> Enum.sort() do %>
+                <form phx-submit="modal_save_binding" class="flex items-center gap-2">
+                  <label class="w-28 text-sm">{action}</label>
+                  <input type="hidden" name="action" value={action} />
+                  <input
+                    type="text"
+                    name="keys"
+                    value={UserGameSettings.display_keys(@settings.bindings[action] || [])}
+                    class="input input-bordered input-sm flex-1"
+                  />
+                  <button type="submit" class="btn btn-sm btn-primary">저장</button>
+                </form>
+              <% end %>
+            </div>
+          </section>
+        <% end %>
+
+        <%= if map_size(@settings.options) > 0 do %>
+          <section class="mb-4">
+            <h3 class="font-semibold mb-2">게임 설정</h3>
+            <form phx-submit="modal_save_options" class="space-y-2">
+              <%= for {k, v} <- @settings.options |> Enum.sort_by(&elem(&1, 0)) do %>
+                <label class="flex items-center gap-2">
+                  <span class="w-32 text-sm">{k}</span>
+                  <%= cond do %>
+                    <% is_boolean(v) -> %>
+                      <input type="hidden" name={"options[#{k}]"} value="false" />
+                      <input
+                        type="checkbox"
+                        name={"options[#{k}]"}
+                        value="true"
+                        checked={v}
+                        class="checkbox checkbox-sm"
+                      />
+                    <% true -> %>
+                      <input
+                        type="text"
+                        name={"options[#{k}]"}
+                        value={to_string(v)}
+                        class="input input-bordered input-sm flex-1"
+                      />
+                  <% end %>
+                </label>
+              <% end %>
+              <div class="flex gap-2 pt-2">
+                <button type="submit" class="btn btn-primary btn-sm">옵션 저장</button>
+                <button
+                  type="button"
+                  phx-click="modal_reset"
+                  class="btn btn-ghost btn-sm"
+                  data-confirm="정말 초기화?"
+                >
+                  초기화
+                </button>
+              </div>
+            </form>
+          </section>
+        <% end %>
+      </div>
     </div>
     """
   end

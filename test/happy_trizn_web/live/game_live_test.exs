@@ -91,6 +91,14 @@ defmodule HappyTriznWeb.GameLiveTest do
       [board, _] = String.split(after_open, "</div>", parts: 2)
       board
     end
+
+    test "옵션 모달 — 2048 도 모달로 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/2048")
+      refute render(view) =~ "modal_save_options"
+
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_options"
+    end
   end
 
   describe "/play/minesweeper" do
@@ -157,6 +165,26 @@ defmodule HappyTriznWeb.GameLiveTest do
     test "MinesweeperCell hook — 우클릭 flag 용", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
       assert html =~ "phx-hook=\"MinesweeperCell\""
+    end
+
+    test "옵션 모달 — ⚙️ 버튼 클릭 시 모달 열림 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/minesweeper")
+      refute render(view) =~ "modal_save_binding"
+
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      assert html =~ "modal_save_binding"
+      assert html =~ "phx-click=\"close_settings\""
+      assert html =~ "modal_reset"
+    end
+
+    test "옵션 모달 — close_settings 닫음 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/minesweeper")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_binding"
+
+      view |> element("button[phx-click='close_settings']") |> render_click()
+      refute render(view) =~ "modal_save_binding"
     end
 
     test "사용자 binding 설정 → 새 키 즉시 반영 (Sprint 4f-2)", %{conn: conn} do
