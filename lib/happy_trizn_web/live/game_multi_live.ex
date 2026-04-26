@@ -863,6 +863,33 @@ defmodule HappyTriznWeb.GameMultiLive do
                 {@me.pending_garbage}
               </span>
             </div>
+            <!-- jstris 식 live HUD — PPS / APM / VS / KPP / pieces. -->
+            <div class="grid grid-cols-3 gap-1 text-xs bg-base-200 p-2 rounded mt-2">
+              <div class="text-center" title="Pieces Per Second">
+                <div class="text-base-content/60">PPS</div>
+                <div class="font-bold text-base">{Map.get(@me, :pps, 0.0)}</div>
+              </div>
+              <div class="text-center" title="Attack Per Minute">
+                <div class="text-base-content/60">APM</div>
+                <div class="font-bold text-base">{Map.get(@me, :apm, 0.0)}</div>
+              </div>
+              <div class="text-center" title="VS = APM + PPS×100">
+                <div class="text-base-content/60">VS</div>
+                <div class="font-bold text-base">{Map.get(@me, :vs, 0.0)}</div>
+              </div>
+              <div class="text-center" title="Keys Per Piece">
+                <div class="text-base-content/60">KPP</div>
+                <div class="font-bold">{Map.get(@me, :kpp, 0.0)}</div>
+              </div>
+              <div class="text-center" title="Pieces Placed">
+                <div class="text-base-content/60">조각</div>
+                <div class="font-bold">{Map.get(@me, :pieces_placed, 0)}</div>
+              </div>
+              <div class="text-center" title="Garbage Sent">
+                <div class="text-base-content/60">보냄</div>
+                <div class="font-bold">{Map.get(@me, :garbage_sent, 0)}</div>
+              </div>
+            </div>
             <div class="flex gap-2 flex-wrap">
               <%= if Map.get(@me, :combo, -1) >= 1 do %>
                 <span class="badge badge-warning">콤보 ×{@me.combo}</span>

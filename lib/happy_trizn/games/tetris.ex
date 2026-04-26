@@ -1053,6 +1053,18 @@ defmodule HappyTrizn.Games.Tetris do
 
   @doc false
   def public_player(p) do
+    # Sprint 3l-4 — live HUD stats. Lock 마다 broadcast 되므로 매 piece 마다 갱신됨.
+    duration_ms = max(System.monotonic_time(:millisecond) - p.started_at, 1)
+    duration_min = duration_ms / 60_000.0
+    duration_sec = duration_ms / 1_000.0
+    pieces = p.pieces_placed
+
+    pps = if duration_sec > 0, do: Float.round(pieces / duration_sec, 2), else: 0.0
+    kpp = if pieces > 0, do: Float.round(p.keys_pressed / pieces, 2), else: 0.0
+    apm = if duration_min > 0, do: Float.round(p.garbage_sent / duration_min, 2), else: 0.0
+    # jstris VS = APM + PPS × 100 단순 근사. 100 부근이면 좋은 실력.
+    vs = Float.round(apm + pps * 100, 1)
+
     %{
       nickname: Map.get(p, :nickname, "anon"),
       board: p.board,
@@ -1071,7 +1083,12 @@ defmodule HappyTrizn.Games.Tetris do
       top_out: p.top_out,
       lock_delay_ms: p.lock_delay_ms,
       pieces_placed: p.pieces_placed,
-      finesse_violations: p.finesse_violations
+      finesse_violations: p.finesse_violations,
+      pps: pps,
+      kpp: kpp,
+      apm: apm,
+      vs: vs,
+      garbage_sent: p.garbage_sent
     }
   end
 

@@ -1030,6 +1030,49 @@ defmodule HappyTrizn.Games.TetrisTest do
     end
   end
 
+  describe "Live HUD stats (Sprint 3l-4) — public_player 에 pps/apm/vs/kpp 포함" do
+    test "신규 player public_player → pps/apm/vs/kpp 0.0 (조각 0)" do
+      state = elem(Tetris.init(%{}), 1)
+      {:ok, state, _} = Tetris.handle_player_join("p1", %{nickname: "alice"}, state)
+      pub = Tetris.public_player(state.players["p1"])
+
+      assert pub.pps == 0.0
+      assert pub.apm == 0.0
+      assert pub.vs == 0.0
+      assert pub.kpp == 0.0
+      assert pub.pieces_placed == 0
+      assert pub.garbage_sent == 0
+    end
+
+    test "pieces / keys 쌓이면 pps / kpp / vs 증가" do
+      state = elem(Tetris.init(%{}), 1)
+      {:ok, state, _} = Tetris.handle_player_join("p1", %{nickname: "p1"}, state)
+
+      # 조작 + 락 시뮬 — pieces_placed/keys_pressed 강제 셋업.
+      # started_at 1초 전 으로 강제 → duration 약 1s.
+      one_sec_ago = System.monotonic_time(:millisecond) - 1000
+
+      state =
+        state
+        |> Map.put(:status, :playing)
+        |> put_in([:players, "p1", :started_at], one_sec_ago)
+        |> put_in([:players, "p1", :pieces_placed], 3)
+        |> put_in([:players, "p1", :keys_pressed], 12)
+        |> put_in([:players, "p1", :garbage_sent], 5)
+
+      pub = Tetris.public_player(state.players["p1"])
+
+      # pps ≈ 3 / 1s = 3.0 (약간의 오차 허용).
+      assert pub.pps >= 2.5 and pub.pps <= 3.5
+      # kpp = 12 / 3 = 4.0
+      assert pub.kpp == 4.0
+      # apm = 5 / (1/60) = 300.0
+      assert pub.apm >= 250.0 and pub.apm <= 350.0
+      # vs = apm + pps*100 ≈ 300 + 300 = 600
+      assert pub.vs >= 550.0 and pub.vs <= 650.0
+    end
+  end
+
   describe "N-player ranking (Sprint 3l-3)" do
     test "winner 1등 + 나머지 top_out_at 늦은 순 (오래 살아남은 사람이 위)" do
       # 4명 셋업, 모두 top_out (winner = 마지막 살아남은 1명).
