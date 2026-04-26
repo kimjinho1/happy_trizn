@@ -402,16 +402,19 @@ defmodule HappyTriznWeb.LobbyLive do
             <% end %>
 
             <div class="divider text-xs my-2">싱글</div>
-            <ul class="text-sm space-y-1">
+            <div class="grid grid-cols-2 gap-2">
               <%= for g <- @games_single do %>
-                <li>
-                  <.link navigate={~p"/play/#{g.slug}"} class="link">{g.name}</.link>
-                </li>
+                <.link
+                  navigate={~p"/play/#{g.slug}"}
+                  class="btn btn-sm btn-outline btn-primary justify-start"
+                >
+                  🎯 {g.name}
+                </.link>
               <% end %>
               <%= if @games_single == [] do %>
-                <li class="text-base-content/40 text-xs">Sprint 3 예정</li>
+                <div class="text-base-content/40 text-xs col-span-2">Sprint 3 예정</div>
               <% end %>
-            </ul>
+            </div>
           </div>
         </section>
         
