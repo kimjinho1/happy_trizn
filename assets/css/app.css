@@ -56,6 +56,78 @@
   --noise: 0;
 }
 
+/* Night Owl — VSCode-inspired deep navy + azure/violet */
+@plugin "../vendor/daisyui-theme" {
+  name: "night-owl";
+  default: false;
+  prefersdark: false;
+  color-scheme: "dark";
+  --color-base-100: oklch(20% 0.04 240);
+  --color-base-200: oklch(17% 0.04 240);
+  --color-base-300: oklch(14% 0.04 240);
+  --color-base-content: oklch(92% 0.02 240);
+  --color-primary: oklch(72% 0.16 250);
+  --color-primary-content: oklch(15% 0.04 240);
+  --color-secondary: oklch(72% 0.18 290);
+  --color-secondary-content: oklch(15% 0.04 290);
+  --color-accent: oklch(72% 0.18 290);
+  --color-accent-content: oklch(15% 0.04 290);
+  --color-neutral: oklch(35% 0.03 240);
+  --color-neutral-content: oklch(92% 0.02 240);
+  --color-info: oklch(72% 0.16 250);
+  --color-info-content: oklch(15% 0.04 240);
+  --color-success: oklch(78% 0.18 130);
+  --color-success-content: oklch(15% 0.04 130);
+  --color-warning: oklch(80% 0.14 75);
+  --color-warning-content: oklch(15% 0.04 75);
+  --color-error: oklch(68% 0.20 25);
+  --color-error-content: oklch(98% 0.02 25);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Hacker Terminal — CRT phosphor green over black */
+@plugin "../vendor/daisyui-theme" {
+  name: "hacker-terminal";
+  default: false;
+  prefersdark: false;
+  color-scheme: "dark";
+  --color-base-100: oklch(8% 0.01 150);
+  --color-base-200: oklch(11% 0.02 150);
+  --color-base-300: oklch(14% 0.03 150);
+  --color-base-content: oklch(85% 0.20 145);
+  --color-primary: oklch(78% 0.26 145);
+  --color-primary-content: oklch(8% 0.01 150);
+  --color-secondary: oklch(78% 0.20 80);
+  --color-secondary-content: oklch(8% 0.01 80);
+  --color-accent: oklch(78% 0.26 145);
+  --color-accent-content: oklch(8% 0.01 150);
+  --color-neutral: oklch(20% 0.05 145);
+  --color-neutral-content: oklch(85% 0.20 145);
+  --color-info: oklch(78% 0.20 200);
+  --color-info-content: oklch(8% 0.01 200);
+  --color-success: oklch(78% 0.26 145);
+  --color-success-content: oklch(8% 0.01 145);
+  --color-warning: oklch(80% 0.18 75);
+  --color-warning-content: oklch(8% 0.01 75);
+  --color-error: oklch(65% 0.25 20);
+  --color-error-content: oklch(98% 0.02 20);
+  --radius-selector: 0.125rem;
+  --radius-field: 0.125rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
 @plugin "../vendor/daisyui-theme" {
   name: "light";
   default: true;
@@ -101,5 +173,29 @@
 
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* Tetris filled blocks — inset bevel for clear edges between adjacent same-color blocks */
+.tetris-filled {
+  box-shadow:
+    inset 0 -2px 0 rgba(0, 0, 0, 0.32),
+    inset 0 2px 0 rgba(255, 255, 255, 0.28),
+    inset -2px 0 0 rgba(0, 0, 0, 0.22),
+    inset 2px 0 0 rgba(255, 255, 255, 0.18);
+}
+/* Mini opponent boards — thinner bevel to fit 12x12 cells */
+.tetris-filled-mini {
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* Active theme picker button highlight (matches data-theme on <html>) */
+[data-theme="light"] .theme-picker-btn[data-phx-theme="light"],
+[data-theme="dark"] .theme-picker-btn[data-phx-theme="dark"],
+[data-theme="night-owl"] .theme-picker-btn[data-phx-theme="night-owl"],
+[data-theme="hacker-terminal"] .theme-picker-btn[data-phx-theme="hacker-terminal"] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
 
 /* This file is for your main application CSS */

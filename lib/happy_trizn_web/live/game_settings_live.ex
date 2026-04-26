@@ -135,19 +135,28 @@ defmodule HappyTriznWeb.GameSettingsLive do
         <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
       </header>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <%= for game <- @games do %>
-          <.link
-            navigate={~p"/settings/games/#{game.slug}"}
-            class="card bg-base-200 hover:bg-base-300"
-          >
-            <div class="card-body p-4">
-              <h3 class="font-semibold">{game.name}</h3>
-              <p class="text-xs text-base-content/60">{game.description}</p>
-            </div>
-          </.link>
-        <% end %>
-      </div>
+      <section class="mb-8">
+        <h2 class="text-lg font-semibold mb-2">테마</h2>
+        <p class="text-xs text-base-content/60 mb-3">브라우저에 저장됩니다. 로그인 안 해도 적용.</p>
+        <Layouts.theme_picker />
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">게임별 옵션</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <%= for game <- @games do %>
+            <.link
+              navigate={~p"/settings/games/#{game.slug}"}
+              class="card bg-base-200 hover:bg-base-300"
+            >
+              <div class="card-body p-4">
+                <h3 class="font-semibold">{game.name}</h3>
+                <p class="text-xs text-base-content/60">{game.description}</p>
+              </div>
+            </.link>
+          <% end %>
+        </div>
+      </section>
     </div>
     """
   end
