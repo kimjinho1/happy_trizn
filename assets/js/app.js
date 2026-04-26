@@ -129,7 +129,18 @@ const Hooks = {
       if (k === "Tab") return "\t"
       return k
     },
+    isFormTarget(t) {
+      if (!t || !t.tagName) return false
+      const tag = t.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true
+      if (t.isContentEditable) return true
+      return false
+    },
     onKeyDown(e) {
+      // 입력 필드(input/textarea/select/contenteditable) 안에서는 게임 키 처리 건너뜀.
+      // 옵션 모달의 키 바인딩 input 에 영어/숫자 입력 가능하게.
+      if (this.isFormTarget(e.target)) return
+
       const action = this.keyToAction[e.key]
       if (!action) return
       e.preventDefault()
@@ -158,6 +169,7 @@ const Hooks = {
       }
     },
     onKeyUp(e) {
+      if (this.isFormTarget(e.target)) return
       const action = this.keyToAction[e.key]
       if (!action) return
       const keyId = e.key
