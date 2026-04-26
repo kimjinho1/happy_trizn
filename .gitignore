@@ -54,3 +54,5 @@ happy_trizn-*.tar
 
 # 마이페이지 프로필 사진 (사용자 업로드 — runtime, 빌드 산출물 X).
 /priv/static/uploads/
+.gstack/
+.gstack-design-audit/

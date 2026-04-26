@@ -189,9 +189,11 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       {:ok, conn: log_in_user(conn, nil, "guest_lobby_#{System.unique_integer([:positive])}")}
     end
 
-    test "게스트는 친구 기능 비활성", %{conn: conn} do
+    test "게스트는 친구 기능 비활성 — 회원가입 유도 노출", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/lobby")
-      assert html =~ "게스트는 친구 기능 사용 불가"
+      # 회원가입 유도 empty state.
+      assert html =~ "회원가입 하면 가능"
+      assert html =~ "@trizn.kr 가입"
     end
 
     test "게스트는 방 생성 form 안 보임", %{conn: conn} do

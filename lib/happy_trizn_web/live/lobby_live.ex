@@ -349,12 +349,16 @@ defmodule HappyTriznWeb.LobbyLive do
     end
   end
 
-  # 싱글 게임 버튼용 emoji.
+  # 게임별 emoji — single + multi 공용.
   defp single_game_emoji("2048"), do: "🔢"
   defp single_game_emoji("games_2048"), do: "🔢"
   defp single_game_emoji("minesweeper"), do: "💣"
   defp single_game_emoji("pacman"), do: "👻"
   defp single_game_emoji("sudoku"), do: "🧩"
+  defp single_game_emoji("tetris"), do: "🟦"
+  defp single_game_emoji("bomberman"), do: "💥"
+  defp single_game_emoji("skribbl"), do: "🎨"
+  defp single_game_emoji("snake_io"), do: "🐍"
   defp single_game_emoji(_), do: "🎯"
 
   # ============================================================================
@@ -439,12 +443,14 @@ defmodule HappyTriznWeb.LobbyLive do
                   Enum.slice(@rooms, (@rooms_page - 1) * @rooms_page_size, @rooms_page_size) %>
                 <div class="space-y-2">
                   <%= for room <- page_rooms do %>
-                    <div class="flex items-center justify-between p-3 bg-base-100 rounded">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <span class="badge badge-md">{game_display_name(room.game_type)}</span>
-                        <span class="font-semibold text-base">{room.name}</span>
+                    <div class="flex items-center justify-between gap-2 p-3 bg-base-100 rounded">
+                      <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <span class="badge badge-md shrink-0">
+                          {single_game_emoji(room.game_type)} {game_display_name(room.game_type)}
+                        </span>
+                        <span class="font-semibold text-base truncate">{room.name}</span>
                         <%= if room.password_hash do %>
-                          <span class="text-base" title="비밀번호 방">🔒</span>
+                          <span class="text-base shrink-0" title="비밀번호 방">🔒</span>
                         <% end %>
                       </div>
                       <div class="flex items-center gap-2">
@@ -569,9 +575,19 @@ defmodule HappyTriznWeb.LobbyLive do
 
             <%= cond do %>
               <% is_nil(@user) -> %>
-                <p class="text-xs text-base-content/50">
-                  게스트는 친구 기능 사용 불가. <.link href={~p"/register"} class="link">@trizn.kr 가입</.link>
-                </p>
+                <div class="text-center py-4 space-y-3">
+                  <div class="text-4xl">👋</div>
+                  <p class="text-sm font-semibold">회원가입 하면 가능</p>
+                  <ul class="text-sm text-base-content/70 space-y-1 text-left inline-block">
+                    <li>👥 친구 추가 / DM</li>
+                    <li>🏆 영구 기록 + 리더보드</li>
+                    <li>💌 친구 게임 초대</li>
+                    <li>🟢 접속중 표시</li>
+                  </ul>
+                  <.link href={~p"/register"} class="btn btn-primary btn-md w-full">
+                    @trizn.kr 가입
+                  </.link>
+                </div>
               <% true -> %>
                 <%= if @pending_received != [] do %>
                   <div class="mt-3 -mx-3 px-3 py-1 bg-warning/20 border-y border-warning/40 text-sm font-bold flex items-center gap-2">

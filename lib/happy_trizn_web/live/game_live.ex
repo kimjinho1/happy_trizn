@@ -301,20 +301,16 @@ defmodule HappyTriznWeb.GameLive do
       data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L,f,F,Space,Spacebar,Enter,Backspace,Delete,0,1,2,3,4,5,6,7,8,9"
       class="min-h-screen p-3 sm:p-6 max-w-3xl mx-auto"
     >
-      <header class="flex items-center justify-between mb-4">
+      <header class="flex items-center gap-3 mb-4">
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-base-content/70">{@nickname}</span>
-          <button
-            phx-click="open_settings"
-            class="btn btn-ghost btn-sm"
-            title="옵션 모달 — 게임 유지"
-            type="button"
-          >
-            ⚙️ 옵션
-          </button>
-          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
-        </div>
+        <button
+          phx-click="open_settings"
+          class="btn btn-ghost btn-sm"
+          title="옵션 모달 — 게임 유지"
+          type="button"
+        >
+          ⚙️ 옵션
+        </button>
       </header>
 
       <%= if @result do %>
@@ -624,8 +620,9 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   # 단일 bg class — cursor 가 가장 우선, 다음 same_n, 다음 fixed, 그 외 빈 셀.
-  defp sudoku_cell_bg(true, _, _), do: "bg-primary/30"
-  defp sudoku_cell_bg(false, true, _), do: "bg-primary/15"
+  # primary (orange) × 30% 가 갈색-베이지로 렌더링되어 의미 모호 → info (blue) 사용.
+  defp sudoku_cell_bg(true, _, _), do: "bg-info/30"
+  defp sudoku_cell_bg(false, true, _), do: "bg-info/15"
   defp sudoku_cell_bg(false, false, true), do: "bg-base-200"
   defp sudoku_cell_bg(false, false, false), do: "bg-base-100"
 

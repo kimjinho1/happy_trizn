@@ -130,12 +130,9 @@ defmodule HappyTriznWeb.GameSettingsLive do
     ~H"""
     <div class="max-w-3xl mx-auto p-3 sm:p-6">
       <Layouts.flash_group flash={@flash} />
-      <header class="mb-6 flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold">게임 옵션</h1>
-          <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
-        </div>
-        <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
+      <header class="mb-6">
+        <h1 class="text-2xl font-bold">게임 옵션</h1>
+        <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
       </header>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -166,10 +163,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
             <p class="text-warning text-sm">게스트는 변경 후 저장 안 됨 (브라우저 다시 열면 초기화).</p>
           <% end %>
         </div>
-        <div class="flex gap-2">
-          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
-          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
-        </div>
+        <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
       </header>
 
       <section class="mb-6">
@@ -312,10 +306,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
             <p class="text-warning text-sm">게스트는 변경 후 저장 안 됨.</p>
           <% end %>
         </div>
-        <div class="flex gap-2">
-          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
-          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
-        </div>
+        <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
       </header>
 
       <%= if map_size(@settings.bindings) > 0 do %>
