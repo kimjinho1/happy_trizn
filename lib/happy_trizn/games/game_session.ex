@@ -95,7 +95,10 @@ defmodule HappyTrizn.Games.GameSession do
           game_state: game_state,
           players: %{},
           meta: meta,
-          tick_ref: maybe_start_tick(meta)
+          tick_ref: maybe_start_tick(meta),
+          # 한 라운드 한 번만 match_results 저장 — game_over 가 매 mutation 마다
+          # :yes 반환하므로 dedupe 필요. restart 시 false 로 reset.
+          match_recorded: false
         }
 
         {:ok, state}
@@ -137,18 +140,15 @@ defmodule HappyTrizn.Games.GameSession do
     broadcast_messages(state.room_id, broadcast)
     new_state = %{state | game_state: new_game_state, players: new_players}
 
-    case state.module.game_over?(new_game_state) do
-      {:yes, results} ->
-        maybe_record_match(new_state, results)
-        broadcast_messages(state.room_id, [{:game_over, results}])
+    cond do
+      # 마지막 player 떠남 → GenServer 종료 + room close.
+      map_size(new_players) == 0 ->
         {:stop, :normal, new_state}
 
-      :no ->
-        if map_size(new_players) == 0 do
-          {:stop, :normal, new_state}
-        else
-          {:noreply, new_state}
-        end
+      true ->
+        # game_over (winner 결정) 면 결과 broadcast + match_result 저장.
+        # GenServer 는 유지 — 남은 player 가 "다시 하기" 가능.
+        check_and_finish(new_state)
     end
   end
 
@@ -202,16 +202,23 @@ defmodule HappyTrizn.Games.GameSession do
     Enum.each(msgs, &Phoenix.PubSub.broadcast(@pubsub, "game:" <> room_id, {:game_event, &1}))
   end
 
-  # game_over? 검사 후 결과 저장 + broadcast + stop. 아니면 noreply.
+  # game_over? 검사 — 라운드 결과 한 번만 저장 + broadcast.
+  # GenServer 는 stop 안 함 — 사용자가 "다시 하기" 누르면 restart action 으로 재진입.
+  # 모든 player leave 시에만 stop (handle_cast :player_leave 에서 처리).
   defp check_and_finish(state) do
     case state.module.game_over?(state.game_state) do
       {:yes, results} ->
-        maybe_record_match(state, results)
-        broadcast_messages(state.room_id, [{:game_over, results}])
-        {:stop, :normal, state}
+        if state.match_recorded do
+          {:noreply, state}
+        else
+          maybe_record_match(state, results)
+          broadcast_messages(state.room_id, [{:game_over, results}])
+          {:noreply, %{state | match_recorded: true}}
+        end
 
       :no ->
-        {:noreply, state}
+        # restart 등으로 :over 벗어남 → 다음 라운드 결과 저장 가능하도록 flag reset.
+        {:noreply, %{state | match_recorded: false}}
     end
   end
 

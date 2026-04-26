@@ -386,6 +386,74 @@ defmodule HappyTrizn.Games.TetrisTest do
     end
   end
 
+  describe "restart + winners_history" do
+    test "1v1 게임 끝 → restart → :countdown 재진입 + winners_history 보존" do
+      state = join2()
+      # 강제로 :over (winner=p1) 상태 만들기
+      state = put_in(state.players["p2"].top_out, true)
+      state = %{state | status: :playing}
+      # 강제로 finish_round 호출 (handle_player_leave 등 거치지 않고 직접)
+      {:ok, finished_state, _} =
+        Tetris.handle_player_leave("ghost_unknown", :disconnect, state)
+
+      # finished_state 는 winner=p1 + status :over (handle_player_leave 처리 안 됨 → 직접)
+      _ = finished_state
+
+      forced =
+        state
+        |> Map.put(:status, :over)
+        |> Map.put(:winner, "p1")
+        |> Map.put(:winners_history, [%{winner_id: "p1", at: DateTime.utc_now(), score: 100}])
+
+      {:ok, ns, broadcasts} = Tetris.handle_input("p1", %{"action" => "restart"}, forced)
+
+      assert ns.status == :countdown
+      assert ns.countdown_ms == 3000
+      assert ns.winner == nil
+      # 양쪽 player score 0 (fresh)
+      Enum.each(ns.players, fn {_, p} -> assert p.score == 0 end)
+      # history 보존 (restart 가 history clear 안 함)
+      assert length(ns.winners_history) == 1
+      assert {:countdown_start, 3000} in broadcasts
+    end
+
+    test "1명 (solo) 게임 끝 → restart → :practice 재진입" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+
+      # 솔로 :over 상태 강제
+      forced = %{s1 | status: :over, winner: nil}
+
+      {:ok, ns, broadcasts} = Tetris.handle_input("p1", %{"action" => "restart"}, forced)
+      assert ns.status == :practice
+      assert ns.players["p1"].score == 0
+      assert {:practice_started, "p1"} in broadcasts
+    end
+
+    test "status != :over 일 때 restart 무시" do
+      state = join2()
+      assert {:ok, ^state, []} = Tetris.handle_input("p1", %{"action" => "restart"}, state)
+    end
+
+    test "참가자 아닌 사람 restart 시도 → 무시" do
+      state = join2() |> Map.put(:status, :over) |> Map.put(:winner, "p1")
+      assert {:ok, ^state, []} = Tetris.handle_input("ghost", %{"action" => "restart"}, state)
+    end
+
+    test "winner 결정 시 winners_history 자동 추가" do
+      state = join2()
+      # p2 leave → p1 winner
+      {:ok, ns, _} = Tetris.handle_player_leave("p2", :disconnect, state)
+      assert ns.status == :over
+      assert ns.winner == "p1"
+      assert length(ns.winners_history) == 1
+      [entry | _] = ns.winners_history
+      assert entry.winner_id == "p1"
+      assert entry.primary_id == "p1"
+      assert is_integer(entry.score)
+    end
+  end
+
   describe "lock delay" do
     test "soft_drop landed → 즉시 lock 안 함, lock_delay_ms 시작" do
       state = join2()

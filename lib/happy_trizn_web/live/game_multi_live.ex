@@ -138,6 +138,14 @@ defmodule HappyTriznWeb.GameMultiLive do
     {:noreply, socket}
   end
 
+  def handle_event("restart", _, socket) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
+      "action" => "restart"
+    })
+
+    {:noreply, assign(socket, :result, nil)}
+  end
+
   # ============================================================================
   # 옵션 모달 (game LiveView 그대로 유지, 새 페이지/탭 안 옮김)
   # ============================================================================
@@ -272,6 +280,16 @@ defmodule HappyTriznWeb.GameMultiLive do
     {:noreply, assign(new_socket, result: %{winner: w})}
   end
 
+  def handle_info({:game_event, {:game_over, results}}, socket) do
+    new_socket = refresh_state(socket)
+    {:noreply, assign(new_socket, result: results)}
+  end
+
+  def handle_info({:game_event, {:restart, _}}, socket) do
+    # 라운드 시작 — result 클리어, 보드 갱신.
+    {:noreply, socket |> refresh_state() |> assign(:result, nil)}
+  end
+
   def handle_info({:game_event, {:top_out, _pid}}, socket) do
     {:noreply, refresh_state(socket)}
   end
@@ -341,9 +359,7 @@ defmodule HappyTriznWeb.GameMultiLive do
       </header>
 
       <%= if @result && @result != %{} do %>
-        <div class="alert alert-success mb-4">
-          <span>{format_result(@result)}</span>
-        </div>
+        <.game_over_panel result={@result} player_id={@player_id} />
       <% end %>
 
       <%= if @slug == "tetris" do %>
@@ -654,7 +670,8 @@ defmodule HappyTriznWeb.GameMultiLive do
       board
     else
       cells = HappyTrizn.Games.Tetris.Piece.absolute_cells(cur.type, cur.rotation, landing)
-      overlay_cells(board, cells, :ghost)
+      # ghost 셀은 piece type 을 들고 다님 — 색은 같지만 opacity 낮춰 표시.
+      overlay_cells(board, cells, {:ghost, cur.type})
     end
   end
 
@@ -706,9 +723,73 @@ defmodule HappyTriznWeb.GameMultiLive do
   defp cell_color(:l), do: "bg-orange-500"
   defp cell_color(:j), do: "bg-blue-500"
   defp cell_color(:garbage), do: "bg-gray-500"
-  defp cell_color(:ghost), do: "bg-base-100 ring-1 ring-base-content/30"
+
+  # Ghost — piece 와 같은 색이지만 50% opacity + 두꺼운 윤곽선. 잘 보임.
+  defp cell_color({:ghost, :i}), do: "bg-cyan-400/40 border-2 border-cyan-300"
+  defp cell_color({:ghost, :o}), do: "bg-yellow-400/40 border-2 border-yellow-300"
+  defp cell_color({:ghost, :t}), do: "bg-purple-500/40 border-2 border-purple-300"
+  defp cell_color({:ghost, :s}), do: "bg-green-500/40 border-2 border-green-300"
+  defp cell_color({:ghost, :z}), do: "bg-red-500/40 border-2 border-red-300"
+  defp cell_color({:ghost, :l}), do: "bg-orange-500/40 border-2 border-orange-300"
+  defp cell_color({:ghost, :j}), do: "bg-blue-500/40 border-2 border-blue-300"
+  defp cell_color({:ghost, _}), do: "bg-base-200 border-2 border-base-content/60"
+
   defp cell_color(_), do: "bg-base-100"
 
-  defp format_result(%{winner: w}), do: "승자: #{String.slice(w, 0..7)}!"
-  defp format_result(other), do: inspect(other)
+  attr :result, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp game_over_panel(assigns) do
+    winner = Map.get(assigns.result, :winner)
+    me_won? = is_binary(winner) and winner == assigns.player_id
+    history = Map.get(assigns.result, :winners_history, [])
+    assigns = assign(assigns, winner: winner, me_won?: me_won?, history: history)
+
+    ~H"""
+    <div class={[
+      "rounded-lg border-2 p-4 mb-4",
+      if(@me_won?, do: "bg-success/20 border-success", else: "bg-base-200 border-base-300")
+    ]}>
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div class="text-lg font-bold">
+          <%= cond do %>
+            <% @me_won? -> %>
+              🏆 승리!
+            <% is_binary(@winner) -> %>
+              😢 패배 — 승자: {String.slice(@winner, 0..7)}
+            <% true -> %>
+              💀 게임 종료
+          <% end %>
+        </div>
+        <button phx-click="restart" class="btn btn-primary btn-sm">🔄 다시 하기</button>
+      </div>
+
+      <%= if @history != [] do %>
+        <div class="text-xs">
+          <div class="font-semibold text-base-content/70 mb-1">방 1등 기록 (최근 {length(@history)}회)</div>
+          <ol class="space-y-1">
+            <%= for {entry, idx} <- Enum.with_index(@history) do %>
+              <li class="flex items-center gap-2">
+                <span class="badge badge-sm">#{idx + 1}</span>
+                <span class="font-mono">
+                  <%= cond do %>
+                    <% entry[:winner_id] -> %>
+                      {String.slice(entry.winner_id, 0..7)}
+                    <% entry[:primary_id] -> %>
+                      {String.slice(entry.primary_id, 0..7)} (솔로)
+                    <% true -> %>
+                      —
+                  <% end %>
+                </span>
+                <%= if entry[:score] do %>
+                  <span class="text-base-content/60">점수 {entry.score} · 라인 {entry[:lines] || 0}</span>
+                <% end %>
+              </li>
+            <% end %>
+          </ol>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
 end

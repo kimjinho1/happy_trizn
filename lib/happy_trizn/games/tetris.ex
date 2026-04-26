@@ -53,7 +53,15 @@ defmodule HappyTrizn.Games.Tetris do
 
   @impl true
   def init(_config) do
-    {:ok, %{status: :waiting, winner: nil, players: %{}, countdown_ms: nil}}
+    {:ok,
+     %{
+       status: :waiting,
+       winner: nil,
+       players: %{},
+       countdown_ms: nil,
+       # 방 단위 1등 기록 — 게임 끝날 때마다 누적 (최신이 head, 최대 10개).
+       winners_history: []
+     }}
   end
 
   # ============================================================================
@@ -101,7 +109,8 @@ defmodule HappyTrizn.Games.Tetris do
     cond do
       state.status == :playing and length(alive) == 1 ->
         winner = alive |> List.first() |> elem(0)
-        {:ok, %{state | players: new_players, status: :over, winner: winner}, [{:winner, winner}]}
+        new_state = finish_round(state, new_players, winner)
+        {:ok, new_state, [{:winner, winner}]}
 
       # countdown 중에 한 명 떠나면 cancel — 남은 player 는 대기 상태로 복귀.
       state.status == :countdown and length(alive) == 1 ->
@@ -141,6 +150,48 @@ defmodule HappyTrizn.Games.Tetris do
 
       true ->
         {:ok, state, []}
+    end
+  end
+
+  # 재도전 — 게임 끝난 후 사용자가 다시 시작. winners_history 보존.
+  # 1명: → :practice (즉시 솔로 시작), 2명: → :countdown 3-2-1 → :playing.
+  def handle_input(player_id, %{"action" => "restart"}, state) do
+    cond do
+      state.status != :over ->
+        {:ok, state, []}
+
+      not Map.has_key?(state.players, player_id) ->
+        {:ok, state, []}
+
+      true ->
+        reset_players = Map.new(state.players, fn {pid, _} -> {pid, new_player_state()} end)
+
+        cond do
+          map_size(reset_players) == 2 ->
+            new_state = %{
+              state
+              | players: reset_players,
+                status: :countdown,
+                countdown_ms: @countdown_ms,
+                winner: nil
+            }
+
+            {:ok, new_state, [{:restart, player_id}, {:countdown_start, @countdown_ms}]}
+
+          map_size(reset_players) == 1 ->
+            new_state = %{
+              state
+              | players: reset_players,
+                status: :practice,
+                countdown_ms: nil,
+                winner: nil
+            }
+
+            {:ok, new_state, [{:restart, player_id}, {:practice_started, player_id}]}
+
+          true ->
+            {:ok, state, []}
+        end
     end
   end
 
@@ -561,16 +612,51 @@ defmodule HappyTrizn.Games.Tetris do
     cond do
       state.status == :playing and length(alive) == 1 ->
         winner = alive |> List.first() |> elem(0)
-
-        {:ok, %{state | players: new_players, status: :over, winner: winner},
-         extra_broadcasts ++ [{:winner, winner}]}
+        new_state = finish_round(state, new_players, winner)
+        {:ok, new_state, extra_broadcasts ++ [{:winner, winner}]}
 
       length(alive) == 0 ->
-        {:ok, %{state | players: new_players, status: :over}, extra_broadcasts}
+        new_state = finish_round(state, new_players, nil)
+        {:ok, new_state, extra_broadcasts}
 
       true ->
         {:ok, %{state | players: new_players}, extra_broadcasts}
     end
+  end
+
+  # 라운드 종료 공통 처리 — winner 기록 + 통계 캡처.
+  # 솔로(:practice 에서 top out) 는 winner = nil 이지만 history 에는 기록 (점수 비교용).
+  defp finish_round(state, new_players, winner) do
+    history_entry = build_history_entry(new_players, winner, state)
+    history = [history_entry | state.winners_history || []] |> Enum.take(10)
+
+    %{
+      state
+      | players: new_players,
+        status: :over,
+        winner: winner,
+        countdown_ms: nil,
+        winners_history: history
+    }
+  end
+
+  defp build_history_entry(players, winner, _state) do
+    # solo 라면 유일한 player 가 결과 주체. multi 면 winner 가 주체 + loser stats 도 같이.
+    {primary_id, primary_player} =
+      cond do
+        is_binary(winner) and Map.has_key?(players, winner) -> {winner, Map.get(players, winner)}
+        true -> Enum.find(players, fn _ -> true end) || {nil, nil}
+      end
+
+    %{
+      winner_id: winner,
+      primary_id: primary_id,
+      at: DateTime.utc_now() |> DateTime.truncate(:second),
+      score: primary_player && primary_player.score,
+      lines: primary_player && primary_player.lines,
+      level: primary_player && primary_player.level,
+      pieces_placed: primary_player && primary_player.pieces_placed
+    }
   end
 
   # ============================================================================
@@ -782,7 +868,12 @@ defmodule HappyTrizn.Games.Tetris do
         {id, public_stats(p)}
       end)
 
-    {:yes, %{winner: w, players: public_players}}
+    {:yes,
+     %{
+       winner: w,
+       players: public_players,
+       winners_history: state.winners_history || []
+     }}
   end
 
   def game_over?(_), do: :no
