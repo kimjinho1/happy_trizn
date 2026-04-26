@@ -125,6 +125,17 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       _ = host
     end
 
+    test "혼자 입장 → 스프린트 버튼 노출 + 클릭 시 :practice 진입", %{conn: conn, room: room} do
+      {:ok, view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "스프린트"
+
+      view |> element("button[phx-click='start_practice']") |> render_click()
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      assert state.status == :practice
+    end
+
     test "HTTP-only mount (connected? = false) 는 GameSession 안 건드림", %{conn: conn, room: room} do
       # disconnected GET 요청만 — websocket 없음 (Phoenix.ConnTest 가 fully render)
       conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")

@@ -128,6 +128,14 @@ defmodule HappyTriznWeb.GameMultiLive do
     {:noreply, socket}
   end
 
+  def handle_event("start_practice", _, socket) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
+      "action" => "start_practice"
+    })
+
+    {:noreply, socket}
+  end
+
   def handle_event("key", %{"key" => key}, socket) do
     if action = key_to_action(socket.assigns.slug, key) do
       GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
@@ -251,6 +259,10 @@ defmodule HappyTriznWeb.GameMultiLive do
         </div>
       <% end %>
 
+      <%= if @slug == "tetris" do %>
+        <.tetris_status_banner game_state={@game_state} player_id={@player_id} />
+      <% end %>
+
       <.game_view
         slug={@slug}
         state={@game_state}
@@ -266,6 +278,47 @@ defmodule HappyTriznWeb.GameMultiLive do
     </div>
     """
   end
+
+  attr :game_state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp tetris_status_banner(assigns) do
+    status = Map.get(assigns.game_state, :status)
+    countdown = Map.get(assigns.game_state, :countdown_ms)
+    me_alone? = map_size(assigns.game_state.players) == 1
+    in_room? = Map.has_key?(assigns.game_state.players, assigns.player_id)
+
+    assigns =
+      assign(assigns,
+        status: status,
+        countdown: countdown,
+        me_alone?: me_alone?,
+        in_room?: in_room?
+      )
+
+    ~H"""
+    <%= cond do %>
+      <% @status == :countdown -> %>
+        <div class="alert alert-warning mb-4 text-center text-2xl font-bold">
+          시작까지 {countdown_seconds(@countdown)}…
+        </div>
+      <% @status == :waiting and @me_alone? and @in_room? -> %>
+        <div class="alert alert-info mb-4 flex items-center justify-between">
+          <span>혼자 있어요. 상대 기다리는 동안 연습하기 가능.</span>
+          <button phx-click="start_practice" class="btn btn-sm btn-primary">🎯 스프린트 (연습)</button>
+        </div>
+      <% @status == :practice -> %>
+        <div class="alert alert-success mb-4 text-sm">
+          연습 중. 상대 입장 시 자동으로 멀티 게임 시작 (3-2-1 카운트다운).
+        </div>
+      <% true -> %>
+        {[]}
+    <% end %>
+    """
+  end
+
+  defp countdown_seconds(ms) when is_integer(ms) and ms > 0, do: div(ms - 1, 1000) + 1
+  defp countdown_seconds(_), do: 0
 
   defp game_view(%{slug: "tetris"} = assigns) do
     me_id = assigns.player_id

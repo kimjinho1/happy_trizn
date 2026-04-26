@@ -36,6 +36,7 @@ defmodule HappyTrizn.Games.Tetris do
   @lines_per_level 10
   @lock_delay_ms 500
   @max_lock_resets 15
+  @countdown_ms 3000
 
   @impl true
   def meta do
@@ -52,7 +53,7 @@ defmodule HappyTrizn.Games.Tetris do
 
   @impl true
   def init(_config) do
-    {:ok, %{status: :waiting, winner: nil, players: %{}}}
+    {:ok, %{status: :waiting, winner: nil, players: %{}, countdown_ms: nil}}
   end
 
   # ============================================================================
@@ -71,9 +72,24 @@ defmodule HappyTrizn.Games.Tetris do
       true ->
         new_player = new_player_state()
         new_players = Map.put(players, player_id, new_player)
-        new_status = if map_size(new_players) == 2, do: :playing, else: :waiting
 
-        {:ok, %{state | players: new_players, status: new_status}, [{:player_joined, player_id}]}
+        # 2번째 player join → 양쪽 모두 fresh state 로 reset + 3-2-1 countdown 시작.
+        # 1번째는 :waiting (혼자 대기). solo 연습은 "start_practice" action 으로 진입.
+        if map_size(new_players) == 2 do
+          reset_players = Map.new(new_players, fn {pid, _} -> {pid, new_player_state()} end)
+
+          new_state = %{
+            state
+            | players: reset_players,
+              status: :countdown,
+              countdown_ms: @countdown_ms,
+              winner: nil
+          }
+
+          {:ok, new_state, [{:player_joined, player_id}, {:countdown_start, @countdown_ms}]}
+        else
+          {:ok, %{state | players: new_players, status: :waiting}, [{:player_joined, player_id}]}
+        end
     end
   end
 
@@ -86,6 +102,22 @@ defmodule HappyTrizn.Games.Tetris do
       state.status == :playing and length(alive) == 1 ->
         winner = alive |> List.first() |> elem(0)
         {:ok, %{state | players: new_players, status: :over, winner: winner}, [{:winner, winner}]}
+
+      # countdown 중에 한 명 떠나면 cancel — 남은 player 는 대기 상태로 복귀.
+      state.status == :countdown and length(alive) == 1 ->
+        {remaining_id, _} = alive |> List.first()
+        # 남은 player 상태 fresh 로 (어차피 countdown 시 reset 했었음).
+        reset_player = new_player_state()
+        reset_players = Map.put(%{}, remaining_id, reset_player)
+
+        {:ok,
+         %{
+           state
+           | players: reset_players,
+             status: :waiting,
+             countdown_ms: nil,
+             winner: nil
+         }, [{:player_left, player_id}, {:countdown_cancel, %{}}]}
 
       map_size(new_players) == 0 ->
         {:ok, %{state | players: new_players, status: :over}, [{:player_left, player_id}]}
@@ -100,10 +132,22 @@ defmodule HappyTrizn.Games.Tetris do
   # ============================================================================
 
   @impl true
+  def handle_input(player_id, %{"action" => "start_practice"}, state) do
+    cond do
+      state.status == :waiting and map_size(state.players) == 1 and
+          Map.has_key?(state.players, player_id) ->
+        # 솔로 연습 모드 진입. 다른 사람 join 하면 자동으로 :countdown → :playing.
+        {:ok, %{state | status: :practice}, [{:practice_started, player_id}]}
+
+      true ->
+        {:ok, state, []}
+    end
+  end
+
   def handle_input(player_id, %{"action" => action}, state) do
     with %{} = player <- Map.get(state.players, player_id),
          false <- player.top_out,
-         :playing <- state.status do
+         status when status in [:playing, :practice] <- state.status do
       # 키 카운터 (KPP) — 인식된 action 만 카운트, hold 가 noop 이어도 카운트.
       if known_action?(action) do
         bumped = %{player | keys_pressed: player.keys_pressed + 1}
@@ -618,7 +662,24 @@ defmodule HappyTrizn.Games.Tetris do
   # ============================================================================
 
   @impl true
-  def tick(%{status: :playing} = state) do
+  def tick(%{status: :countdown, countdown_ms: ms} = state) when is_integer(ms) do
+    new_ms = ms - @tick_ms
+
+    if new_ms <= 0 do
+      # countdown 끝 → :playing 진입. started_at 리셋 (통계 정확히).
+      now = System.monotonic_time(:millisecond)
+
+      reset_players =
+        Map.new(state.players, fn {pid, p} -> {pid, %{p | started_at: now}} end)
+
+      new_state = %{state | status: :playing, countdown_ms: 0, players: reset_players}
+      {:ok, new_state, [{:game_start, %{}}]}
+    else
+      {:ok, %{state | countdown_ms: new_ms}, [{:countdown_tick, new_ms}]}
+    end
+  end
+
+  def tick(%{status: status} = state) when status in [:playing, :practice] do
     {new_state, broadcasts} =
       Enum.reduce(state.players, {state, []}, fn {pid, player}, {acc_state, acc_b} ->
         cond do

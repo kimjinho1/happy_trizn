@@ -4,7 +4,18 @@ defmodule HappyTrizn.Games.TetrisTest do
   alias HappyTrizn.Games.Tetris
   alias HappyTrizn.Games.Tetris.{Board, Piece}
 
+  # 2명 join + countdown 즉시 끝내서 :playing 상태로.
+  # 신규 spec: 2번째 join 시 :countdown (3000ms) → tick 으로 0 까지 가야 :playing.
   defp join2 do
+    {:ok, state} = Tetris.init(%{})
+    {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+    {:ok, s2, _} = Tetris.handle_player_join("p2", %{}, s1)
+    # status :countdown — 강제로 :playing 으로 진입 (tick 60번 없이).
+    %{s2 | status: :playing, countdown_ms: 0}
+  end
+
+  # countdown 진행 중인 상태 그대로 (UI 테스트용).
+  defp join2_countdown do
     {:ok, state} = Tetris.init(%{})
     {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
     {:ok, s2, _} = Tetris.handle_player_join("p2", %{}, s1)
@@ -36,14 +47,16 @@ defmodule HappyTrizn.Games.TetrisTest do
   end
 
   describe "handle_player_join/3" do
-    test "1번째 → waiting, 2번째 → playing" do
+    test "1번째 → waiting, 2번째 → countdown (3-2-1 → playing)" do
       {:ok, state} = Tetris.init(%{})
       {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
       assert s1.status == :waiting
       assert map_size(s1.players) == 1
 
-      {:ok, s2, _} = Tetris.handle_player_join("p2", %{}, s1)
-      assert s2.status == :playing
+      {:ok, s2, broadcasts} = Tetris.handle_player_join("p2", %{}, s1)
+      assert s2.status == :countdown
+      assert s2.countdown_ms == 3000
+      assert {:countdown_start, 3000} in broadcasts
       assert map_size(s2.players) == 2
 
       Enum.each(s2.players, fn {_id, p} ->
@@ -291,6 +304,85 @@ defmodule HappyTrizn.Games.TetrisTest do
 
       {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
       assert ns.players["p1"].combo == -1
+    end
+  end
+
+  describe "practice 모드 + countdown" do
+    test "1명 join + start_practice → status :practice" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+      assert s1.status == :waiting
+
+      {:ok, s2, broadcasts} = Tetris.handle_input("p1", %{"action" => "start_practice"}, s1)
+      assert s2.status == :practice
+      assert {:practice_started, "p1"} in broadcasts
+    end
+
+    test ":waiting 2명 아닐 때 start_practice 무시" do
+      {:ok, state} = Tetris.init(%{})
+
+      assert {:ok, ^state, []} =
+               Tetris.handle_input("ghost", %{"action" => "start_practice"}, state)
+    end
+
+    test ":practice 중 input (예: hard_drop) 동작" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "start_practice"}, s1)
+
+      orig_score = s2.players["p1"].score
+      {:ok, s3, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, s2)
+      assert s3.players["p1"].score > orig_score
+    end
+
+    test ":practice 중 2명째 join → 양쪽 reset + :countdown" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "start_practice"}, s1)
+
+      # p1 점수 쌓기
+      {:ok, s2b, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, s2)
+      assert s2b.players["p1"].score > 0
+
+      {:ok, s3, broadcasts} = Tetris.handle_player_join("p2", %{}, s2b)
+      assert s3.status == :countdown
+      # 양쪽 모두 fresh state (점수 0)
+      assert s3.players["p1"].score == 0
+      assert s3.players["p2"].score == 0
+      assert {:countdown_start, 3000} in broadcasts
+    end
+
+    test "tick 으로 countdown_ms 감소 → 0 도달 시 :playing" do
+      state = join2_countdown()
+      assert state.status == :countdown
+      assert state.countdown_ms == 3000
+
+      # tick 한 번 → 50ms 감소
+      {:ok, s1, _} = Tetris.tick(state)
+      assert s1.countdown_ms == 2950
+
+      # 강제로 ms 50 으로 만들고 한 번 더 → :playing
+      s_almost = %{state | countdown_ms: 50}
+      {:ok, s_done, broadcasts} = Tetris.tick(s_almost)
+      assert s_done.status == :playing
+      assert s_done.countdown_ms == 0
+      assert {:game_start, %{}} in broadcasts
+    end
+
+    test "countdown 중 한 명 leave → :waiting 복귀 + 카운트 cancel" do
+      state = join2_countdown()
+      assert state.status == :countdown
+
+      {:ok, s, broadcasts} = Tetris.handle_player_leave("p2", :disconnect, state)
+      assert s.status == :waiting
+      assert s.countdown_ms == nil
+      assert map_size(s.players) == 1
+      assert {:countdown_cancel, %{}} in broadcasts
+    end
+
+    test ":countdown 중 input 무시 (status not in [:playing, :practice])" do
+      state = join2_countdown()
+      assert {:ok, ^state, []} = Tetris.handle_input("p1", %{"action" => "left"}, state)
     end
   end
 
