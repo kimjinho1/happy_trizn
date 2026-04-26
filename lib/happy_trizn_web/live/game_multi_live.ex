@@ -191,6 +191,23 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   # ============================================================================
+  # Bomberman events
+  # ============================================================================
+
+  def handle_event("bomberman_input", payload, socket) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, payload)
+    {:noreply, socket}
+  end
+
+  def handle_event("bomberman_start", _, socket) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
+      "action" => "start_game"
+    })
+
+    {:noreply, socket}
+  end
+
+  # ============================================================================
   # 옵션 모달 (game LiveView 그대로 유지, 새 페이지/탭 안 옮김)
   # ============================================================================
 
@@ -883,13 +900,232 @@ defmodule HappyTriznWeb.GameMultiLive do
     """
   end
 
+  defp game_view(%{slug: "bomberman"} = assigns) do
+    state = ensure_bomberman_state(assigns.state)
+    me_id = assigns.player_id
+    me = Map.get(state.players, me_id) || %{}
+    bindings = assigns.key_settings.bindings || %{}
+
+    assigns = assign(assigns, state: state, me: me, bindings: bindings)
+
+    ~H"""
+    <div
+      id="bomberman-input-host"
+      phx-hook="BombermanInput"
+      data-key-bindings={Jason.encode!(@bindings)}
+      tabindex="0"
+      class="outline-none"
+    >
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
+        <div>
+          <.bomberman_status state={@state} me={@me} />
+          <.bomberman_grid state={@state} player_id={@player_id} />
+        </div>
+
+        <aside class="space-y-3">
+          <.bomberman_scoreboard players={@state.players} />
+          <div class="bg-base-200 rounded p-3 text-xs space-y-1">
+            <div class="font-semibold">조작</div>
+            <div>이동: ← → ↑ ↓ / WASD</div>
+            <div>폭탄: Space</div>
+          </div>
+        </aside>
+      </div>
+
+      <%= if @state.status == :over do %>
+        <.bomberman_game_over_modal state={@state} player_id={@player_id} />
+      <% end %>
+    </div>
+    """
+  end
+
   defp game_view(assigns) do
     ~H"""
     <div class="card bg-base-200">
       <div class="card-body">
         <h3 class="card-title">{@slug}</h3>
-        <p class="text-sm">이 게임은 Sprint 3b 진행 중. 풀 클라이언트 구현 예정.</p>
+        <p class="text-sm">이 게임은 Sprint 3 진행 중. 풀 구현 예정.</p>
         <pre class="text-xs bg-base-100 p-2 rounded overflow-auto max-h-64">{inspect(@state, pretty: true, limit: 50)}</pre>
+      </div>
+    </div>
+    """
+  end
+
+  # Bomberman placeholder state 보강 — HTTP 첫 mount 안전.
+  defp ensure_bomberman_state(state) do
+    state
+    |> Map.put_new(:status, :waiting)
+    |> Map.put_new(:players, %{})
+    |> Map.put_new(:grid, [])
+    |> Map.put_new(:bombs, %{})
+    |> Map.put_new(:explosions, [])
+    |> Map.put_new(:items, %{})
+    |> Map.put_new(:winner_id, nil)
+  end
+
+  attr :state, :map, required: true
+  attr :me, :map, required: true
+
+  defp bomberman_status(assigns) do
+    ~H"""
+    <div class="bg-base-200 rounded p-3 mb-3 flex items-center justify-between">
+      <div>
+        <%= case @state.status do %>
+          <% :waiting -> %>
+            <span class="text-sm">대기 중 — 2명 이상 시 시작 가능</span>
+            <%= if map_size(@state.players) >= 2 do %>
+              <button phx-click="bomberman_start" class="btn btn-primary btn-sm ml-3">💣 시작</button>
+            <% end %>
+          <% :playing -> %>
+            <span class="text-sm font-semibold">게임 중</span>
+          <% :over -> %>
+            <span class="text-sm">게임 종료</span>
+        <% end %>
+      </div>
+      <%= if Map.get(@me, :alive) do %>
+        <div class="text-xs space-x-3">
+          <span>💣 {Map.get(@me, :bomb_max, 1)}</span>
+          <span>🔥 {Map.get(@me, :bomb_range, 2)}</span>
+          {if Map.get(@me, :kick?), do: "🦵"}
+        </div>
+      <% else %>
+        <%= if @state.status == :playing do %>
+          <span class="badge badge-error">사망</span>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp bomberman_grid(assigns) do
+    rows = HappyTrizn.Games.Bomberman.rows()
+    cols = HappyTrizn.Games.Bomberman.cols()
+    grid = assigns.state.grid
+
+    explosion_set =
+      assigns.state.explosions
+      |> Enum.flat_map(fn e -> e.cells end)
+      |> MapSet.new()
+
+    assigns = assign(assigns, rows: rows, cols: cols, grid: grid, explosion_set: explosion_set)
+
+    ~H"""
+    <div class="inline-block bg-base-300 p-1 rounded">
+      <%= for r <- 0..(@rows - 1) do %>
+        <div class="flex">
+          <%= for c <- 0..(@cols - 1) do %>
+            <div class={[
+              "w-7 h-7 flex items-center justify-center text-xs",
+              bomberman_cell_class(@grid, r, c, @explosion_set)
+            ]}>
+              {bomberman_cell_content(@state, r, c)}
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp bomberman_cell_class(grid, r, c, explosion_set) do
+    base = bomberman_terrain_class(Enum.at(Enum.at(grid, r) || [], c))
+    if MapSet.member?(explosion_set, {r, c}), do: base <> " bg-error/70", else: base
+  end
+
+  defp bomberman_terrain_class(:wall), do: "bg-neutral-700 border border-neutral-900"
+  defp bomberman_terrain_class(:block), do: "bg-amber-700 border border-amber-900"
+  defp bomberman_terrain_class(:empty), do: "bg-base-100 border border-base-300"
+  defp bomberman_terrain_class(_), do: "bg-base-100"
+
+  defp bomberman_cell_content(state, r, c) do
+    cond do
+      bomb = Map.get(state.bombs, {r, c}) -> bomb_emoji(bomb)
+      item = Map.get(state.items, {r, c}) -> item_emoji(item)
+      player = bomberman_player_at(state, r, c) -> player_emoji(player)
+      true -> ""
+    end
+  end
+
+  defp bomberman_player_at(state, r, c) do
+    state.players
+    |> Enum.find(fn {_, p} -> p.alive and p.row == r and p.col == c end)
+    |> case do
+      {_, p} -> p
+      _ -> nil
+    end
+  end
+
+  defp bomb_emoji(_bomb), do: "💣"
+  defp item_emoji(:bomb_up), do: "💣"
+  defp item_emoji(:range_up), do: "🔥"
+  defp item_emoji(:speed_up), do: "👟"
+  defp item_emoji(:kick), do: "🦵"
+  defp item_emoji(_), do: "?"
+
+  defp player_emoji(_p), do: "🙂"
+
+  attr :players, :map, required: true
+
+  defp bomberman_scoreboard(assigns) do
+    sorted = assigns.players |> Enum.sort_by(fn {_, p} -> not p.alive end)
+    assigns = assign(assigns, sorted: sorted)
+
+    ~H"""
+    <div class="bg-base-200 rounded p-3">
+      <h3 class="font-semibold mb-2 text-sm">참가자</h3>
+      <ul class="space-y-1 text-sm">
+        <%= for {_, p} <- @sorted do %>
+          <li class="flex items-center justify-between">
+            <span class="font-mono">{p.nickname}</span>
+            <span>
+              <%= if p.alive do %>
+                <span class="badge badge-success badge-xs">생존</span>
+              <% else %>
+                <span class="badge badge-error badge-xs">탈락</span>
+              <% end %>
+            </span>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp bomberman_game_over_modal(assigns) do
+    winner_id = assigns.state.winner_id
+    winner = winner_id && Map.get(assigns.state.players, winner_id)
+    me_won? = winner_id == assigns.player_id
+    assigns = assign(assigns, winner: winner, me_won?: me_won?)
+
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class={[
+        "rounded-xl shadow-2xl max-w-md w-full p-6 border-4",
+        if(@me_won?, do: "bg-success/30 border-success", else: "bg-base-100 border-base-300")
+      ]}>
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2">{if @me_won?, do: "🏆", else: "💥"}</div>
+          <div class="text-2xl font-bold">
+            <%= cond do %>
+              <% @me_won? -> %>
+                승리!
+              <% @winner -> %>
+                {@winner.nickname} 우승
+              <% true -> %>
+                무승부
+            <% end %>
+          </div>
+        </div>
+
+        <button phx-click="bomberman_start" class="btn btn-primary w-full">
+          🔄 다시 하기
+        </button>
       </div>
     </div>
     """
