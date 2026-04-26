@@ -577,9 +577,8 @@ defmodule HappyTriznWeb.GameLive do
               <% v = Enum.at(Enum.at(@state.user, r), c) %>
               <% fixed? = Map.has_key?(@state.fixed, {r, c}) %>
               <% cursor? = r == @cur_r and c == @cur_c %>
-              <% same_n? = not is_nil(@cur_n) and v == @cur_n and not cursor? %>
               <% conflict? = sudoku_conflict?(@state.user, r, c, v) %>
-              <% bg = sudoku_cell_bg(cursor?, same_n?, fixed?) %>
+              <% bg = sudoku_cell_bg(cursor?, false, fixed?) %>
               <button
                 phx-click="input"
                 phx-value-action="set_cursor"
