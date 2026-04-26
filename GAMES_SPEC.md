@@ -9,7 +9,7 @@
 - [캐치마인드 ✅ (구 Skribbl)](#캐치마인드--구현-완료)
 - [Bomberman ✅](#bomberman--구현-완료)
 - [Snake.io ✅](#snakeio--구현-완료)
-- [Pac-Man ⏳](#pac-man--미구현)
+- [Pac-Man ✅](#pac-man--구현-완료)
 - [2048 + Minesweeper ✅ (싱글, 옵션 보강 완료)](#2048--minesweeper--옵션-로직-보강-완료-sprint-3h)
 - [DB 스키마](#db-스키마)
 - [구현 진행 상황](#구현-진행-상황)
@@ -245,20 +245,44 @@ user_game_settings
 
 ---
 
-## Pac-Man ⏳ 미구현
+## Pac-Man ✅ 구현 완료
 
-### 게임 로직 (계획)
+### 게임 로직 (구현)
 
-- 표준 maze 28×31
-- 4 ghost AI (Blinky/Pinky/Inky/Clyde)
-- 도트 / 파워 펠릿 / 과일
-- ghost frightened 모드
-- 점수 + 라이프 3 + 레벨
+- 표준 28×31 maze (벽 / dot / power pellet / ghost door / tunnel wrap row14) ✅
+- Pac-Man + 4 ghost — 100ms tick (10fps 클래식 느낌) ✅
+- ghost AI 4종 (Blinky/Pinky/Inky/Clyde) — chase target 차별화 ✅
+  - Blinky: Pac-Man 직진 추격.
+  - Pinky: Pac-Man 4칸 앞.
+  - Inky: Pac-Man 2칸 앞 + Blinky 거리.
+  - Clyde: 8칸 이상 → chase, 가까우면 scatter.
+- :scatter ↔ :chase 모드 자동 전환 (각 7s / 20s) ✅
+- power pellet → :frightened 8s — ghost 도망, 잡히면 +200/400/800/1600 ✅
+- :eaten ghost 자기 spawn 위치로 복귀 후 재진입 ✅
+- Pac-Man 잡힘 → :dying (애니메이션) → 라이프 -1 → respawn or :over ✅
+- 모든 dot/pellet 먹으면 :won → 다음 level (score/lives 누적) ✅
 
-### 옵션 (defaults 만 구현)
+### UI (구현)
 
-- 키 (방향키 + WASD)
-- 사운드 (먹기/death/intro)
+- HTML canvas 560×620 (셀 20px) ✅
+- 벽 진한 파랑 + inner stroke 라이트 파랑.
+- dot 작은 점, pellet 큰 점 + blink 애니.
+- Pac-Man 노란 원 + 입 열고닫음 (tick 패리티), dir 별 회전.
+- ghost 4 색 (red/pink/cyan/orange) + 톱니 아래쪽 + dir 별 눈동자.
+- frightened 시 짙은 파랑 + 끝나기 직전 흰색 깜빡 + 작은 입 무늬.
+- :eaten 시 본체 X, 눈만.
+- HUD: 점수 / 라이프 / 레벨 / GAME OVER 배지.
+
+### 인프라 (구현)
+
+- 싱글 게임용 GameLive — `connected?` + `:timer.send_interval` 으로 LiveView 안에서 직접 tick 발행 (멀티는 GameSession 이 처리).
+- key_to_action: 방향키 + WASD → `set_dir`.
+- GameKeyCapture hook 으로 page-scroll 회피.
+
+### JS hook
+
+- `pacman_canvas.js` — mounted/updated 마다 payload 재그림.
+- 새 hook 등록 (`assets/js/app.js`).
 
 ---
 
@@ -363,7 +387,8 @@ direct_messages (?) — DM
 | **3e** | Bomberman 풀 구현 + 셀/이모티콘 폴리시 + 게임방 채팅 | ✅ |
 | **3e+** | 게임 종료 후 1명 남으면 :waiting 자동 리셋 (Bomberman/Skribbl stuck modal 회피) | ✅ |
 | **3f** | Snake.io 풀 구현 (100×100 격자 + 캔버스 + 자동 부활) | ✅ |
-| **3g** | Pac-Man 풀 구현 (싱글) | ⏳ |
+| **3g** | Pac-Man 풀 구현 (28×31 maze + ghost AI 4종 + frightened) | ✅ |
+| **3l** | 마이페이지 (닉네임 수정 + 프로필 사진 + Bomberman 둥근 아바타) | ✅ |
 | **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ✅ |
 | **3h** | 2048 키보드 입력 (화살표 / WASD / HJKL) | ✅ |
 | **3h** | Settings slug ↔ game_type alias 정규화 (`2048` → `games_2048`) | ✅ |

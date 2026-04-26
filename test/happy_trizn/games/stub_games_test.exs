@@ -103,28 +103,36 @@ defmodule HappyTrizn.Games.StubGamesTest do
   end
 
   describe "PacMan" do
-    test "meta single" do
+    test "meta single + tick interval" do
       m = PacMan.meta()
       assert m.slug == "pacman"
       assert m.mode == :single
       assert m.max_players == 1
+      assert m.tick_interval_ms == 125
     end
 
-    test "init state" do
+    test "init state — :playing + 28×31 + walls/dots/pellets/ghost 4" do
       {:ok, state} = PacMan.init(%{})
+      assert state.status == :playing
       assert state.score == 0
       assert state.lives == 3
-      assert state.over == false
+      assert state.rows == 31
+      assert state.cols == 28
+      assert MapSet.size(state.walls) > 0
+      assert MapSet.size(state.dots) > 0
+      assert MapSet.size(state.pellets) == 4
+      assert map_size(state.ghosts) == 4
+      assert Map.has_key?(state.ghosts, :blinky)
     end
 
-    test "game_over? over=false → :no" do
+    test "game_over? :playing → :no" do
       {:ok, state} = PacMan.init(%{})
       assert :no = PacMan.game_over?(state)
     end
 
-    test "game_over? over=true → yes + score" do
-      assert {:yes, %{score: 100}} =
-               PacMan.game_over?(%{score: 100, level: 1, lives: 0, over: true})
+    test "game_over? :over → yes + score" do
+      state = %{status: :over, score: 100, level: 1, lives: 0}
+      assert {:yes, %{score: 100, level: 1, lives: 0}} = PacMan.game_over?(state)
     end
   end
 end

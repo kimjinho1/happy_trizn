@@ -125,10 +125,26 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, conn: log_in_user(conn, nil, "ppm_#{System.unique_integer([:positive])}")}
     end
 
-    test "mount stub 렌더", %{conn: conn} do
+    test "마운트 + 캔버스 hook + 점수/라이프/레벨 노출", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/pacman")
       assert html =~ "Pac-Man"
-      assert html =~ "Sprint 3g"
+      assert html =~ "phx-hook=\"PacmanCanvas\""
+      assert html =~ "점수"
+      assert html =~ "라이프"
+      assert html =~ "레벨"
+    end
+
+    test "GameKeyCapture data-keys 포함 (Pac-Man 입력 키)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/pacman")
+      assert html =~ "phx-hook=\"GameKeyCapture\""
+      assert html =~ "ArrowUp"
+    end
+
+    test "방향 키 → set_dir input forward (page 살아있음)", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/pacman")
+      html = render_keydown(view, "keydown", %{"key" => "ArrowUp"})
+      # 페이지 살아 있음.
+      assert html =~ "Pac-Man"
     end
   end
 end

@@ -36,6 +36,12 @@ defmodule HappyTriznWeb.GameLive do
           # 싱글 게임은 player_id = nickname.
           {:ok, game_state, _} = module.handle_player_join(nickname, %{}, game_state)
 
+          # tick_interval_ms 가 있는 게임 (Pac-Man 등) — LiveView 안에서 직접 timer.
+          # Multi 게임은 GameSession 이 처리. 싱글은 GameLive 가 tick 발행.
+          if connected?(socket) and Map.get(meta, :tick_interval_ms) do
+            :timer.send_interval(meta.tick_interval_ms, self(), :game_tick)
+          end
+
           {:ok,
            socket
            |> assign(:slug, slug)
@@ -48,6 +54,25 @@ defmodule HappyTriznWeb.GameLive do
         end
     end
   end
+
+  @impl true
+  def handle_info(:game_tick, socket) do
+    %{module: module, game_state: state} = socket.assigns
+
+    if function_exported?(module, :tick, 1) do
+      {:ok, new_state, _bc} = module.tick(state)
+      socket = assign(socket, game_state: new_state)
+
+      case module.game_over?(new_state) do
+        {:yes, results} -> {:noreply, assign(socket, result: results)}
+        :no -> {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("input", payload, socket) do
@@ -102,6 +127,19 @@ defmodule HappyTriznWeb.GameLive do
 
   defp key_to_action("2048", k) when k in ~w(ArrowRight d D l L),
     do: %{"action" => "move", "dir" => "right"}
+
+  # Pac-Man — 화살표 + WASD.
+  defp key_to_action("pacman", k) when k in ~w(ArrowUp w W),
+    do: %{"action" => "set_dir", "dir" => "up"}
+
+  defp key_to_action("pacman", k) when k in ~w(ArrowDown s S),
+    do: %{"action" => "set_dir", "dir" => "down"}
+
+  defp key_to_action("pacman", k) when k in ~w(ArrowLeft a A),
+    do: %{"action" => "set_dir", "dir" => "left"}
+
+  defp key_to_action("pacman", k) when k in ~w(ArrowRight d D),
+    do: %{"action" => "set_dir", "dir" => "right"}
 
   defp key_to_action(_, _), do: nil
 
@@ -231,9 +269,74 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   defp game_view(%{slug: "pacman"} = assigns) do
+    s = assigns.state
+    # 캔버스에 그릴 압축 payload — JSON 직렬화 위해 tuple → list.
+    walls = MapSet.to_list(s.walls) |> Enum.map(fn {r, c} -> [r, c] end)
+    dots = MapSet.to_list(s.dots) |> Enum.map(fn {r, c} -> [r, c] end)
+    pellets = MapSet.to_list(s.pellets) |> Enum.map(fn {r, c} -> [r, c] end)
+    door = if s.ghost_door, do: [elem(s.ghost_door, 0), elem(s.ghost_door, 1)], else: nil
+
+    ghosts =
+      Enum.map(s.ghosts, fn {id, g} ->
+        %{
+          id: id,
+          row: g.row,
+          col: g.col,
+          dir: g.dir,
+          mode: g.mode
+        }
+      end)
+
+    payload = %{
+      rows: s.rows,
+      cols: s.cols,
+      walls: walls,
+      dots: dots,
+      pellets: pellets,
+      door: door,
+      pacman: %{
+        row: s.pacman.row,
+        col: s.pacman.col,
+        dir: s.pacman.dir,
+        alive: s.status != :dying
+      },
+      ghosts: ghosts,
+      frightened: s.frightened_ticks > 0,
+      tick_no: s.tick_no
+    }
+
+    assigns =
+      assign(assigns,
+        score: s.score,
+        lives: s.lives,
+        level: s.level,
+        status: s.status,
+        payload: payload
+      )
+
     ~H"""
-    <div class="text-base-content/60">
-      Pac-Man stub. 풀 구현은 Sprint 3g. 점수: {@state.score}, 라이프: {@state.lives}.
+    <div class="space-y-3">
+      <div class="flex items-center gap-4 text-sm">
+        <span>점수 <strong class="text-lg">{@score}</strong></span>
+        <span>라이프 <strong>{@lives}</strong></span>
+        <span>레벨 <strong>{@level}</strong></span>
+        <%= if @status == :over do %>
+          <span class="badge badge-error">GAME OVER</span>
+        <% end %>
+      </div>
+
+      <div
+        id="pacman-canvas-host"
+        phx-hook="PacmanCanvas"
+        data-payload={Jason.encode!(@payload)}
+        class="bg-black rounded-lg p-1 inline-block ring-2 ring-blue-900"
+      >
+        <canvas id="pacman-canvas" width="560" height="620" class="block"></canvas>
+      </div>
+
+      <p class="text-xs text-base-content/50">
+        화살표 / WASD — 이동. 점수: dot 10, pellet 50, frightened ghost 200/400/800/1600.
+      </p>
     </div>
     """
   end

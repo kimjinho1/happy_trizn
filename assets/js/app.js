@@ -31,6 +31,7 @@ import {BombermanInput} from "./hooks/bomberman_input"
 import {SnakeInput} from "./hooks/snake_input"
 import {SnakeCanvas} from "./hooks/snake_canvas"
 import {GameKeyCapture} from "./hooks/game_key_capture"
+import {PacmanCanvas} from "./hooks/pacman_canvas"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -87,6 +88,8 @@ const Hooks = {
   SnakeCanvas,
   // 게임 키 capture — 화살표 등 page scroll 막고 server 로 forward.
   GameKeyCapture,
+  // Pac-Man 캔버스 렌더 — 28×31 maze + ghost AI + dot/pellet.
+  PacmanCanvas,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
