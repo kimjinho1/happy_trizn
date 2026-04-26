@@ -343,7 +343,9 @@ defmodule HappyTrizn.Games.Tetris do
           |> post_action_lock_check()
 
         new_state = put_in(state.players[player_id], new_player)
-        {:ok, new_state, [{:player_state, player_id, public_player(new_player)}]}
+
+        {:ok, new_state,
+         [{:rotated, player_id}, {:player_state, player_id, public_player(new_player)}]}
     end
   end
 
@@ -508,11 +510,12 @@ defmodule HappyTrizn.Games.Tetris do
     new_level = div(new_lines, @lines_per_level) + 1
 
     # 라인 안 지운 lock 일 때만 board 에 pending 적용 — jstris 표준.
+    # top_out 시에도 가비지 적용된 board 사용 — UI 에 "가비지로 졌다" 명확히 보임.
     {board_with_garbage, top_out_garbage, garbage_applied} =
       if cleared == 0 and pending_after_cancel > 0 do
         case Board.add_garbage(cleared_board, pending_after_cancel) do
           {:ok, b} -> {b, false, pending_after_cancel}
-          {:error, :top_out} -> {cleared_board, true, 0}
+          {:top_out, b} -> {b, true, pending_after_cancel}
         end
       else
         {cleared_board, false, 0}
@@ -573,7 +576,11 @@ defmodule HappyTrizn.Games.Tetris do
       }
 
       new_players = Map.put(state.players, player_id, new_player)
-      base_broadcasts = [{:player_state, player_id, public_player(new_player)}]
+
+      base_broadcasts = [
+        {:locked, player_id},
+        {:player_state, player_id, public_player(new_player)}
+      ]
 
       base_broadcasts =
         if cleared > 0 do
@@ -755,20 +762,28 @@ defmodule HappyTrizn.Games.Tetris do
   # ============================================================================
 
   @impl true
-  def tick(%{status: :countdown, countdown_ms: ms} = state) when is_integer(ms) do
+  def tick(%{status: :countdown} = state) do
+    # countdown_ms 가 비정상 (nil 등) 이면 0 으로 fallback — 즉시 :playing 진입.
+    ms = if is_integer(state.countdown_ms), do: state.countdown_ms, else: 0
     new_ms = ms - @tick_ms
 
-    if new_ms <= 0 do
-      # countdown 끝 → :playing 진입. started_at 리셋 (통계 정확히).
-      now = System.monotonic_time(:millisecond)
+    cond do
+      new_ms <= 0 ->
+        now = System.monotonic_time(:millisecond)
 
-      reset_players =
-        Map.new(state.players, fn {pid, p} -> {pid, %{p | started_at: now}} end)
+        reset_players =
+          Map.new(state.players, fn {pid, p} -> {pid, %{p | started_at: now}} end)
 
-      new_state = %{state | status: :playing, countdown_ms: 0, players: reset_players}
-      {:ok, new_state, [{:game_start, %{}}]}
-    else
-      {:ok, %{state | countdown_ms: new_ms}, [{:countdown_tick, new_ms}]}
+        new_state = %{state | status: :playing, countdown_ms: 0, players: reset_players}
+        {:ok, new_state, [{:game_start, %{}}]}
+
+      true ->
+        # 매 50ms 마다 broadcast 하면 PubSub 폭주 (LiveView refresh_state 가 GenServer
+        # call 매번 호출). 1초 boundary 마다만 broadcast → 사운드 / UI 충분.
+        old_sec = div(ms, 1000)
+        new_sec = div(new_ms, 1000)
+        broadcasts = if old_sec != new_sec, do: [{:countdown_tick, new_ms}], else: []
+        {:ok, %{state | countdown_ms: new_ms}, broadcasts}
     end
   end
 

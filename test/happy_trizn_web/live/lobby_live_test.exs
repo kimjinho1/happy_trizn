@@ -30,6 +30,12 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       assert html =~ "로비"
     end
 
+    test "🏆 기록 링크 lobby 헤더 노출", %{conn: conn} do
+      {:ok, _, html} = live(conn, ~p"/lobby")
+      assert html =~ "🏆"
+      assert html =~ "/history"
+    end
+
     test "메시지 보내기 → 화면에 표시", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/lobby")
 

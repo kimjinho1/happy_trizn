@@ -284,6 +284,9 @@ defmodule HappyTriznWeb.LobbyLive do
               (게스트) <strong>{@nickname}</strong>
             <% end %>
           </span>
+          <.link navigate={~p"/history"} class="btn btn-ghost btn-sm" title="내 기록">
+            🏆 기록
+          </.link>
           <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm" title="게임 옵션">
             ⚙️ 옵션
           </.link>

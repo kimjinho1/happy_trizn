@@ -35,6 +35,37 @@ defmodule HappyTrizn.Games.TetrisTest do
     put_in(state.players[player_id].board, board)
   end
 
+  # countdown 이 :playing 으로 진입할 때 player.started_at 갱신 시도 — fresh player state 필요.
+  defp new_player_for_test do
+    %{
+      board: Board.new(),
+      current: %{type: :i, rotation: 0, origin: {0, 3}},
+      next: :o,
+      bag: [:t, :s, :z, :l, :j],
+      hold: nil,
+      hold_used: false,
+      score: 0,
+      lines: 0,
+      level: 1,
+      gravity_counter: 0,
+      pending_garbage: 0,
+      combo: -1,
+      b2b: false,
+      last_was_rotate: false,
+      top_out: false,
+      lock_delay_ms: nil,
+      lock_resets: 0,
+      pieces_placed: 0,
+      keys_pressed: 0,
+      garbage_sent: 0,
+      garbage_received: 0,
+      garbage_wasted: 0,
+      hold_count: 0,
+      finesse_violations: 0,
+      started_at: System.monotonic_time(:millisecond)
+    }
+  end
+
   describe "meta/0" do
     test "multi 1v1 + tick_interval_ms 50" do
       m = Tetris.meta()
@@ -304,6 +335,71 @@ defmodule HappyTrizn.Games.TetrisTest do
 
       {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
       assert ns.players["p1"].combo == -1
+    end
+  end
+
+  describe "countdown tick throttle (broadcast 빈도)" do
+    test "1초 boundary 마다만 broadcast (50ms 마다 안 함)" do
+      state = %{
+        status: :countdown,
+        countdown_ms: 2999,
+        players: %{},
+        winner: nil,
+        winners_history: []
+      }
+
+      # 2999 - 50 = 2949 — div 2 → 2 (같음) → broadcast 없음.
+      {:ok, ns1, broadcasts1} = Tetris.tick(state)
+      assert ns1.countdown_ms == 2949
+      assert broadcasts1 == []
+
+      # 2050 - 50 = 2000 — div 2 → 2 (같음) → broadcast 없음.
+      s = %{state | countdown_ms: 2050}
+      {:ok, _, b} = Tetris.tick(s)
+      assert b == []
+
+      # 2000 - 50 = 1950 — div 2 → 1 (다름) → boundary 통과, broadcast.
+      s = %{state | countdown_ms: 2000}
+      {:ok, _, b2} = Tetris.tick(s)
+      assert b2 == [{:countdown_tick, 1950}]
+    end
+
+    test "countdown_ms nil 이어도 안 멈춤 — :playing 즉시 진입" do
+      state = %{
+        status: :countdown,
+        countdown_ms: nil,
+        players: %{"p1" => new_player_for_test()},
+        winner: nil,
+        winners_history: []
+      }
+
+      {:ok, ns, broadcasts} = Tetris.tick(state)
+      assert ns.status == :playing
+      assert {:game_start, %{}} in broadcasts
+    end
+  end
+
+  describe "top_out via garbage — board 에 가비지 적용된 상태" do
+    test "many pending → hard_drop → top_out_garbage + board 에 가비지" do
+      state = join2()
+      # p1 에게 25 lines pending 강제 — 적용 시 top_out.
+      state = put_in(state.players["p1"].pending_garbage, 25)
+
+      # no clear lock → garbage 적용 시도 → top_out (visible 다 garbage).
+      # 빈 board 위에 hard_drop → 0 line clear → garbage 25 적용 → top_out.
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+
+      assert p.top_out
+
+      # board 에 가비지 셀이 가득 — visible 행에 garbage atom 다수.
+      garbage_cells =
+        p.board
+        |> Enum.drop(2)
+        |> Enum.flat_map(& &1)
+        |> Enum.count(&(&1 == :garbage))
+
+      assert garbage_cells > 100
     end
   end
 
@@ -794,16 +890,30 @@ defmodule HappyTrizn.Games.TetrisTest do
 
     test "garbage 가 board height 초과해도 board 길이 22 유지 (overflow 방지)" do
       # 빈 board 에 25 lines garbage — visible 모두 채움 = top_out.
-      assert {:error, :top_out} = Board.add_garbage(Board.new(), 25)
+      assert {:top_out, b} = Board.add_garbage(Board.new(), 25)
+      assert length(b) == 22
 
-      # 보드 일부만 채워서 add → 길이 22 보장 (over_top? false 시 :ok 가능).
-      # visible_height (20) 는 무조건 top_out 트리거.
-      assert {:error, :top_out} = Board.add_garbage(Board.new(), 20)
+      # visible_height (20) 도 top_out 트리거.
+      assert {:top_out, b2} = Board.add_garbage(Board.new(), 20)
+      assert length(b2) == 22
     end
 
     test "garbage <= visible_height-1 이면 정상 적용, 길이 22 유지" do
       assert {:ok, b} = Board.add_garbage(Board.new(), 19)
       assert length(b) == 22
+    end
+
+    test "top_out 시 board 에 가비지 적용된 상태로 반환 (UI 시각적 피드백)" do
+      assert {:top_out, b} = Board.add_garbage(Board.new(), 21)
+      # 하단부 가비지 다수 적용
+      visible_garbage =
+        b
+        |> Enum.drop(2)
+        |> Enum.flat_map(& &1)
+        |> Enum.count(&(&1 == :garbage))
+
+      # 21 lines × 9 garbage cells (1 hole each) = 최소 180+ 가비지 셀
+      assert visible_garbage > 100
     end
 
     test "hard_drop_position — 빈 board 에서 가장 아래까지" do
