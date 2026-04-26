@@ -44,6 +44,29 @@
         <span class="text-base-content/30">/</span>
         <span class="text-base-content/80 font-medium">{assigns[:page_title]}</span>
       <% end %>
+
+      <div class="ml-auto flex items-center gap-2">
+        <%= if user = assigns[:current_user] do %>
+          <a
+            href="/me"
+            class="flex items-center gap-2 hover:opacity-80 transition"
+            title="마이페이지"
+          >
+            <%= if user.avatar_url do %>
+              <img
+                src={user.avatar_url}
+                alt={user.nickname}
+                class="w-8 h-8 rounded-full object-cover ring-2 ring-base-300"
+              />
+            <% else %>
+              <div class="w-8 h-8 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center ring-2 ring-base-300 text-sm">
+                {String.first(user.nickname) |> String.upcase()}
+              </div>
+            <% end %>
+            <span class="text-sm hidden sm:inline">{user.nickname}</span>
+          </a>
+        <% end %>
+      </div>
     </header>
     {@inner_content}
   </body>

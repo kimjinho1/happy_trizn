@@ -19,6 +19,9 @@ services:
       # DATABASE_URL 미사용 — 비번에 URL reserved char(&, %, ^ 등) 있어도
       # 안전하게 .env 의 MYSQL_HOST/PORT/USER/PASSWORD 환경변수로 직접 전달
       # (runtime.exs 가 처리).
+    volumes:
+      # 마이페이지 프로필 사진 — 컨테이너 재배포 후에도 유지.
+      - app_uploads:/app/lib/happy_trizn-0.1.0/priv/static/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -94,3 +97,5 @@ volumes:
     name: happy_trizn_mysql_data
   mongo_data:
     name: happy_trizn_mongo_data
+  app_uploads:
+    name: happy_trizn_uploads

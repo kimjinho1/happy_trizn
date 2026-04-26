@@ -97,10 +97,12 @@ defmodule HappyTrizn.Games.Bomberman do
 
       true ->
         nickname = Map.get(meta, :nickname, "anon")
+        avatar_url = Map.get(meta, :avatar_url)
         {row, col} = Enum.at(@spawn_corners, map_size(state.players))
 
         player = %{
           nickname: nickname,
+          avatar_url: avatar_url,
           row: row,
           col: col,
           alive: true,
@@ -156,6 +158,7 @@ defmodule HappyTrizn.Games.Bomberman do
         {pid,
          %{
            nickname: prev.nickname,
+           avatar_url: Map.get(prev, :avatar_url),
            row: row,
            col: col,
            alive: true,
