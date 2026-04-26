@@ -21,8 +21,40 @@ defmodule HappyTrizn.Games.Games2048Test do
       assert length(tiles) == 2
       assert Enum.all?(tiles, &(&1 in [2, 4]))
       assert state.score == 0
+      assert state.size == 4
       refute state.won
       refute state.over
+    end
+
+    test "board_size 5 → 5×5 grid" do
+      {:ok, state} = Games2048.init(%{"board_size" => 5})
+      assert state.size == 5
+      assert length(state.board) == 5
+      assert Enum.all?(state.board, &(length(&1) == 5))
+      tiles = state.board |> List.flatten() |> Enum.reject(&is_nil/1)
+      assert length(tiles) == 2
+    end
+
+    test "board_size 6 → 6×6 grid" do
+      {:ok, state} = Games2048.init(%{"board_size" => 6})
+      assert state.size == 6
+      assert length(state.board) == 6
+      assert Enum.all?(state.board, &(length(&1) == 6))
+    end
+
+    test "board_size 문자열 \"5\" 파싱 → 5×5" do
+      {:ok, state} = Games2048.init(%{"board_size" => "5"})
+      assert state.size == 5
+    end
+
+    test "board_size 7 (지원 안 함) → 기본 4" do
+      {:ok, state} = Games2048.init(%{"board_size" => 7})
+      assert state.size == 4
+    end
+
+    test "board_size 잡스러운 값 → 기본 4" do
+      {:ok, state} = Games2048.init(%{"board_size" => "wat"})
+      assert state.size == 4
     end
   end
 
@@ -87,6 +119,37 @@ defmodule HappyTrizn.Games.Games2048Test do
       assert first == [4, 4, nil, nil]
       assert gained == 8
     end
+
+    test "5×5 board left merge — pad nil 5개" do
+      board =
+        [[2, 2, nil, nil, nil] | List.duplicate(List.duplicate(nil, 5), 4)]
+
+      {result, gained} = Games2048.move(board, :left)
+      [first | _] = result
+      assert first == [4, nil, nil, nil, nil]
+      assert length(first) == 5
+      assert gained == 4
+    end
+
+    test "6×6 up merge — column 길이 유지" do
+      empty_row = List.duplicate(nil, 6)
+
+      board = [
+        [2 | List.duplicate(nil, 5)],
+        [2 | List.duplicate(nil, 5)],
+        empty_row,
+        empty_row,
+        empty_row,
+        empty_row
+      ]
+
+      {result, gained} = Games2048.move(board, :up)
+      assert length(result) == 6
+      assert Enum.all?(result, &(length(&1) == 6))
+      [r0 | _] = result
+      assert hd(r0) == 4
+      assert gained == 4
+    end
   end
 
   describe "handle_input move" do
@@ -135,6 +198,16 @@ defmodule HappyTrizn.Games.Games2048Test do
 
       assert fresh.score == 0
       refute fresh.won
+    end
+
+    test "restart 시 board_size 유지" do
+      {:ok, state} = Games2048.init(%{"board_size" => 6})
+      state = %{state | score: 999, won: true}
+
+      {:ok, fresh, _} = Games2048.handle_input("p1", %{"action" => "restart"}, state)
+      assert fresh.size == 6
+      assert length(fresh.board) == 6
+      assert fresh.score == 0
     end
 
     test "alien action 무시", %{state: state} do

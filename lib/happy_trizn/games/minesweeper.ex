@@ -1,13 +1,21 @@
 defmodule HappyTrizn.Games.Minesweeper do
   @moduledoc """
-  Minesweeper — 10x10 grid 싱글. 지뢰 찾고 모든 안전 셀 reveal 하면 승.
+  Minesweeper — N×M grid 싱글. 지뢰 찾고 모든 안전 셀 reveal 하면 승.
 
   state:
-    - rows / cols / mine_count
+    - rows / cols / mine_count (init 시 결정)
+    - difficulty: "easy" | "medium" | "hard" | "custom" | nil
     - cells: %{{r, c} => %{mine: bool, revealed: bool, flagged: bool, neighbors: int}}
     - mines_placed: bool (첫 클릭 후 placement)
     - over: :win | :lose | nil
     - started_at: DateTime (시간 기록)
+
+  init/1 config — 사용자 옵션 그대로 받음:
+    - %{"difficulty" => "easy"} → 9x9 / 10 mines
+    - %{"difficulty" => "medium"} → 16x16 / 40 mines
+    - %{"difficulty" => "hard"} → 16x30 / 99 mines
+    - %{"difficulty" => "custom", "custom_rows" => r, "custom_cols" => c, "custom_mines" => m}
+    - %{} → 기본 (10x10/12) — 테스트/구버전 호환
 
   input:
     - %{"action" => "reveal", "r" => r, "c" => c}
@@ -17,9 +25,19 @@ defmodule HappyTrizn.Games.Minesweeper do
 
   @behaviour HappyTrizn.Games.GameBehaviour
 
-  @rows 10
-  @cols 10
-  @mine_count 12
+  @default_rows 10
+  @default_cols 10
+  @default_mines 12
+
+  # Windows 표준 프리셋.
+  @presets %{
+    "easy" => {9, 9, 10},
+    "medium" => {16, 16, 40},
+    "hard" => {16, 30, 99}
+  }
+
+  @row_range 5..30
+  @col_range 5..40
 
   @impl true
   def meta do
@@ -34,7 +52,10 @@ defmodule HappyTrizn.Games.Minesweeper do
   end
 
   @impl true
-  def init(_config), do: {:ok, new_game()}
+  def init(config) do
+    {rows, cols, mines, difficulty} = preset_dims(config)
+    {:ok, new_game(rows, cols, mines, difficulty)}
+  end
 
   @impl true
   def handle_player_join(_player_id, _meta, state), do: {:ok, state, []}
@@ -46,7 +67,7 @@ defmodule HappyTrizn.Games.Minesweeper do
   def handle_input(_player_id, %{"action" => "reveal", "r" => r, "c" => c}, state) do
     cond do
       state.over -> {:ok, state, []}
-      not in_bounds?(r, c) -> {:ok, state, []}
+      not in_bounds?(state, r, c) -> {:ok, state, []}
       true -> reveal_cell(state, r, c)
     end
   end
@@ -56,7 +77,7 @@ defmodule HappyTrizn.Games.Minesweeper do
       state.over ->
         {:ok, state, []}
 
-      not in_bounds?(r, c) ->
+      not in_bounds?(state, r, c) ->
         {:ok, state, []}
 
       true ->
@@ -73,8 +94,12 @@ defmodule HappyTrizn.Games.Minesweeper do
     end
   end
 
-  def handle_input(_player_id, %{"action" => "restart"}, _state) do
-    new = new_game()
+  def handle_input(_player_id, %{"action" => "restart"}, state) do
+    diff = Map.get(state, :difficulty)
+    rows = Map.get(state, :rows, @default_rows)
+    cols = Map.get(state, :cols, @default_cols)
+    mines = Map.get(state, :mine_count, @default_mines)
+    new = new_game(rows, cols, mines, diff)
     {:ok, new, [{:state_changed, new}]}
   end
 
@@ -102,16 +127,19 @@ defmodule HappyTrizn.Games.Minesweeper do
   # ============================================================================
 
   @doc false
-  def new_game do
+  def new_game, do: new_game(@default_rows, @default_cols, @default_mines, nil)
+
+  def new_game(rows, cols, mine_count, difficulty \\ nil) do
     cells =
-      for r <- 0..(@rows - 1), c <- 0..(@cols - 1), into: %{} do
+      for r <- 0..(rows - 1), c <- 0..(cols - 1), into: %{} do
         {{r, c}, %{mine: false, revealed: false, flagged: false, neighbors: 0}}
       end
 
     %{
-      rows: @rows,
-      cols: @cols,
-      mine_count: @mine_count,
+      rows: rows,
+      cols: cols,
+      mine_count: mine_count,
+      difficulty: difficulty,
       cells: cells,
       mines_placed: false,
       over: nil,
@@ -119,7 +147,56 @@ defmodule HappyTrizn.Games.Minesweeper do
     }
   end
 
-  defp in_bounds?(r, c), do: r >= 0 and r < @rows and c >= 0 and c < @cols
+  defp preset_dims(%{"difficulty" => "custom"} = c) do
+    rows = c |> Map.get("custom_rows") |> clamp(@row_range, @default_rows)
+    cols = c |> Map.get("custom_cols") |> clamp(@col_range, @default_cols)
+    raw_mines = Map.get(c, "custom_mines", @default_mines)
+    mines = clamp_mines(raw_mines, rows, cols)
+    {rows, cols, mines, "custom"}
+  end
+
+  defp preset_dims(%{"difficulty" => d}) when is_map_key(@presets, d) do
+    {r, c, m} = Map.fetch!(@presets, d)
+    {r, c, m, d}
+  end
+
+  defp preset_dims(_), do: {@default_rows, @default_cols, @default_mines, nil}
+
+  defp clamp(v, range, default) when is_integer(v) do
+    if v in range, do: v, else: default
+  end
+
+  defp clamp(v, range, default) when is_binary(v) do
+    case Integer.parse(v) do
+      {n, _} -> clamp(n, range, default)
+      :error -> default
+    end
+  end
+
+  defp clamp(_, _, default), do: default
+
+  defp clamp_mines(v, rows, cols) when is_integer(v) do
+    # 첫 클릭 safe zone (3x3) 만큼은 비워둠 + 최소 1.
+    max_mines = max(1, rows * cols - 9)
+
+    cond do
+      v < 1 -> 1
+      v > max_mines -> max_mines
+      true -> v
+    end
+  end
+
+  defp clamp_mines(v, rows, cols) when is_binary(v) do
+    case Integer.parse(v) do
+      {n, _} -> clamp_mines(n, rows, cols)
+      :error -> @default_mines
+    end
+  end
+
+  defp clamp_mines(_, _, _), do: @default_mines
+
+  defp in_bounds?(state, r, c),
+    do: r >= 0 and r < state.rows and c >= 0 and c < state.cols
 
   defp reveal_cell(state, r, c) do
     state =
@@ -166,9 +243,12 @@ defmodule HappyTrizn.Games.Minesweeper do
       for dr <- -1..1, dc <- -1..1, into: MapSet.new(), do: {fr + dr, fc + dc}
 
     candidates =
-      for r <- 0..(@rows - 1), c <- 0..(@cols - 1), {r, c} not in safe_zone, do: {r, c}
+      for r <- 0..(state.rows - 1),
+          c <- 0..(state.cols - 1),
+          {r, c} not in safe_zone,
+          do: {r, c}
 
-    mine_positions = Enum.take_random(candidates, @mine_count)
+    mine_positions = Enum.take_random(candidates, state.mine_count)
 
     cells_with_mines =
       Enum.reduce(mine_positions, state.cells, fn pos, acc ->
@@ -212,7 +292,7 @@ defmodule HappyTrizn.Games.Minesweeper do
               for dr <- -1..1,
                   dc <- -1..1,
                   not (dr == 0 and dc == 0),
-                  in_bounds?(r + dr, c + dc),
+                  in_bounds?(new_state, r + dr, c + dc),
                   do: {r + dr, c + dc}
 
             flood_reveal(new_state, neighbors)

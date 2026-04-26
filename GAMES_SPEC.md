@@ -10,7 +10,7 @@
 - [Bomberman ⏳](#bomberman--미구현)
 - [Snake.io ⏳](#snakeio--미구현)
 - [Pac-Man ⏳](#pac-man--미구현)
-- [2048 + Minesweeper ⏳ (싱글, 옵션 보강 대기)](#2048--minesweeper--싱글-옵션-보강)
+- [2048 + Minesweeper ✅ (싱글, 옵션 보강 완료)](#2048--minesweeper--옵션-로직-보강-완료-sprint-3h)
 - [DB 스키마](#db-스키마)
 - [구현 진행 상황](#구현-진행-상황)
 
@@ -221,27 +221,50 @@ user_game_settings
 
 ---
 
-## 2048 + Minesweeper ⏳ 싱글, 옵션 보강
+## 2048 + Minesweeper ✅ 옵션 로직 보강 완료 (Sprint 3h)
 
-### 2048 (게임 동작 구현됨, 옵션 미보강)
+> Slug ↔ settings_key 정규화: `UserGameSettings.normalize_game_type/1` 가
+> slug `"2048"` → DB game_type `"games_2048"` 자동 변환. `defaults/get_for/upsert/reset`
+> 모두 alias 따라가서 `/settings/games/2048` 폼 + 저장이 정상 동작.
 
-- 4×4 grid + swipe + 합치기 + win 2048
 
-#### 옵션 (defaults 있음)
+
+### 2048 ✅
+
+- N×N grid (4 / 5 / 6) + swipe + 합치기 + win 2048
+- `init/1` 가 `%{"board_size" => N}` 받아 동적 grid 생성. `state.size` 보유.
+- restart 시 size 유지.
+
+#### 옵션
 
 - 키 (방향키 + WASD + HJKL)
-- board 사이즈 (4/5/6) — **로직 보강 필요**
+- **board 사이즈 (4 / 5 / 6)** ✅ — 그리드 inline `grid-template-columns: repeat(N, ...)` 렌더
 - 다크/라이트 테마
 
-### Minesweeper (게임 동작 구현됨, 옵션 미보강)
+### Minesweeper ✅
 
-- 10×10 / 12 mines / first-click safe / BFS reveal / flag
+- N×M grid + first-click safe + BFS reveal + flag
+- `init/1` 이 `%{"difficulty" => preset}` 받아 dims 결정
+- restart 시 dims/difficulty 유지
 
-#### 옵션 (defaults 있음)
+#### 난이도 프리셋 ✅
 
-- 난이도 (easy/medium/hard/custom) — **로직 보강 필요**
+| 프리셋 | rows × cols | mines |
+|---|---|---|
+| `easy` | 9×9 | 10 |
+| `medium` | 16×16 | 40 |
+| `hard` | 16×30 | 99 |
+| `custom` | rows ∈ [5..30], cols ∈ [5..40] | 1 ~ rows×cols-9 자동 캡 |
+
+- `init(%{})` (테스트/구버전) → 10×10/12 fallback
+- 알 수 없는 difficulty → 같은 fallback
+
+#### 옵션
+
+- 키 (좌클 reveal · 우클 / 'F' flag)
+- **난이도 (easy/medium/hard/custom)** ✅
+- custom 시 `custom_rows` / `custom_cols` / `custom_mines` 필드
 - 시간 표시
-- 좌클 reveal vs 우클 flag
 
 ---
 
@@ -299,7 +322,7 @@ direct_messages (?) — DM
 | **3e** | Bomberman 풀 구현 | ⏳ |
 | **3f** | Snake.io 풀 구현 | ⏳ |
 | **3g** | Pac-Man 풀 구현 (싱글) | ⏳ |
-| **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ⏳ |
+| **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ✅ |
 | **3i** | Finesse 분석 (현재 stub 0) | ⏳ |
 | **3j** | JS Tetris canvas (블록 스킨 / DAS-ARR client-side timing — 현재 server timing) | ⏳ |
 | **3k** | 모바일 반응형 (canvas / 옵션 모달 / 채팅) | ⏳ |
@@ -312,11 +335,10 @@ direct_messages (?) — DM
 1. **Bomberman 풀 구현** (3e) — 4인 동시, 60fps tick, 폭탄 chain reaction. 회식 분위기 좋음.
 2. **Snake.io 풀 구현** (3f) — 자유 입퇴장 + 큰 격자.
 3. **Pac-Man 풀 구현** (3g) — 싱글 + ghost AI.
-4. **2048 / Minesweeper 옵션 로직 보강** (3h) — 보드 사이즈 / 난이도 적용.
-5. **모바일 반응형** (3k) — 캔버스 / 모달 / 채팅 layout.
-6. **JS Tetris canvas + skin** (3j) — 더 화려한 렌더 (현재 LiveView grid).
-7. **Finesse 분석** (3i) — Tetris finesse_violations 카운트.
-8. **DM + 알림** (4) — 친구 1:1 채팅, 게임 초대.
+4. **모바일 반응형** (3k) — 캔버스 / 모달 / 채팅 layout.
+5. **JS Tetris canvas + skin** (3j) — 더 화려한 렌더 (현재 LiveView grid).
+6. **Finesse 분석** (3i) — Tetris finesse_violations 카운트.
+7. **DM + 알림** (4) — 친구 1:1 채팅, 게임 초대.
 
 ## 테스트 현황
 

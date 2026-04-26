@@ -3,14 +3,15 @@ defmodule HappyTriznWeb.GameLive do
   싱글 게임 진입점 (`/play/:game_type`).
 
   GameRegistry 에서 모듈 dispatch + GameBehaviour state 를 LiveView assign 으로 보유.
-  클라이언트는 phx-hook 으로 board 업데이트 받음 (game_state push_event).
+  사용자 옵션 (UserGameSettings) → init/1 config 로 주입 (board_size / difficulty).
 
-  멀티 게임은 GamePlaceholderLive (Sprint 3b 에서 GameSession + Channel 로 전환).
+  멀티 게임은 GameMultiLive (Sprint 3b 부터).
   """
 
   use HappyTriznWeb, :live_view
 
   alias HappyTrizn.Games.Registry, as: GameRegistry
+  alias HappyTrizn.UserGameSettings
 
   @impl true
   def mount(%{"game_type" => slug}, _session, socket) do
@@ -30,7 +31,8 @@ defmodule HappyTriznWeb.GameLive do
           {:ok, socket |> put_flash(:error, "이 게임은 멀티 — 방을 만들어 주세요") |> redirect(to: ~p"/lobby")}
         else
           module = GameRegistry.get_module(slug)
-          {:ok, game_state} = module.init(%{})
+          options = UserGameSettings.get_for(socket.assigns[:current_user], slug).options
+          {:ok, game_state} = module.init(options)
           # 싱글 게임은 player_id = nickname.
           {:ok, game_state, _} = module.handle_player_join(nickname, %{}, game_state)
 
@@ -41,6 +43,7 @@ defmodule HappyTriznWeb.GameLive do
            |> assign(:module, module)
            |> assign(:game_state, game_state)
            |> assign(:nickname, nickname)
+           |> assign(:options, options)
            |> assign(:result, nil)}
         end
     end
@@ -60,20 +63,57 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   def handle_event("restart", _, socket) do
-    %{module: module, nickname: nickname} = socket.assigns
-    {:ok, fresh} = module.init(%{})
+    %{module: module, nickname: nickname, options: options} = socket.assigns
+    {:ok, fresh} = module.init(options)
     {:ok, fresh, _} = module.handle_player_join(nickname, %{}, fresh)
     {:noreply, assign(socket, game_state: fresh, result: nil)}
   end
 
+  def handle_event("keydown", %{"key" => key}, socket) do
+    case key_to_action(socket.assigns.slug, key) do
+      nil ->
+        {:noreply, socket}
+
+      payload ->
+        %{module: module, game_state: state, nickname: nickname} = socket.assigns
+        {:ok, new_state, _} = module.handle_input(nickname, payload, state)
+        socket = assign(socket, game_state: new_state)
+
+        case module.game_over?(new_state) do
+          {:yes, results} -> {:noreply, assign(socket, result: results)}
+          :no -> {:noreply, socket}
+        end
+    end
+  end
+
+  # ============================================================================
+  # 키보드 → input action map (싱글 게임)
+  # ============================================================================
+
+  # 2048 — 화살표 + WASD + HJKL.
+  defp key_to_action("2048", k) when k in ~w(ArrowUp w W k K),
+    do: %{"action" => "move", "dir" => "up"}
+
+  defp key_to_action("2048", k) when k in ~w(ArrowDown s S j J),
+    do: %{"action" => "move", "dir" => "down"}
+
+  defp key_to_action("2048", k) when k in ~w(ArrowLeft a A h H),
+    do: %{"action" => "move", "dir" => "left"}
+
+  defp key_to_action("2048", k) when k in ~w(ArrowRight d D l L),
+    do: %{"action" => "move", "dir" => "right"}
+
+  defp key_to_action(_, _), do: nil
+
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen p-6 max-w-3xl mx-auto">
+    <div class="min-h-screen p-6 max-w-3xl mx-auto" phx-window-keydown="keydown" phx-throttle="80">
       <header class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
         <div class="flex items-center gap-2">
           <span class="text-sm text-base-content/70">{@nickname}</span>
+          <.link navigate={~p"/settings/games/#{@slug}"} class="btn btn-ghost btn-sm">⚙️ 옵션</.link>
           <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
         </div>
       </header>
@@ -90,7 +130,7 @@ defmodule HappyTriznWeb.GameLive do
       </div>
 
       <p class="text-xs text-base-content/40 mt-4">
-        Sprint 3a placeholder. 풀 클라이언트 canvas 는 Sprint 3b. 키보드 입력은 console 또는 단순 button 으로 dispatch.
+        ⚙️ 옵션 에서 변경 (board 크기 / 난이도). 저장 후 다시 시작 시 적용.
       </p>
     </div>
     """
@@ -103,8 +143,11 @@ defmodule HappyTriznWeb.GameLive do
   defp game_view(%{slug: "2048"} = assigns) do
     ~H"""
     <div class="space-y-2">
-      <div class="text-lg">점수: <strong>{@state.score}</strong></div>
-      <div class="grid grid-cols-4 gap-1 bg-base-300 p-1 w-fit">
+      <div class="text-lg">점수: <strong>{@state.score}</strong> · 보드: {@state.size}×{@state.size}</div>
+      <div
+        class="grid gap-1 bg-base-300 p-1 w-fit"
+        style={"grid-template-columns: repeat(#{@state.size}, minmax(0, 1fr))"}
+      >
         <%= for row <- @state.board, cell <- row do %>
           <div class={[
             "w-16 h-16 flex items-center justify-center text-xl font-bold rounded",
@@ -131,7 +174,7 @@ defmodule HappyTriznWeb.GameLive do
         </button>
       </div>
       <div class="text-xs text-base-content/50">
-        키보드 화살표 또는 버튼. 데스크탑에선 phx-keyup 추가 가능 (Sprint 3b).
+        키: 화살표 / WASD / HJKL · 버튼 클릭도 동작.
       </div>
     </div>
     """
@@ -140,9 +183,13 @@ defmodule HappyTriznWeb.GameLive do
   defp game_view(%{slug: "minesweeper"} = assigns) do
     ~H"""
     <div class="space-y-2">
-      <div class="text-sm">셀 클릭 = reveal, 우클릭 (right-click 미구현, 일단 [F] 버튼 토글):
-        지뢰 {@state.mine_count}개 숨겨져 있음.</div>
-      <div class="inline-block bg-base-300 p-1">
+      <div class="text-sm">
+        {@state.rows}×{@state.cols} · 지뢰 {@state.mine_count}개
+        <%= if @state.difficulty do %>
+          ({@state.difficulty})
+        <% end %>
+      </div>
+      <div class="inline-block bg-base-300 p-1 overflow-auto max-w-full">
         <%= for r <- 0..(@state.rows - 1) do %>
           <div class="flex">
             <%= for c <- 0..(@state.cols - 1) do %>
@@ -181,14 +228,14 @@ defmodule HappyTriznWeb.GameLive do
   defp game_view(%{slug: "pacman"} = assigns) do
     ~H"""
     <div class="text-base-content/60">
-      Pac-Man stub. 풀 구현은 Sprint 3b. 점수: {@state.score}, 라이프: {@state.lives}.
+      Pac-Man stub. 풀 구현은 Sprint 3g. 점수: {@state.score}, 라이프: {@state.lives}.
     </div>
     """
   end
 
   defp game_view(assigns) do
     ~H"""
-    <div class="text-base-content/60">{@slug}: 풀 구현 Sprint 3b 예정.</div>
+    <div class="text-base-content/60">{@slug}: 풀 구현 예정.</div>
     """
   end
 

@@ -23,8 +23,8 @@ MIX_ENV=test bin/mix test
 | **캐치마인드 (Skribbl)** | skribbl_test (state / join / start / choose / stroke / guess / tick / round-robin / total_rounds / word_pool 카테고리) | 32 |
 | GameSession | game_session_test (lifecycle / dedupe / terminate cleanup / match_record top_out) | 12 |
 | 다른 게임 stub | stub_games_test (Bomberman/Snake/Pacman/Skribbl 인터페이스 검증) | 12 |
-| 2048 | games_2048_test | 10 |
-| Minesweeper | minesweeper_test | 12 |
+| 2048 | games_2048_test (board_size 4/5/6 + restart 보존) | 16+ |
+| Minesweeper | minesweeper_test (난이도 easy/medium/hard/custom + clamp + restart 보존) | 19+ |
 | **MatchResults** | match_results_test (record/for_user/recent/winners_summary) | 12 |
 | **PersonalRecords** | personal_records_test (apply_stats max / metadata merge / leaderboard) | 8 |
 | Registry | registry_test | 5 |

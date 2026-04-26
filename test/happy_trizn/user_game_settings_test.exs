@@ -44,6 +44,19 @@ defmodule HappyTrizn.UserGameSettingsTest do
       assert UserGameSettings.defaults("games_2048").options["board_size"] == 4
     end
 
+    test "minesweeper difficulty + custom 필드 defaults" do
+      opts = UserGameSettings.defaults("minesweeper").options
+      assert opts["difficulty"] == "medium"
+      assert opts["custom_rows"] == 10
+      assert opts["custom_cols"] == 10
+      assert opts["custom_mines"] == 12
+    end
+
+    test "slug \"2048\" → \"games_2048\" alias 정규화" do
+      assert UserGameSettings.defaults("2048") == UserGameSettings.defaults("games_2048")
+      assert UserGameSettings.defaults("2048").options["board_size"] == 4
+    end
+
     test "알 수 없는 게임 → 빈 map" do
       d = UserGameSettings.defaults("unknown")
       assert d.bindings == %{}
@@ -54,6 +67,48 @@ defmodule HappyTrizn.UserGameSettingsTest do
   describe "get_for/2" do
     test "user nil → defaults 반환" do
       assert UserGameSettings.get_for(nil, "tetris") == UserGameSettings.defaults("tetris")
+    end
+
+    test "slug \"2048\" alias → 게스트 도 board_size 4" do
+      result = UserGameSettings.get_for(nil, "2048")
+      assert result.options["board_size"] == 4
+    end
+
+    test "upsert(user, \"2048\", ...) → DB row 의 game_type 은 \"games_2048\"" do
+      user = user_fixture()
+
+      {:ok, _} =
+        UserGameSettings.upsert(user, "2048", %{
+          key_bindings: %{},
+          options: %{"board_size" => 5}
+        })
+
+      # slug 로 다시 읽어도 동작
+      slug_result = UserGameSettings.get_for(user, "2048")
+      assert slug_result.options["board_size"] == 5
+
+      # 정식 키로 읽어도 같은 row
+      key_result = UserGameSettings.get_for(user, "games_2048")
+      assert key_result.options["board_size"] == 5
+
+      # 실제 DB row
+      row = HappyTrizn.Repo.get_by(Setting, user_id: user.id, game_type: "games_2048")
+      assert row != nil
+      assert row.options["board_size"] == 5
+    end
+
+    test "reset(user, \"2048\") 도 alias 따름" do
+      user = user_fixture()
+
+      {:ok, _} =
+        UserGameSettings.upsert(user, "games_2048", %{
+          key_bindings: %{},
+          options: %{"board_size" => 6}
+        })
+
+      :ok = UserGameSettings.reset(user, "2048")
+
+      assert HappyTrizn.Repo.get_by(Setting, user_id: user.id, game_type: "games_2048") == nil
     end
 
     test "user 있고 row 없음 → defaults 반환" do
