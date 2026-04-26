@@ -183,7 +183,9 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   def handle_event("skribbl_chat", %{"text" => text}, socket) do
     skribbl_input(socket, %{"action" => "guess", "text" => text})
-    {:noreply, socket}
+
+    # 입력창 비움 — morphdom 은 typed input value 안 건드림. ChatReset hook 이 받음.
+    {:noreply, push_event(socket, "chat:reset_input", %{})}
   end
 
   # ============================================================================
@@ -786,6 +788,14 @@ defmodule HappyTriznWeb.GameMultiLive do
         />
       </aside>
     </div>
+
+    <%= if @state.status == :round_end do %>
+      <.skribbl_round_end_modal state={@state} />
+    <% end %>
+
+    <%= if @state.status == :over do %>
+      <.skribbl_game_over_modal state={@state} player_id={@player_id} />
+    <% end %>
     """
   end
 
@@ -969,7 +979,12 @@ defmodule HappyTriznWeb.GameMultiLive do
         <% end %>
       </div>
 
-      <form phx-submit="skribbl_chat" class="flex gap-1">
+      <form
+        id="skribbl-chat-form"
+        phx-hook="ChatReset"
+        phx-submit="skribbl_chat"
+        class="flex gap-1"
+      >
         <input
           type="text"
           name="text"
@@ -978,9 +993,113 @@ defmodule HappyTriznWeb.GameMultiLive do
           autocomplete="off"
           class="input input-bordered input-sm flex-1"
           disabled={not @can_chat?}
+          value=""
         />
         <button type="submit" class="btn btn-sm btn-primary" disabled={not @can_chat?}>전송</button>
       </form>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+
+  defp skribbl_round_end_modal(assigns) do
+    seconds = max(div(assigns.state.time_left_ms || 0, 1000), 0)
+    word = assigns.state.word
+
+    guessed =
+      assigns.state.players
+      |> Enum.filter(fn {_, p} -> p.guessed_at end)
+      |> Enum.map(fn {_, p} -> p end)
+      |> Enum.sort_by(& &1.guessed_at, DateTime)
+
+    assigns = assign(assigns, seconds: seconds, word: word, guessed: guessed)
+
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class="bg-base-100 rounded-xl shadow-2xl max-w-md w-full p-6 border-4 border-info">
+        <div class="text-center mb-3">
+          <div class="text-3xl mb-1">📢</div>
+          <div class="text-lg font-semibold">정답 공개</div>
+          <div class="text-3xl font-bold mt-2 text-success font-mono">{@word}</div>
+        </div>
+
+        <div class="mb-4">
+          <div class="text-sm font-semibold text-base-content/70 mb-1">맞춘 사람</div>
+          <%= if @guessed == [] do %>
+            <p class="text-base-content/50 text-sm">아무도 못 맞춤 😅</p>
+          <% else %>
+            <ol class="space-y-1 text-sm">
+              <%= for {p, idx} <- Enum.with_index(@guessed) do %>
+                <li class="flex justify-between">
+                  <span>
+                    <span class="badge badge-sm">#{idx + 1}</span>
+                    <span class="font-mono ml-2">{p.nickname}</span>
+                  </span>
+                  <strong>{p.score}점</strong>
+                </li>
+              <% end %>
+            </ol>
+          <% end %>
+        </div>
+
+        <div class="text-center text-xs text-base-content/60">
+          다음 라운드 시작까지 <strong>{@seconds}초</strong>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp skribbl_game_over_modal(assigns) do
+    winner_id = assigns.state.winner_id
+    winner = winner_id && Map.get(assigns.state.players, winner_id)
+    me_won? = winner_id == assigns.player_id
+
+    sorted =
+      assigns.state.players |> Enum.sort_by(fn {_, p} -> -p.score end) |> Enum.take(8)
+
+    assigns = assign(assigns, winner: winner, me_won?: me_won?, sorted: sorted)
+
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class={[
+        "rounded-xl shadow-2xl max-w-md w-full p-6 border-4",
+        if(@me_won?, do: "bg-success/30 border-success", else: "bg-base-100 border-base-300")
+      ]}>
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2">{if @me_won?, do: "🏆", else: "🎉"}</div>
+          <div class="text-2xl font-bold">
+            <%= cond do %>
+              <% @me_won? -> %>
+                승리!
+              <% @winner -> %>
+                {@winner.nickname} 우승
+              <% true -> %>
+                게임 종료
+            <% end %>
+          </div>
+        </div>
+
+        <ol class="mb-4 space-y-1 text-sm">
+          <%= for {{_, p}, idx} <- Enum.with_index(@sorted) do %>
+            <li class="flex justify-between">
+              <span>
+                <span class="badge badge-sm">#{idx + 1}</span>
+                <span class="font-mono ml-2">{p.nickname}</span>
+              </span>
+              <strong>{p.score}점</strong>
+            </li>
+          <% end %>
+        </ol>
+
+        <button phx-click="skribbl_start_game" class="btn btn-primary w-full">
+          🔄 다시 하기
+        </button>
+      </div>
     </div>
     """
   end
@@ -1171,36 +1290,55 @@ defmodule HappyTriznWeb.GameMultiLive do
     assigns = assign(assigns, winner: winner, me_won?: me_won?, summary: summary)
 
     ~H"""
-    <div class={[
-      "rounded-lg border-2 p-4 mb-4",
-      if(@me_won?, do: "bg-success/20 border-success", else: "bg-base-200 border-base-300")
-    ]}>
-      <div class="flex items-center justify-between gap-3 mb-3">
-        <div class="text-lg font-bold">
-          <%= cond do %>
-            <% @me_won? -> %>
-              🏆 승리!
-            <% is_binary(@winner) -> %>
-              😢 패배
-            <% true -> %>
-              💀 게임 종료
-          <% end %>
-        </div>
-        <button phx-click="restart" class="btn btn-primary btn-sm">🔄 다시 하기</button>
-      </div>
-
-      <%= if @summary != [] do %>
-        <div class="text-sm">
-          <div class="font-semibold text-base-content/70 mb-1">방 누적 우승</div>
-          <div class="flex flex-wrap gap-2">
-            <%= for entry <- @summary do %>
-              <span class="badge badge-lg">
-                {entry.nickname} · <strong class="ml-1">{entry.wins}회</strong>
-              </span>
+    <!-- Fullscreen popup overlay — 게임 끝났을 때 명확히 보이도록 화면 중앙에. -->
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class={[
+        "rounded-xl shadow-2xl max-w-md w-full p-6 border-4",
+        if(@me_won?,
+          do: "bg-success/30 border-success",
+          else: "bg-base-100 border-base-300"
+        )
+      ]}>
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2">
+            <%= cond do %>
+              <% @me_won? -> %>
+                🏆
+              <% is_binary(@winner) -> %>
+                😢
+              <% true -> %>
+                💀
+            <% end %>
+          </div>
+          <div class="text-2xl font-bold">
+            <%= cond do %>
+              <% @me_won? -> %>
+                승리!
+              <% is_binary(@winner) -> %>
+                패배
+              <% true -> %>
+                게임 종료
             <% end %>
           </div>
         </div>
-      <% end %>
+
+        <%= if @summary != [] do %>
+          <div class="mb-4">
+            <div class="font-semibold text-base-content/70 mb-2 text-center">방 누적 우승</div>
+            <div class="flex flex-wrap gap-2 justify-center">
+              <%= for entry <- @summary do %>
+                <span class="badge badge-lg">
+                  {entry.nickname} · <strong class="ml-1">{entry.wins}회</strong>
+                </span>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <button phx-click="restart" class="btn btn-primary w-full">
+          🔄 다시 하기
+        </button>
+      </div>
     </div>
     """
   end

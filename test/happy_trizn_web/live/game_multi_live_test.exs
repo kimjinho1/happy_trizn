@@ -447,5 +447,61 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       html = Phoenix.ConnTest.html_response(conn, 200)
       assert html =~ "🏠"
     end
+
+    test "skribbl_chat 후 chat:reset_input push (입력창 자동 비움)", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      view |> render_hook("skribbl_chat", %{"text" => "안녕"})
+      assert_push_event(view, "chat:reset_input", %{})
+    end
+
+    test "round_end 시 정답 공개 popup 모달 표시", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      bob = user_fixture(nickname: "sk_re_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _, _} = live(conn_b, ~p"/game/skribbl/#{room.id}")
+      Process.sleep(20)
+
+      view |> element("button[phx-click='skribbl_start_game']") |> render_click()
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      # 강제로 round_end 상태 만듦.
+      :sys.replace_state(pid, fn s ->
+        gs = s.game_state
+        new_gs = %{gs | status: :round_end, word: "사과", time_left_ms: 5000, word_revealed: true}
+        %{s | game_state: new_gs}
+      end)
+
+      send(view.pid, {:game_event, {:round_end, %{reason: :timeout, word: "사과"}}})
+      Process.sleep(20)
+      html = render(view)
+
+      # popup overlay (정답 공개 + 단어 + 다음 라운드 까지)
+      assert html =~ "정답 공개"
+      assert html =~ "사과"
+    end
+
+    test ":over 시 game_over popup + 다시 하기 버튼", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/skribbl/#{room.id}")
+      bob = user_fixture(nickname: "sk_o_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _, _} = live(conn_b, ~p"/game/skribbl/#{room.id}")
+      Process.sleep(20)
+
+      view |> element("button[phx-click='skribbl_start_game']") |> render_click()
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      :sys.replace_state(pid, fn s ->
+        gs = s.game_state
+        # 강제 :over.
+        winner_id = gs.players |> Map.keys() |> List.first()
+        new_gs = %{gs | status: :over, winner_id: winner_id}
+        %{s | game_state: new_gs}
+      end)
+
+      send(view.pid, {:game_event, {:game_finished, %{winner: nil}}})
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "다시 하기"
+    end
   end
 end
