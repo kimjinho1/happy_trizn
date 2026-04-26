@@ -67,11 +67,11 @@ defmodule HappyTrizn.Games.TetrisTest do
   end
 
   describe "meta/0" do
-    test "multi 1v1 + tick_interval_ms 50" do
+    test "multi 최대 8명 + tick_interval_ms 50 (Sprint 3l-2 N-player)" do
       m = Tetris.meta()
       assert m.slug == "tetris"
       assert m.mode == :multi
-      assert m.max_players == 2
+      assert m.max_players == 8
       assert m.min_players == 2
       assert m.tick_interval_ms == 50
     end
@@ -106,8 +106,25 @@ defmodule HappyTrizn.Games.TetrisTest do
       end)
     end
 
-    test "3번째 거부 :full" do
-      assert {:reject, :full} = Tetris.handle_player_join("p3", %{}, join2())
+    test "3번째도 in-progress 합류 (cap 8) — 카운트다운 안 다시 시작, 합류만" do
+      state = join2()
+      # join2 후 status :countdown. 3번째 join → status 유지, players 3.
+      {:ok, s3, broadcasts} = Tetris.handle_player_join("p3", %{}, state)
+      assert map_size(s3.players) == 3
+      assert {:player_joined, "p3"} in broadcasts
+      # countdown 재시작 안 함.
+      refute Enum.any?(broadcasts, &match?({:countdown_start, _}, &1))
+    end
+
+    test "9번째 거부 :full (max_players 8)" do
+      state =
+        Enum.reduce(1..8, elem(Tetris.init(%{}), 1), fn i, acc ->
+          {:ok, new, _} = Tetris.handle_player_join("p#{i}", %{}, acc)
+          new
+        end)
+
+      assert map_size(state.players) == 8
+      assert {:reject, :full} = Tetris.handle_player_join("p9", %{}, state)
     end
 
     test "재 join 은 noop" do
@@ -1010,6 +1027,72 @@ defmodule HappyTrizn.Games.TetrisTest do
       assert s.players["p1"].piece_inputs == 1
       {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "hold"}, s)
       assert s2.players["p1"].piece_inputs == 0
+    end
+  end
+
+  describe "N-player garbage targeting (Sprint 3l-2)" do
+    # 4명 join 시 — 가비지 타겟이 살아있는 다른 player 중 random 1명.
+    # 죽은 (top_out) player 는 제외.
+    defp join_n(n) do
+      Enum.reduce(1..n, elem(Tetris.init(%{}), 1), fn i, acc ->
+        {:ok, new, _} = Tetris.handle_player_join("p#{i}", %{nickname: "p#{i}"}, acc)
+        new
+      end)
+      |> Map.put(:status, :playing)
+      |> Map.put(:countdown_ms, 0)
+    end
+
+    # I rotation 1 cells {0,2},{1,2},{2,2},{3,2} → origin {top, 2} 면 col 4.
+    defp tetris_clear_setup(state, player_id) do
+      board =
+        Board.new()
+        |> List.replace_at(20, for(c <- 0..9, do: if(c == 4, do: nil, else: :garbage)))
+        |> List.replace_at(19, for(c <- 0..9, do: if(c == 4, do: nil, else: :garbage)))
+        |> List.replace_at(18, for(c <- 0..9, do: if(c == 4, do: nil, else: :garbage)))
+        |> List.replace_at(17, for(c <- 0..9, do: if(c == 4, do: nil, else: :garbage)))
+
+      state = put_in(state.players[player_id].board, board)
+      put_in(state.players[player_id].current, %{type: :i, rotation: 1, origin: {0, 2}})
+    end
+
+    test "4명 + p1 가비지 발생 → target ∈ p2/p3/p4 (자기 자신 X)" do
+      state = join_n(4) |> tetris_clear_setup("p1")
+
+      {:ok, _new_state, broadcasts} =
+        Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+
+      {:garbage_sent, %{from: from, to: to, lines: lines}} =
+        Enum.find(broadcasts, &match?({:garbage_sent, _}, &1))
+
+      assert from == "p1"
+      assert to in ["p2", "p3", "p4"]
+      assert lines > 0
+    end
+
+    test "p2/p3 top_out → p1 가비지 target = p4 (살아있는 1명)" do
+      state =
+        join_n(4)
+        |> put_in([:players, "p2", :top_out], true)
+        |> put_in([:players, "p3", :top_out], true)
+        |> tetris_clear_setup("p1")
+
+      {:ok, _new, broadcasts} =
+        Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+
+      {:garbage_sent, %{to: to}} = Enum.find(broadcasts, &match?({:garbage_sent, _}, &1))
+      assert to == "p4"
+    end
+
+    test "다른 모두 top_out — 가비지 target nil (broadcast 안 발생)" do
+      state =
+        join_n(2)
+        |> put_in([:players, "p2", :top_out], true)
+        |> tetris_clear_setup("p1")
+
+      {:ok, _new, broadcasts} =
+        Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+
+      refute Enum.any?(broadcasts, &match?({:garbage_sent, _}, &1))
     end
   end
 end
