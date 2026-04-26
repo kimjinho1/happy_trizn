@@ -44,9 +44,9 @@ defmodule HappyTrizn.Games.Tetris do
       name: "Tetris",
       slug: "tetris",
       mode: :multi,
-      max_players: 2,
+      max_players: 8,
       min_players: 2,
-      description: "Jstris 클론 1v1",
+      description: "Jstris 클론 — 최대 8명 동시 플레이",
       tick_interval_ms: @tick_ms
     }
   end
@@ -68,6 +68,8 @@ defmodule HappyTrizn.Games.Tetris do
   # Player join / leave
   # ============================================================================
 
+  @max_players 8
+
   @impl true
   def handle_player_join(player_id, meta, %{players: players} = state) do
     nickname = Map.get(meta || %{}, :nickname) || "p#{String.slice(player_id, 0..4)}"
@@ -76,33 +78,39 @@ defmodule HappyTrizn.Games.Tetris do
       Map.has_key?(players, player_id) ->
         {:ok, state, []}
 
-      map_size(players) >= 2 ->
+      map_size(players) >= @max_players ->
         {:reject, :full}
 
       true ->
         new_player = new_player_state(nickname)
         new_players = Map.put(players, player_id, new_player)
 
-        # 2번째 player join → 양쪽 모두 fresh state 로 reset + 3-2-1 countdown 시작.
-        # 1번째는 :waiting (혼자 대기). solo 연습은 "start_practice" action 으로 진입.
-        if map_size(new_players) == 2 do
-          # reset 시 기존 nickname 보존.
-          reset_players =
-            Map.new(new_players, fn {pid, p} ->
-              {pid, new_player_state(p.nickname)}
-            end)
+        # 2명 이상 — :playing/:over/:practice 였더라도 join 시점은 다양하게 발생.
+        # 새로 join 한 player 도 fresh state. 첫 라운드 시작은:
+        # - 1명 → :waiting (혼자 대기, solo 연습은 start_practice)
+        # - 2명 처음 도달 → :countdown (3-2-1 시작) + 모두 fresh
+        # - 이미 진행 중 (:playing/:countdown/:practice) 에 N+1 join → 그대로 in-progress 합류
+        cond do
+          # 2명 처음 도달 (이전 :waiting/:practice/:over) → 양쪽 reset + countdown.
+          map_size(new_players) == 2 and state.status in [:waiting, :practice, :over] ->
+            reset_players =
+              Map.new(new_players, fn {pid, p} ->
+                {pid, new_player_state(p.nickname)}
+              end)
 
-          new_state = %{
-            state
-            | players: reset_players,
-              status: :countdown,
-              countdown_ms: @countdown_ms,
-              winner: nil
-          }
+            new_state = %{
+              state
+              | players: reset_players,
+                status: :countdown,
+                countdown_ms: @countdown_ms,
+                winner: nil
+            }
 
-          {:ok, new_state, [{:player_joined, player_id}, {:countdown_start, @countdown_ms}]}
-        else
-          {:ok, %{state | players: new_players, status: :waiting}, [{:player_joined, player_id}]}
+            {:ok, new_state, [{:player_joined, player_id}, {:countdown_start, @countdown_ms}]}
+
+          # in-progress (:playing / :countdown) 중 N+1 합류 — 그대로 합류, 카운트다운 X.
+          true ->
+            {:ok, %{state | players: new_players}, [{:player_joined, player_id}]}
         end
     end
   end
@@ -160,7 +168,7 @@ defmodule HappyTrizn.Games.Tetris do
   end
 
   # 재도전 — 게임 끝난 후 사용자가 다시 시작. winners_history 보존.
-  # 1명: → :practice (즉시 솔로 시작), 2명: → :countdown 3-2-1 → :playing.
+  # 1명: → :practice (즉시 솔로), 2+명: → :countdown 3-2-1 → :playing.
   def handle_input(player_id, %{"action" => "restart"}, state) do
     cond do
       state.status != :over ->
@@ -174,7 +182,7 @@ defmodule HappyTrizn.Games.Tetris do
           Map.new(state.players, fn {pid, p} -> {pid, new_player_state(p.nickname)} end)
 
         cond do
-          map_size(reset_players) == 2 ->
+          map_size(reset_players) >= 2 ->
             new_state = %{
               state
               | players: reset_players,
@@ -639,7 +647,9 @@ defmodule HappyTrizn.Games.Tetris do
         end
 
       if garbage_send > 0 do
-        target = state.players |> Map.keys() |> Enum.find(&(&1 != player_id))
+        # N-player 가비지 타겟팅 — 살아있는 (top_out 아님) 다른 플레이어 중 random.
+        # 1v1 = 항상 1명, 4v4 = random 1명. 죽은 플레이어 제외.
+        target = pick_garbage_target(new_players, player_id)
 
         if target do
           new_players =
@@ -656,6 +666,19 @@ defmodule HappyTrizn.Games.Tetris do
       else
         {:ok, %{state | players: new_players}, base_broadcasts}
       end
+    end
+  end
+
+  # 살아있는 (top_out 아님) 다른 player_id 중 random 하나. 없으면 nil.
+  defp pick_garbage_target(players, sender_id) do
+    candidates =
+      players
+      |> Enum.filter(fn {pid, p} -> pid != sender_id and not p.top_out end)
+      |> Enum.map(fn {pid, _} -> pid end)
+
+    case candidates do
+      [] -> nil
+      list -> Enum.random(list)
     end
   end
 
