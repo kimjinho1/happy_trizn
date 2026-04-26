@@ -239,6 +239,15 @@ defmodule HappyTriznWeb.GameLiveTest do
       assert html =~ "ArrowUp"
     end
 
+    test "옵션 모달 — Pac-Man 도 모달 (Sprint 4f-3)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/pacman")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      # tick_ms 옵션 노출 (Sprint 4f-4 — 사용자 속도 조절).
+      assert html =~ "tick_ms"
+      assert html =~ "modal_save_options"
+    end
+
     test "방향 키 → set_dir input forward (page 살아있음)", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/play/pacman")
       html = render_keydown(view, "keydown", %{"key" => "ArrowUp"})

@@ -155,7 +155,10 @@ defmodule HappyTrizn.UserGameSettings do
       options: %{
         "sound_eat" => true,
         "sound_death" => true,
-        "sound_intro" => true
+        "sound_intro" => true,
+        # Sprint 4f-4 — tick interval (ms). 작을수록 빠름. 기본 125 (Pac-Man module 의 @tick_ms 와 일치).
+        # 50~300 범위. modal options form 에서 변경.
+        "tick_ms" => 125
       },
       das: 0,
       arr: 0,

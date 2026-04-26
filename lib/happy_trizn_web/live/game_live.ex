@@ -40,8 +40,10 @@ defmodule HappyTriznWeb.GameLive do
 
           # tick_interval_ms 가 있는 게임 (Pac-Man 등) — LiveView 안에서 직접 timer.
           # Multi 게임은 GameSession 이 처리. 싱글은 GameLive 가 tick 발행.
+          # Sprint 4f-4 — option "tick_ms" 가 있으면 사용자 설정 우선 (Pac-Man 속도 조절).
           if connected?(socket) and Map.get(meta, :tick_interval_ms) do
-            :timer.send_interval(meta.tick_interval_ms, self(), :game_tick)
+            interval = tick_interval(options, meta.tick_interval_ms)
+            :timer.send_interval(interval, self(), :game_tick)
           end
 
           {:ok,
@@ -213,6 +215,17 @@ defmodule HappyTriznWeb.GameLive do
   # ============================================================================
 
   # 2048 — 화살표 + WASD + HJKL.
+  # Sprint 4f-4 — option "tick_ms" 가 있으면 50~300 clamp 후 사용. 없으면 meta default.
+  defp tick_interval(options, default_ms) do
+    case Map.get(options, "tick_ms") do
+      n when is_integer(n) -> n |> max(50) |> min(300)
+      n when is_binary(n) -> n |> String.to_integer() |> max(50) |> min(300)
+      _ -> default_ms
+    end
+  rescue
+    _ -> default_ms
+  end
+
   defp key_to_action("2048", k, _) when k in ~w(ArrowUp w W k K),
     do: %{"action" => "move", "dir" => "up"}
 
