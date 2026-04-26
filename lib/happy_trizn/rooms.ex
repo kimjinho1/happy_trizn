@@ -113,6 +113,32 @@ defmodule HappyTrizn.Rooms do
     end
   end
 
+  @doc """
+  방 강제 종료 (호스트 검증 없이) — GameSession terminate / 빈 방 cleanup 용.
+
+  Returns {:ok, room} | {:ok, :not_found} | {:error, changeset}
+  """
+  def close_by_id(room_id) when is_binary(room_id) do
+    case get(room_id) do
+      nil ->
+        {:ok, :not_found}
+
+      %Room{status: "closed"} = room ->
+        {:ok, room}
+
+      %Room{} = room ->
+        case room |> Room.status_changeset(%{status: "closed"}) |> Repo.update() do
+          {:ok, updated} ->
+            broadcast_lobby({:room_closed, updated})
+            broadcast_room(room_id, {:room_closed, updated})
+            {:ok, updated}
+
+          err ->
+            err
+        end
+    end
+  end
+
   @doc "방 종료 (호스트만)."
   def close(%User{id: host_id}, room_id) when is_binary(room_id) do
     case get(room_id) do

@@ -98,5 +98,253 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       state = HappyTrizn.Games.GameSession.get_state(pid)
       assert map_size(state.players) >= 1
     end
+
+    test "두 사용자 동시 입장 → 같은 GameSession 에 둘 다 join (방 만든 사람이 사라지지 않음)",
+         %{conn: conn, host: host, room: room} do
+      # host A 가 게임 방 입장
+      {:ok, view_a, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid_a = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      assert pid_a
+      state_a = HappyTrizn.Games.GameSession.get_state(pid_a)
+      assert map_size(state_a.players) == 1
+
+      # B 가 같은 방으로 입장
+      bob = user_fixture(nickname: "bob_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _view_b, _} = live(conn_b, ~p"/game/tetris/#{room.id}")
+
+      # 같은 GameSession pid 사용 (host 가 만든 세션 그대로)
+      pid_b = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      assert pid_b == pid_a
+
+      state = HappyTrizn.Games.GameSession.get_state(pid_b)
+      assert map_size(state.players) == 2
+
+      # host (A) 가 여전히 player 안에 있어야 — HTTP mount 의 leave 사이클이 죽이지 않음
+      _ = view_a
+      _ = host
+    end
+
+    test "혼자 입장 → 스프린트 버튼 노출 + 클릭 시 :practice 진입", %{conn: conn, room: room} do
+      {:ok, view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "스프린트"
+
+      view |> element("button[phx-click='start_practice']") |> render_click()
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      assert state.status == :practice
+    end
+
+    test "2번째 player 입장 → 카운트다운 배너 (시작까지 N…)", %{conn: conn, room: room} do
+      # host A
+      {:ok, view_a, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      # B 입장
+      bob = user_fixture(nickname: "bob_cd_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _view_b, _} = live(conn_b, ~p"/game/tetris/#{room.id}")
+
+      # A 화면에 countdown 표기 도달 (PubSub broadcast 전파 후)
+      Process.sleep(50)
+      html = render(view_a)
+      assert html =~ "시작까지"
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      assert state.status == :countdown
+      # 양쪽 모두 fresh state — score 0
+      Enum.each(state.players, fn {_, p} -> assert p.score == 0 end)
+    end
+
+    test "글로벌 🏠 홈 링크 게임 화면에도 노출", %{conn: conn, room: room} do
+      conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
+      html = Phoenix.ConnTest.html_response(conn, 200)
+      assert html =~ "🏠"
+    end
+
+    test "ghost piece + grid class render", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # standard grid class (default)
+      assert html =~ "border-base-100"
+      # 옵션 hold/next preview 컴포넌트
+      assert html =~ "홀드"
+      assert html =~ "다음"
+    end
+
+    test "⚙️ 옵션 → 모달 인라인 (페이지 안 옮김)", %{conn: conn, room: room} do
+      {:ok, view, _html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # 처음엔 모달 안 열림
+      refute render(view) =~ "modal_save_binding"
+
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      assert html =~ "modal_save_binding"
+      assert html =~ "modal_save_options"
+      assert html =~ "phx-click=\"close_settings\""
+    end
+
+    test "모달 save_binding → key_settings 즉시 갱신 + 모달 유지 (단일 저장)", %{
+      conn: conn,
+      room: room
+    } do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+
+      view
+      |> form("form[phx-submit='modal_save_binding']:nth-of-type(1)")
+      |> render_submit(%{"action" => "hard_drop", "keys" => "Space, q"})
+
+      html = render(view)
+      assert html =~ "&quot;hard_drop&quot;:[&quot; &quot;,&quot;q&quot;]"
+      # 단일 저장 후에도 모달 그대로 — 다른 키도 연속 저장 가능
+      assert html =~ "phx-submit=\"modal_save_binding\""
+    end
+
+    test "모달 save_options (옵션 저장 버튼) → 모달 닫힘", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_options"
+
+      view
+      |> form("form[phx-submit='modal_save_options']")
+      |> render_submit(%{"options" => %{"das" => "100"}})
+
+      refute render(view) =~ "modal_save_options"
+    end
+
+    test "모달 ✕ 버튼 → 닫힘", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      assert render(view) =~ "modal_save_binding"
+
+      # 닫기 버튼 (모달 안의 ✕)
+      view |> element("#settings-modal-box button[phx-click='close_settings']") |> render_click()
+      refute render(view) =~ "modal_save_binding"
+    end
+
+    test "tetris 일 때 phx-window-keyup 비활성 (JS hook 만 키 처리)", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # 더블파이어 방지 — server keyup handler 없어야
+      refute html =~ "phx-window-keyup=\"key\""
+      # JS hook 은 살아있어야
+      assert html =~ "phx-hook=\"TetrisInput\""
+    end
+
+    test "HTTP-only mount (connected? = false) 는 GameSession 안 건드림", %{conn: conn, room: room} do
+      # disconnected GET 요청만 — websocket 없음 (Phoenix.ConnTest 가 fully render)
+      conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
+      assert conn.status == 200
+      # GameSession 시작 안 됨 (connected 일 때만 시작)
+      assert HappyTrizn.Games.GameSession.whereis_room(room.id) == nil
+    end
+
+    test "다음 큐 (5 piece) UI 노출 + 좌측 holdpane 분리", %{conn: conn, room: room} do
+      {:ok, _, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # next_queue 컴포넌트 marker
+      assert html =~ ">다음<"
+      # hold 좌측 라벨
+      assert html =~ ">홀드<"
+    end
+
+    test "pending garbage spoiler bar — 빨간 indicator 가 board 옆에 노출", %{
+      conn: conn,
+      room: room
+    } do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      # 강제로 player pending_garbage 5 셋업.
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      :sys.replace_state(pid, fn state ->
+        # 첫 player_id 찾아 pending_garbage 5 강제.
+        gs = state.game_state
+
+        new_players =
+          Map.new(gs.players, fn {id, p} -> {id, %{p | pending_garbage: 5}} end)
+
+        %{state | game_state: %{gs | players: new_players}}
+      end)
+
+      # PubSub broadcast push — re-render.
+      send(view.pid, {:game_event, {:player_state, "stub", %{}}})
+      Process.sleep(20)
+      html = render(view)
+
+      # spoiler bar (bg-error animate-pulse) 가 노출
+      assert html =~ "bg-error"
+      assert html =~ "animate-pulse"
+    end
+
+    test "🔄 다시 하기 버튼 클릭 → restart action → 라운드 리셋", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      # 강제로 :over + winner=현재 player 상태.
+      :sys.replace_state(pid, fn state ->
+        gs = state.game_state
+        [player_id] = Map.keys(gs.players)
+        %{state | game_state: %{gs | status: :over, winner: player_id}}
+      end)
+
+      send(view.pid, {:game_event, {:game_over, %{winner: nil, players: %{}}}})
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "다시 하기"
+
+      view |> element("button[phx-click='restart']") |> render_click()
+      Process.sleep(20)
+
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      # 1명 → :practice, 2명 → :countdown 으로 진입. 여기는 1명.
+      assert state.status == :practice
+    end
+
+    test "game_over_panel 에 winners_summary (닉네임 누적 우승) 표시", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      # game_over event 수동 push — winners_summary 포함.
+      send(
+        view.pid,
+        {:game_event,
+         {:game_over,
+          %{
+            winner: "p_other",
+            players: %{},
+            winners_summary: [
+              %{user_id: "u1", nickname: "alice", wins: 5},
+              %{user_id: "u2", nickname: "bob", wins: 2}
+            ]
+          }}}
+      )
+
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "alice"
+      assert html =~ "5회"
+      assert html =~ "bob"
+      assert html =~ "2회"
+      assert html =~ "방 누적 우승"
+    end
+
+    test "modal reset 버튼 → bindings/options 초기화 + 모달 유지", %{conn: conn, room: room, host: host} do
+      {:ok, _} =
+        HappyTrizn.UserGameSettings.upsert(host, "tetris", %{
+          key_bindings: %{"move_left" => ["q"]},
+          options: %{"das" => 99}
+        })
+
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+
+      view |> element("button[phx-click='modal_reset']") |> render_click()
+
+      result = HappyTrizn.UserGameSettings.get_for(host, "tetris")
+      # 기본값 복귀
+      assert result.das == 133
+      assert "ArrowLeft" in result.bindings["move_left"]
+      # 모달 유지 (form 그대로)
+      assert render(view) =~ "modal_save_binding"
+    end
   end
 end

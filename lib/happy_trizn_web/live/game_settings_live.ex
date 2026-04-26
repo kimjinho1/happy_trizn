@@ -63,7 +63,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
     if is_nil(user) do
       {:noreply, put_flash(socket, :error, "게스트는 옵션 저장 불가 (브라우저 임시 저장만)")}
     else
-      keys = keys_str |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+      keys = UserGameSettings.parse_keys_input(keys_str)
 
       new_bindings = Map.put(socket.assigns.settings.bindings, action, keys)
 
@@ -130,9 +130,12 @@ defmodule HappyTriznWeb.GameSettingsLive do
     ~H"""
     <div class="max-w-3xl mx-auto p-6">
       <Layouts.flash_group flash={@flash} />
-      <header class="mb-6">
-        <h1 class="text-2xl font-bold">게임 옵션</h1>
-        <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
+      <header class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold">게임 옵션</h1>
+          <p class="text-sm text-base-content/60">게임별로 키 바인딩 / 속도 / 표시 옵션을 설정하세요.</p>
+        </div>
+        <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
       </header>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -163,7 +166,10 @@ defmodule HappyTriznWeb.GameSettingsLive do
             <p class="text-warning text-sm">게스트는 변경 후 저장 안 됨 (브라우저 다시 열면 초기화).</p>
           <% end %>
         </div>
-        <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+        <div class="flex gap-2">
+          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
+        </div>
       </header>
 
       <section class="mb-6">
@@ -179,7 +185,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
               <input
                 type="text"
                 name="keys"
-                value={(@settings.bindings[action] || []) |> Enum.join(", ")}
+                value={display_keys(@settings.bindings[action] || [])}
                 class="input input-bordered input-sm flex-1"
                 disabled={is_nil(@current_user)}
               />
@@ -277,16 +283,99 @@ defmodule HappyTriznWeb.GameSettingsLive do
   end
 
   def render(assigns) do
-    # 다른 게임은 키 바인딩만 표시 (옵션은 게임마다 추가).
+    # 다른 게임 — 제너릭 폼: bindings 각 action 별 text input + options 각 key 별 text/checkbox.
     ~H"""
     <div class="max-w-3xl mx-auto p-6">
       <Layouts.flash_group flash={@flash} />
       <header class="mb-6 flex items-center justify-between">
-        <h1 class="text-2xl font-bold">{@meta.name} 옵션</h1>
-        <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+        <div>
+          <h1 class="text-2xl font-bold">{@meta.name} 옵션</h1>
+          <%= if is_nil(@current_user) do %>
+            <p class="text-warning text-sm">게스트는 변경 후 저장 안 됨.</p>
+          <% end %>
+        </div>
+        <div class="flex gap-2">
+          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm">← 게임 목록</.link>
+          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
+        </div>
       </header>
 
-      <p class="text-base-content/60">이 게임의 옵션은 추후 추가 예정.</p>
+      <%= if map_size(@settings.bindings) > 0 do %>
+        <section class="mb-6">
+          <h2 class="text-lg font-semibold mb-2">키 바인딩</h2>
+          <p class="text-xs text-base-content/60 mb-3">여러 키 콤마(,)로 구분.</p>
+          <div class="space-y-2">
+            <%= for action <- @settings.bindings |> Map.keys() |> Enum.sort() do %>
+              <form phx-submit="save_binding" class="flex items-center gap-2">
+                <label class="w-32 text-sm">{action}</label>
+                <input type="hidden" name="action" value={action} />
+                <input
+                  type="text"
+                  name="keys"
+                  value={display_keys(@settings.bindings[action] || [])}
+                  class="input input-bordered input-sm flex-1"
+                  disabled={is_nil(@current_user)}
+                />
+                <button type="submit" class="btn btn-sm btn-primary" disabled={is_nil(@current_user)}>
+                  저장
+                </button>
+              </form>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
+
+      <%= if map_size(@settings.options) > 0 do %>
+        <section class="mb-6">
+          <h2 class="text-lg font-semibold mb-2">게임 설정</h2>
+          <form phx-submit="save_options" class="space-y-2">
+            <%= for {k, v} <- @settings.options |> Enum.sort_by(&elem(&1, 0)) do %>
+              <label class="flex items-center gap-2">
+                <span class="w-40 text-sm">{k}</span>
+                <%= cond do %>
+                  <% is_boolean(v) -> %>
+                    <input type="hidden" name={"options[#{k}]"} value="false" />
+                    <input
+                      type="checkbox"
+                      name={"options[#{k}]"}
+                      value="true"
+                      checked={v}
+                      class="checkbox checkbox-sm"
+                      disabled={is_nil(@current_user)}
+                    />
+                  <% true -> %>
+                    <input
+                      type="text"
+                      name={"options[#{k}]"}
+                      value={to_string(v)}
+                      class="input input-bordered input-sm flex-1"
+                      disabled={is_nil(@current_user)}
+                    />
+                <% end %>
+              </label>
+            <% end %>
+
+            <div class="flex gap-2 pt-2">
+              <button type="submit" class="btn btn-primary btn-sm" disabled={is_nil(@current_user)}>
+                옵션 저장
+              </button>
+              <button
+                type="button"
+                phx-click="reset"
+                class="btn btn-ghost btn-sm"
+                disabled={is_nil(@current_user)}
+                data-confirm="정말 초기화?"
+              >
+                초기화
+              </button>
+            </div>
+          </form>
+        </section>
+      <% end %>
+
+      <%= if map_size(@settings.bindings) == 0 and map_size(@settings.options) == 0 do %>
+        <p class="text-base-content/60">이 게임의 옵션은 추후 추가 예정.</p>
+      <% end %>
     </div>
     """
   end
@@ -313,15 +402,6 @@ defmodule HappyTriznWeb.GameSettingsLive do
     ]
   end
 
-  defp normalize_option_value("ghost", "true"), do: true
-  defp normalize_option_value("ghost", _), do: false
-
-  defp normalize_option_value(k, v) when k in ~w(das arr sound_volume) do
-    case Integer.parse(v) do
-      {n, _} -> n
-      :error -> v
-    end
-  end
-
-  defp normalize_option_value(_, v), do: v
+  defp display_keys(keys), do: UserGameSettings.display_keys(keys)
+  defp normalize_option_value(k, v), do: UserGameSettings.normalize_option_value(k, v)
 end

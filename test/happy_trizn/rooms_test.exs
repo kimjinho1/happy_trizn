@@ -22,6 +22,50 @@ defmodule HappyTrizn.RoomsTest do
     {:ok, host: host}
   end
 
+  describe "close_by_id/1 (empty room cleanup)" do
+    test "open 방 → closed 상태", %{host: host} do
+      {:ok, room} =
+        Rooms.create(host, %{
+          game_type: "tetris",
+          name: "cleanup_#{System.unique_integer([:positive])}"
+        })
+
+      assert room.status == "open"
+
+      assert {:ok, updated} = Rooms.close_by_id(room.id)
+      assert updated.status == "closed"
+      assert Rooms.get(room.id).status == "closed"
+    end
+
+    test "이미 닫힌 방 → 그대로 returns ok", %{host: host} do
+      {:ok, room} =
+        Rooms.create(host, %{
+          game_type: "tetris",
+          name: "double_close_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, _} = Rooms.close_by_id(room.id)
+      assert {:ok, %Rooms.Room{status: "closed"}} = Rooms.close_by_id(room.id)
+    end
+
+    test "없는 방 → :not_found" do
+      assert {:ok, :not_found} = Rooms.close_by_id("00000000-0000-0000-0000-000000000000")
+    end
+
+    test "list_open 에서 사라짐", %{host: host} do
+      {:ok, room} =
+        Rooms.create(host, %{
+          game_type: "tetris",
+          name: "vis_#{System.unique_integer([:positive])}"
+        })
+
+      assert Enum.any?(Rooms.list_open(), &(&1.id == room.id))
+
+      {:ok, _} = Rooms.close_by_id(room.id)
+      refute Enum.any?(Rooms.list_open(), &(&1.id == room.id))
+    end
+  end
+
   describe "create/2" do
     test "비번 없는 방 생성", %{host: host} do
       assert {:ok, %Room{} = room} =

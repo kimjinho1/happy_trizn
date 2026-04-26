@@ -24,6 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/happy_trizn"
 import topbar from "../vendor/topbar"
+import {TetrisInput} from "./hooks/tetris_input"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -60,127 +61,8 @@ const Hooks = {
     },
   },
 
-  // Tetris 입력 — 키 hold 시 DAS (Delayed Auto Shift) 후 ARR (Auto Repeat Rate) 로
-  // 자동 반복. 서버에 phx-event "key" 또는 "input" push.
-  //
-  // - left/right/soft_drop = 반복 가능 (DAS+ARR).
-  // - rotate_*/hard_drop/hold = 1회 발동 (반복 없음).
-  // - data-das, data-arr (ms) — el 에서 읽음.
-  // - data-key-bindings JSON — { "move_left": ["ArrowLeft", "j"], ... }.
-  //
-  // 같은 키 두 개 (e.g. ArrowLeft + j) 가 동시에 눌리면 OR — 둘 다 release 후 멈춤.
-  TetrisInput: {
-    mounted() {
-      this.repeatable = new Set(["move_left", "move_right", "soft_drop"])
-      this.actionToServer = {
-        "move_left": "left",
-        "move_right": "right",
-        "soft_drop": "soft_drop",
-        "hard_drop": "hard_drop",
-        "rotate_cw": "rotate_cw",
-        "rotate_ccw": "rotate_ccw",
-        "rotate_180": "rotate_180",
-        "hold": "hold",
-      }
-
-      this.parseDataset()
-      this.activeTimers = new Map()  // action → {dasTimer, arrTimer}
-      this.heldKeys = new Set()
-
-      this._keydown = (e) => this.onKeyDown(e)
-      this._keyup = (e) => this.onKeyUp(e)
-      this._blur = () => this.releaseAll()
-
-      window.addEventListener("keydown", this._keydown)
-      window.addEventListener("keyup", this._keyup)
-      window.addEventListener("blur", this._blur)
-    },
-    updated() {
-      // server 가 data attr 갱신 시 (e.g. 옵션 저장 후) 다시 파싱.
-      this.parseDataset()
-    },
-    destroyed() {
-      window.removeEventListener("keydown", this._keydown)
-      window.removeEventListener("keyup", this._keyup)
-      window.removeEventListener("blur", this._blur)
-      this.releaseAll()
-    },
-    parseDataset() {
-      this.das = parseInt(this.el.dataset.das || "133", 10)
-      this.arr = parseInt(this.el.dataset.arr || "10", 10)
-      try {
-        const bindings = JSON.parse(this.el.dataset.keyBindings || "{}")
-        // key → action lookup map (한 키는 마지막 매칭 action 으로).
-        this.keyToAction = {}
-        for (const [action, keys] of Object.entries(bindings)) {
-          if (!Array.isArray(keys)) continue
-          for (const k of keys) {
-            this.keyToAction[k] = action
-          }
-        }
-      } catch (_e) {
-        this.keyToAction = {}
-      }
-    },
-    onKeyDown(e) {
-      const action = this.keyToAction[e.key]
-      if (!action) return
-      e.preventDefault()
-      const keyId = e.key
-      if (this.heldKeys.has(keyId)) return  // OS auto-repeat 무시 (manual ARR 만 사용)
-      this.heldKeys.add(keyId)
-
-      this.fire(action)
-
-      if (this.repeatable.has(action)) {
-        // 이미 동일 action 의 타이머 있으면 스킵 (다른 키로 같은 action — OR)
-        if (this.activeTimers.has(action)) return
-
-        const dasTimer = setTimeout(() => {
-          const arrInterval = Math.max(this.arr, 1)
-          this.fire(action)
-          const arrTimer = setInterval(() => this.fire(action), arrInterval)
-          const slot = this.activeTimers.get(action)
-          if (slot) {
-            slot.arrTimer = arrTimer
-            slot.dasTimer = null
-          }
-        }, this.das)
-
-        this.activeTimers.set(action, { dasTimer, arrTimer: null, keys: new Set([keyId]) })
-      }
-    },
-    onKeyUp(e) {
-      const action = this.keyToAction[e.key]
-      if (!action) return
-      const keyId = e.key
-      this.heldKeys.delete(keyId)
-
-      const slot = this.activeTimers.get(action)
-      if (!slot) return
-      slot.keys.delete(keyId)
-
-      // 같은 action 에 매핑된 다른 키가 아직 눌려있으면 유지.
-      if (slot.keys.size === 0) {
-        if (slot.dasTimer) clearTimeout(slot.dasTimer)
-        if (slot.arrTimer) clearInterval(slot.arrTimer)
-        this.activeTimers.delete(action)
-      }
-    },
-    releaseAll() {
-      for (const slot of this.activeTimers.values()) {
-        if (slot.dasTimer) clearTimeout(slot.dasTimer)
-        if (slot.arrTimer) clearInterval(slot.arrTimer)
-      }
-      this.activeTimers.clear()
-      this.heldKeys.clear()
-    },
-    fire(action) {
-      const serverAction = this.actionToServer[action]
-      if (!serverAction) return
-      this.pushEvent("input", { action: serverAction })
-    },
-  },
+  // Tetris 키 입력 — 별도 모듈 (./hooks/tetris_input.js).
+  TetrisInput,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

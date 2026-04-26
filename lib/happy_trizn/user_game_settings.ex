@@ -30,6 +30,118 @@ defmodule HappyTrizn.UserGameSettings do
 
   새 게임 추가 시 case 절 확장.
   """
+  def defaults("bomberman") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w"],
+        "move_down" => ["ArrowDown", "s"],
+        "move_left" => ["ArrowLeft", "a"],
+        "move_right" => ["ArrowRight", "d"],
+        "place_bomb" => [" ", "x"],
+        "kick" => ["k"],
+        "punch" => ["p"]
+      },
+      options: %{
+        "speed_sound" => true,
+        "explosion_sound" => true,
+        "grid_color" => "#1a1a1a",
+        "skin" => "default"
+      },
+      das: 133,
+      arr: 30,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("skribbl") do
+    %{
+      bindings: %{
+        "send_chat" => ["Enter"]
+      },
+      options: %{
+        "chat_sound" => true,
+        "dictionary" => "ko",
+        "round_seconds" => 80,
+        "default_pen_color" => "#000000"
+      },
+      das: 133,
+      arr: 10,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("snake_io") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"],
+        "boost" => [" "]
+      },
+      options: %{
+        "color" => "random",
+        "minimap" => true
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("games_2048") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"]
+      },
+      options: %{
+        "board_size" => 4,
+        "theme" => "light"
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("minesweeper") do
+    %{
+      bindings: %{
+        "reveal" => ["click"],
+        "flag" => ["right_click", "f"]
+      },
+      options: %{
+        "difficulty" => "medium",
+        "show_timer" => true
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
+  def defaults("pacman") do
+    %{
+      bindings: %{
+        "move_up" => ["ArrowUp", "w"],
+        "move_down" => ["ArrowDown", "s"],
+        "move_left" => ["ArrowLeft", "a"],
+        "move_right" => ["ArrowRight", "d"]
+      },
+      options: %{
+        "sound_eat" => true,
+        "sound_death" => true,
+        "sound_intro" => true
+      },
+      das: 0,
+      arr: 0,
+      soft_drop_speed: "medium"
+    }
+  end
+
   def defaults("tetris") do
     %{
       bindings: %{
@@ -91,7 +203,11 @@ defmodule HappyTrizn.UserGameSettings do
         base
 
       %Setting{key_bindings: kb, options: opts} ->
-        merged_bindings = Map.merge(base.bindings, kb || %{})
+        merged_bindings =
+          base.bindings
+          |> Map.merge(kb || %{})
+          |> normalize_bindings()
+
         merged_options = Map.merge(base.options, opts || %{})
 
         %{
@@ -103,6 +219,69 @@ defmodule HappyTrizn.UserGameSettings do
         }
     end
   end
+
+  # 저장된 키 list 의 친화 표기 ("Space"/"space" 등) 를 KeyboardEvent.key 정규형 (" ") 으로 변환.
+  # 과거 parse_key 도입 전에 저장된 row 도 안전하게 매칭.
+  defp normalize_bindings(bindings) when is_map(bindings) do
+    Map.new(bindings, fn {action, keys} ->
+      {action, normalize_key_list(keys)}
+    end)
+  end
+
+  defp normalize_key_list(keys) when is_list(keys), do: Enum.map(keys, &normalize_key/1)
+  defp normalize_key_list(_), do: []
+
+  defp normalize_key("Space"), do: " "
+  defp normalize_key("space"), do: " "
+  defp normalize_key("SPACE"), do: " "
+  defp normalize_key("Tab"), do: "\t"
+  defp normalize_key(k), do: k
+
+  # ============================================================================
+  # Public helpers for forms (display + parse)
+  # ============================================================================
+
+  @doc "키 list → UI 친화 표시 문자열 (\" \" → \"Space\")."
+  def display_keys(keys) when is_list(keys) do
+    keys |> Enum.map(&display_key/1) |> Enum.join(", ")
+  end
+
+  def display_keys(_), do: ""
+
+  def display_key(" "), do: "Space"
+  def display_key("\t"), do: "Tab"
+  def display_key(k), do: k
+
+  @doc "사용자 입력 키 문자열 → KeyboardEvent.key 정규형 (\"Space\" → \" \")."
+  def parse_key("Space"), do: " "
+  def parse_key("space"), do: " "
+  def parse_key("Tab"), do: "\t"
+  def parse_key(""), do: ""
+  def parse_key(k), do: k
+
+  @doc "콤마 분리 + trim + parse + 빈 값 제거."
+  def parse_keys_input(str) when is_binary(str) do
+    str
+    |> String.split(",", trim: true)
+    |> Enum.map(&(&1 |> String.trim() |> parse_key()))
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  def parse_keys_input(_), do: []
+
+  @doc "옵션 값 정규화 (boolean/integer 변환)."
+  def normalize_option_value(_k, "true"), do: true
+  def normalize_option_value(_k, "false"), do: false
+
+  def normalize_option_value(k, v)
+      when k in ~w(das arr sound_volume round_seconds board_size) and is_binary(v) do
+    case Integer.parse(v) do
+      {n, _} -> n
+      :error -> v
+    end
+  end
+
+  def normalize_option_value(_, v), do: v
 
   @doc """
   Upsert 사용자 옵션. (등록자 only)

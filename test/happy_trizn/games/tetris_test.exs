@@ -4,7 +4,18 @@ defmodule HappyTrizn.Games.TetrisTest do
   alias HappyTrizn.Games.Tetris
   alias HappyTrizn.Games.Tetris.{Board, Piece}
 
+  # 2명 join + countdown 즉시 끝내서 :playing 상태로.
+  # 신규 spec: 2번째 join 시 :countdown (3000ms) → tick 으로 0 까지 가야 :playing.
   defp join2 do
+    {:ok, state} = Tetris.init(%{})
+    {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+    {:ok, s2, _} = Tetris.handle_player_join("p2", %{}, s1)
+    # status :countdown — 강제로 :playing 으로 진입 (tick 60번 없이).
+    %{s2 | status: :playing, countdown_ms: 0}
+  end
+
+  # countdown 진행 중인 상태 그대로 (UI 테스트용).
+  defp join2_countdown do
     {:ok, state} = Tetris.init(%{})
     {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
     {:ok, s2, _} = Tetris.handle_player_join("p2", %{}, s1)
@@ -36,14 +47,16 @@ defmodule HappyTrizn.Games.TetrisTest do
   end
 
   describe "handle_player_join/3" do
-    test "1번째 → waiting, 2번째 → playing" do
+    test "1번째 → waiting, 2번째 → countdown (3-2-1 → playing)" do
       {:ok, state} = Tetris.init(%{})
       {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
       assert s1.status == :waiting
       assert map_size(s1.players) == 1
 
-      {:ok, s2, _} = Tetris.handle_player_join("p2", %{}, s1)
-      assert s2.status == :playing
+      {:ok, s2, broadcasts} = Tetris.handle_player_join("p2", %{}, s1)
+      assert s2.status == :countdown
+      assert s2.countdown_ms == 3000
+      assert {:countdown_start, 3000} in broadcasts
       assert map_size(s2.players) == 2
 
       Enum.each(s2.players, fn {_id, p} ->
@@ -186,11 +199,18 @@ defmodule HappyTrizn.Games.TetrisTest do
       assert p.hold_used
     end
 
-    test "이미 hold_used 면 noop" do
+    test "이미 hold_used 면 noop (current/hold 변동 없음, keys_pressed 만 증가)" do
       state = join2()
       {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "hold"}, state)
-      # 한 번 더 → noop
-      assert {:ok, ^s1, []} = Tetris.handle_input("p1", %{"action" => "hold"}, s1)
+      hold_before = s1.players["p1"].hold
+      cur_before = s1.players["p1"].current
+      keys_before = s1.players["p1"].keys_pressed
+
+      assert {:ok, s2, []} = Tetris.handle_input("p1", %{"action" => "hold"}, s1)
+      assert s2.players["p1"].hold == hold_before
+      assert s2.players["p1"].current == cur_before
+      # hold 시도 = key press 1회 카운트
+      assert s2.players["p1"].keys_pressed == keys_before + 1
     end
 
     test "두 번째 hold (lock 후) → swap" do
@@ -284,6 +304,359 @@ defmodule HappyTrizn.Games.TetrisTest do
 
       {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
       assert ns.players["p1"].combo == -1
+    end
+  end
+
+  describe "practice 모드 + countdown" do
+    test "1명 join + start_practice → status :practice" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+      assert s1.status == :waiting
+
+      {:ok, s2, broadcasts} = Tetris.handle_input("p1", %{"action" => "start_practice"}, s1)
+      assert s2.status == :practice
+      assert {:practice_started, "p1"} in broadcasts
+    end
+
+    test ":waiting 2명 아닐 때 start_practice 무시" do
+      {:ok, state} = Tetris.init(%{})
+
+      assert {:ok, ^state, []} =
+               Tetris.handle_input("ghost", %{"action" => "start_practice"}, state)
+    end
+
+    test ":practice 중 input (예: hard_drop) 동작" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "start_practice"}, s1)
+
+      orig_score = s2.players["p1"].score
+      {:ok, s3, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, s2)
+      assert s3.players["p1"].score > orig_score
+    end
+
+    test ":practice 중 2명째 join → 양쪽 reset + :countdown" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "start_practice"}, s1)
+
+      # p1 점수 쌓기
+      {:ok, s2b, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, s2)
+      assert s2b.players["p1"].score > 0
+
+      {:ok, s3, broadcasts} = Tetris.handle_player_join("p2", %{}, s2b)
+      assert s3.status == :countdown
+      # 양쪽 모두 fresh state (점수 0)
+      assert s3.players["p1"].score == 0
+      assert s3.players["p2"].score == 0
+      assert {:countdown_start, 3000} in broadcasts
+    end
+
+    test "tick 으로 countdown_ms 감소 → 0 도달 시 :playing" do
+      state = join2_countdown()
+      assert state.status == :countdown
+      assert state.countdown_ms == 3000
+
+      # tick 한 번 → 50ms 감소
+      {:ok, s1, _} = Tetris.tick(state)
+      assert s1.countdown_ms == 2950
+
+      # 강제로 ms 50 으로 만들고 한 번 더 → :playing
+      s_almost = %{state | countdown_ms: 50}
+      {:ok, s_done, broadcasts} = Tetris.tick(s_almost)
+      assert s_done.status == :playing
+      assert s_done.countdown_ms == 0
+      assert {:game_start, %{}} in broadcasts
+    end
+
+    test "countdown 중 한 명 leave → :waiting 복귀 + 카운트 cancel" do
+      state = join2_countdown()
+      assert state.status == :countdown
+
+      {:ok, s, broadcasts} = Tetris.handle_player_leave("p2", :disconnect, state)
+      assert s.status == :waiting
+      assert s.countdown_ms == nil
+      assert map_size(s.players) == 1
+      assert {:countdown_cancel, %{}} in broadcasts
+    end
+
+    test ":countdown 중 input 무시 (status not in [:playing, :practice])" do
+      state = join2_countdown()
+      assert {:ok, ^state, []} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+    end
+  end
+
+  describe "restart + winners_history" do
+    test "1v1 게임 끝 → restart → :countdown 재진입 + winners_history 보존" do
+      state = join2()
+      # 강제로 :over (winner=p1) 상태 만들기
+      state = put_in(state.players["p2"].top_out, true)
+      state = %{state | status: :playing}
+      # 강제로 finish_round 호출 (handle_player_leave 등 거치지 않고 직접)
+      {:ok, finished_state, _} =
+        Tetris.handle_player_leave("ghost_unknown", :disconnect, state)
+
+      # finished_state 는 winner=p1 + status :over (handle_player_leave 처리 안 됨 → 직접)
+      _ = finished_state
+
+      forced =
+        state
+        |> Map.put(:status, :over)
+        |> Map.put(:winner, "p1")
+        |> Map.put(:winners_history, [%{winner_id: "p1", at: DateTime.utc_now(), score: 100}])
+
+      {:ok, ns, broadcasts} = Tetris.handle_input("p1", %{"action" => "restart"}, forced)
+
+      assert ns.status == :countdown
+      assert ns.countdown_ms == 3000
+      assert ns.winner == nil
+      # 양쪽 player score 0 (fresh)
+      Enum.each(ns.players, fn {_, p} -> assert p.score == 0 end)
+      # history 보존 (restart 가 history clear 안 함)
+      assert length(ns.winners_history) == 1
+      assert {:countdown_start, 3000} in broadcasts
+    end
+
+    test "1명 (solo) 게임 끝 → restart → :practice 재진입" do
+      {:ok, state} = Tetris.init(%{})
+      {:ok, s1, _} = Tetris.handle_player_join("p1", %{}, state)
+
+      # 솔로 :over 상태 강제
+      forced = %{s1 | status: :over, winner: nil}
+
+      {:ok, ns, broadcasts} = Tetris.handle_input("p1", %{"action" => "restart"}, forced)
+      assert ns.status == :practice
+      assert ns.players["p1"].score == 0
+      assert {:practice_started, "p1"} in broadcasts
+    end
+
+    test "status != :over 일 때 restart 무시" do
+      state = join2()
+      assert {:ok, ^state, []} = Tetris.handle_input("p1", %{"action" => "restart"}, state)
+    end
+
+    test "참가자 아닌 사람 restart 시도 → 무시" do
+      state = join2() |> Map.put(:status, :over) |> Map.put(:winner, "p1")
+      assert {:ok, ^state, []} = Tetris.handle_input("ghost", %{"action" => "restart"}, state)
+    end
+
+    test "winner 결정 시 winners_history 자동 추가" do
+      state = join2()
+      # p2 leave → p1 winner
+      {:ok, ns, _} = Tetris.handle_player_leave("p2", :disconnect, state)
+      assert ns.status == :over
+      assert ns.winner == "p1"
+      assert length(ns.winners_history) == 1
+      [entry | _] = ns.winners_history
+      assert entry.winner_id == "p1"
+      assert entry.primary_id == "p1"
+      assert is_integer(entry.score)
+    end
+  end
+
+  describe "lock delay" do
+    test "soft_drop landed → 즉시 lock 안 함, lock_delay_ms 시작" do
+      state = join2()
+
+      # 빈 board 에 piece 가 max 까지 떨어진 상태 시뮬: O at row=20 col=4 → soft drop landed.
+      state = force_piece(state, "p1", :o, 0, {20, 4})
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      p = ns.players["p1"]
+
+      # 새 piece spawn 안 됐어야 (lock 미발생)
+      assert p.current.type == :o
+      assert p.current.origin == {20, 4}
+      assert p.lock_delay_ms == 500
+      assert p.lock_resets == 0
+    end
+
+    test "lock delay 중 회전 시 timer reset, lock_resets +1" do
+      state = join2()
+      state = force_piece(state, "p1", :t, 0, {20, 4})
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      assert s1.players["p1"].lock_delay_ms == 500
+
+      # 인공으로 시간 경과 시뮬 — lock_delay_ms 100 으로
+      s1 = put_in(s1.players["p1"].lock_delay_ms, 100)
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "rotate_cw"}, s1)
+      assert s2.players["p1"].lock_delay_ms == 500
+      assert s2.players["p1"].lock_resets == 1
+    end
+
+    test "max_lock_resets 도달 시 timer reset 안 함" do
+      state = join2()
+      state = force_piece(state, "p1", :o, 0, {20, 4})
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+
+      # lock_resets 를 max 로 강제 + delay 100
+      s1 =
+        s1
+        |> put_in([Access.key!(:players), "p1", Access.key!(:lock_resets)], 15)
+        |> put_in([Access.key!(:players), "p1", Access.key!(:lock_delay_ms)], 100)
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "left"}, s1)
+      # delay 그대로 (reset 안 됨)
+      assert s2.players["p1"].lock_delay_ms == 100
+      assert s2.players["p1"].lock_resets == 15
+    end
+
+    test "tick 으로 lock_delay 시간 경과 후 0 되면 lock_and_advance" do
+      state = join2()
+      state = force_piece(state, "p1", :o, 0, {20, 4})
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "soft_drop"}, state)
+      orig_next = s1.players["p1"].next
+
+      # delay 50 으로 → 한 tick 으로 lock
+      s1 = put_in(s1.players["p1"].lock_delay_ms, 50)
+
+      {:ok, s2, _} = Tetris.tick(s1)
+      p = s2.players["p1"]
+
+      # 새 piece spawn (lock 후)
+      assert p.current.type == orig_next
+      assert p.lock_delay_ms == nil
+      assert p.lock_resets == 0
+      assert p.pieces_placed == 1
+    end
+
+    test "lock delay 중 더 이상 landed 아니게 되면 lock_delay_ms 클리어" do
+      state = join2()
+      state = force_piece(state, "p1", :o, 0, {20, 4}, lock_delay_ms: 200)
+
+      # left 이동 시 같은 row 더 갈 수 있나? 그냥 horizontal — landed 여부 변함 없을 수 있음.
+      # 더 확실: piece 를 위로 옮긴 상태에서 horizontal → not landed → clear.
+      state = force_piece(state, "p1", :o, 0, {5, 4}, lock_delay_ms: 200)
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      assert ns.players["p1"].lock_delay_ms == nil
+    end
+  end
+
+  describe "next 큐 (upcoming)" do
+    test "public_player.nexts 5개 piece" do
+      state = join2()
+      pp = Tetris.public_player(state.players["p1"])
+      assert is_list(pp.nexts)
+      assert length(pp.nexts) == 5
+      Enum.each(pp.nexts, fn t -> assert t in [:i, :o, :t, :s, :z, :l, :j] end)
+    end
+
+    test "upcoming/2 ordering — head = next, 그 다음 bag 순서" do
+      state = join2()
+      p = state.players["p1"]
+      assert Tetris.upcoming(p, 5) == [p.next | p.bag] |> Enum.take(5)
+    end
+  end
+
+  describe "stats / public_stats" do
+    test "public_stats 에 pps/kpp/apm + 카운터들 포함" do
+      state = join2()
+      stats = Tetris.public_stats(state.players["p1"])
+
+      keys = [
+        :score,
+        :lines,
+        :level,
+        :top_out,
+        :combo,
+        :b2b,
+        :pieces_placed,
+        :keys_pressed,
+        :garbage_sent,
+        :garbage_received,
+        :garbage_wasted,
+        :hold_count,
+        :finesse_violations,
+        :duration_ms,
+        :pps,
+        :kpp,
+        :apm
+      ]
+
+      Enum.each(keys, fn k -> assert Map.has_key?(stats, k), "missing #{k}" end)
+    end
+
+    test "lock 후 pieces_placed +1, hold 후 hold_count +1" do
+      state = join2()
+
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      assert s1.players["p1"].pieces_placed == 1
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "hold"}, s1)
+      assert s2.players["p1"].hold_count == 1
+    end
+
+    test "input 마다 keys_pressed +1 (인식된 action 만)" do
+      state = join2()
+      {:ok, s1, _} = Tetris.handle_input("p1", %{"action" => "left"}, state)
+      assert s1.players["p1"].keys_pressed == 1
+
+      {:ok, s2, _} = Tetris.handle_input("p1", %{"action" => "magic"}, s1)
+      # 인식 안 된 action 은 카운트 X
+      assert s2.players["p1"].keys_pressed == 1
+    end
+  end
+
+  describe "garbage cancel — line clear 시 pending 차감 + 상대 send 차감" do
+    test "single clear (send 0, pending 5) → cancel 0, pending 그대로 5" do
+      state = join2()
+      state = put_in(state.players["p1"].pending_garbage, 5)
+
+      # single line clear setup (board row 21 col 0..4, 6..9 garbage; col 5 만 비움)
+      base_row = List.duplicate(:garbage, 10) |> List.replace_at(5, nil)
+      board = List.replace_at(Board.new(), 21, base_row)
+      state = state |> force_board("p1", board)
+      state = force_piece(state, "p1", :i, 1, {18, 3})
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.lines == 1
+      # send 0 (single 보냄 0), cancel 0 → pending 5 유지
+      assert p.pending_garbage == 5
+    end
+
+    test "tetris (send 4, pending 5) → cancel 4, pending = 1" do
+      state = join2()
+      state = put_in(state.players["p1"].pending_garbage, 5)
+
+      # 4 lines clear setup (row 18..21, col 4 빈칸. I 세로 떨어뜨려 4-line clear)
+      base_row = fn -> List.duplicate(:garbage, 10) |> List.replace_at(4, nil) end
+      board = Board.new()
+      board = Enum.reduce(18..21, board, fn r, acc -> List.replace_at(acc, r, base_row.()) end)
+      state = state |> force_board("p1", board)
+      state = force_piece(state, "p1", :i, 1, {18, 2})
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.lines == 4
+      # tetris send = 4, cancel min(4, 5) = 4, pending 5 - 4 = 1
+      assert p.pending_garbage == 1
+    end
+
+    test "no clear → pending 모두 board 로 굳음 (잔여 0)" do
+      state = join2()
+      state = put_in(state.players["p1"].pending_garbage, 3)
+
+      # 빈 board, hard_drop → no clear → garbage 3 적용 + pending 0
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.pending_garbage == 0
+      assert p.garbage_received == 3
+      assert p.garbage_wasted == 3
+    end
+
+    test "no clear + pending 0 → board 그대로" do
+      state = join2()
+      assert state.players["p1"].pending_garbage == 0
+
+      {:ok, ns, _} = Tetris.handle_input("p1", %{"action" => "hard_drop"}, state)
+      p = ns.players["p1"]
+      assert p.pending_garbage == 0
+      assert p.garbage_received == 0
     end
   end
 
@@ -415,6 +788,20 @@ defmodule HappyTrizn.Games.TetrisTest do
       |> Enum.each(fn row ->
         assert Enum.count(row, &is_nil/1) == 1
       end)
+    end
+
+    test "garbage 가 board height 초과해도 board 길이 22 유지 (overflow 방지)" do
+      # 빈 board 에 25 lines garbage — visible 모두 채움 = top_out.
+      assert {:error, :top_out} = Board.add_garbage(Board.new(), 25)
+
+      # 보드 일부만 채워서 add → 길이 22 보장 (over_top? false 시 :ok 가능).
+      # visible_height (20) 는 무조건 top_out 트리거.
+      assert {:error, :top_out} = Board.add_garbage(Board.new(), 20)
+    end
+
+    test "garbage <= visible_height-1 이면 정상 적용, 길이 22 유지" do
+      assert {:ok, b} = Board.add_garbage(Board.new(), 19)
+      assert length(b) == 22
     end
 
     test "hard_drop_position — 빈 board 에서 가장 아래까지" do

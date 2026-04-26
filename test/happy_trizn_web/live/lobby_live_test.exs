@@ -21,6 +21,14 @@ defmodule HappyTriznWeb.LobbyLiveTest do
       assert html =~ "글로벌 채팅"
     end
 
+    test "글로벌 🏠 홈 링크 root layout 에 노출", %{conn: conn} do
+      conn = Phoenix.ConnTest.get(conn, ~p"/lobby")
+      html = Phoenix.ConnTest.html_response(conn, 200)
+      assert html =~ "🏠"
+      # fixed 위치 (top/left) — root layout 의 home 버튼 marker
+      assert html =~ "fixed"
+    end
+
     test "메시지 보내기 → 화면에 표시", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/lobby")
 

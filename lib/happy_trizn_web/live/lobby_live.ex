@@ -283,6 +283,9 @@ defmodule HappyTriznWeb.LobbyLive do
               (게스트) <strong>{@nickname}</strong>
             <% end %>
           </span>
+          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm" title="게임 옵션">
+            ⚙️ 옵션
+          </.link>
           <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-sm">로그아웃</.link>
         </div>
       </header>

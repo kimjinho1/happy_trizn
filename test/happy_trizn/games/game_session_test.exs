@@ -103,4 +103,138 @@ defmodule HappyTrizn.Games.GameSessionTest do
       assert Process.alive?(pid)
     end
   end
+
+  describe "match_results 자동 저장 (game_over 시)" do
+    test "Tetris 1v1 한 명 leave → winner 결정 → match_results row 생성" do
+      Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(HappyTrizn.Repo, {:shared, self()})
+
+      {:ok, host} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "mr_h_#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "mr_h_#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, opp} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "mr_o_#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "mr_o_#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "tetris",
+          name: "match_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room.id),
+          room_id: room.id,
+          game_type: "tetris"
+        )
+
+      :ok = GameSession.player_join(pid, "p1", %{user_id: host.id, nickname: host.nickname})
+      :ok = GameSession.player_join(pid, "p2", %{user_id: opp.id, nickname: opp.nickname})
+
+      # countdown 끝낼 때까지 기다림 (3000ms 대신 강제 force).
+      # GenServer state 직접 조작 — 테스트용.
+      :sys.replace_state(pid, fn state ->
+        gs = state.game_state
+        %{state | game_state: %{gs | status: :playing, countdown_ms: 0}}
+      end)
+
+      # p2 가 leave → p1 winner → game_over → match_result 저장.
+      # GenServer 는 stop 안 함 (남은 player 가 다시 하기 가능).
+      GameSession.player_leave(pid, "p2", :disconnect)
+      # cast 처리 대기.
+      _ = :sys.get_state(pid)
+
+      # match_results 에 winner=host 인 row 있어야
+      [r] = HappyTrizn.MatchResults.recent("tetris", 50)
+      assert r.winner_id == host.id
+      assert r.room_id == room.id
+      assert r.game_type == "tetris"
+
+      # GenServer 살아있어야 (다시 하기 가능)
+      assert Process.alive?(pid)
+    end
+
+    test "winner 결정 후에도 game_over 다시 검사해도 dedupe — match_result 1개만 저장" do
+      Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(HappyTrizn.Repo, {:shared, self()})
+
+      {:ok, host} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "dd_#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "dd_#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "tetris",
+          name: "dedupe_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room.id),
+          room_id: room.id,
+          game_type: "tetris"
+        )
+
+      :ok = GameSession.player_join(pid, "p1", %{user_id: host.id, nickname: host.nickname})
+      :ok = GameSession.player_join(pid, "p2", %{user_id: nil, nickname: "p2"})
+
+      :sys.replace_state(pid, fn state ->
+        gs = state.game_state
+        %{state | game_state: %{gs | status: :playing, countdown_ms: 0}}
+      end)
+
+      GameSession.player_leave(pid, "p2", :disconnect)
+      _ = :sys.get_state(pid)
+      # 추가 input 이 발생해도 (game_over 재검사) match_result 또 저장 안 됨.
+      GameSession.handle_input(pid, "p1", %{"action" => "left"})
+      _ = :sys.get_state(pid)
+
+      assert length(HappyTrizn.MatchResults.recent("tetris", 50)) == 1
+    end
+  end
+
+  describe "terminate cleanup (room close)" do
+    test "GameSession 종료 시 Rooms.close_by_id 호출 → 방 status closed" do
+      Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(HappyTrizn.Repo, {:shared, self()})
+
+      {:ok, host} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "gst#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "gst#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, room} =
+        HappyTrizn.Rooms.create(host, %{
+          game_type: "tetris",
+          name: "term_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room.id),
+          room_id: room.id,
+          game_type: "tetris"
+        )
+
+      ref = Process.monitor(pid)
+      GenServer.stop(pid, :normal)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 1000
+
+      # 방 닫혔어야
+      assert HappyTrizn.Rooms.get(room.id).status == "closed"
+    end
+  end
 end
