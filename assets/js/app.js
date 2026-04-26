@@ -30,6 +30,7 @@ import {SkribblCanvas} from "./hooks/skribbl_canvas"
 import {BombermanInput} from "./hooks/bomberman_input"
 import {SnakeInput} from "./hooks/snake_input"
 import {SnakeCanvas} from "./hooks/snake_canvas"
+import {GameKeyCapture} from "./hooks/game_key_capture"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -84,6 +85,8 @@ const Hooks = {
   SnakeInput,
   // Snake.io 캔버스 렌더 — server 가 보낸 snakes/food payload.
   SnakeCanvas,
+  // 게임 키 capture — 화살표 등 page scroll 막고 server 로 forward.
+  GameKeyCapture,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

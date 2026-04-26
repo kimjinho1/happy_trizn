@@ -113,6 +113,18 @@ defmodule HappyTrizn.Games.SnakeIoTest do
     end
   end
 
+  describe "tick broadcast" do
+    test "tick 마다 :snake_state broadcast — players + food + tick_no 포함" do
+      s = init_with(2)
+      {:ok, ns, broadcasts} = SnakeIo.tick(s)
+
+      assert [{:snake_state, payload}] = broadcasts
+      assert payload.players == ns.players
+      assert payload.food == ns.food
+      assert payload.tick_no == ns.tick_no
+    end
+  end
+
   describe "tick — head 전진" do
     test "tick 마다 head 1칸 이동 + tail 줄어듦 (식사 안 함)" do
       s = init_with(1)

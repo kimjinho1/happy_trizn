@@ -532,6 +532,17 @@ defmodule HappyTriznWeb.GameMultiLive do
     {:noreply, refresh_state(socket)}
   end
 
+  # Snake.io 매 tick payload — GenServer.call 회피. canvas 라 DOM diff 부담 X.
+  def handle_info({:game_event, {:snake_state, payload}}, socket) do
+    new_state =
+      socket.assigns.game_state
+      |> Map.put(:players, payload.players)
+      |> Map.put(:food, payload.food)
+      |> Map.put(:tick_no, payload.tick_no)
+
+    {:noreply, assign(socket, :game_state, new_state)}
+  end
+
   def handle_info({:game_event, _other}, socket), do: {:noreply, refresh_state(socket)}
 
   # 게임방 채팅 — 최근 50개만 유지.

@@ -199,7 +199,16 @@ defmodule HappyTrizn.Games.SnakeIo do
     # 7. best_length 갱신.
     state = update_best_length(state)
 
-    {:ok, state, []}
+    # 매 tick 전체 state broadcast — LiveView 가 GenServer.call 안 거치고
+    # payload 로 직접 game_state 갱신 (Tetris freeze 패턴 회피). canvas 라
+    # DOM diff 부담 X.
+    payload = %{
+      players: state.players,
+      food: state.food,
+      tick_no: state.tick_no
+    }
+
+    {:ok, state, [{:snake_state, payload}]}
   end
 
   # ============================================================================

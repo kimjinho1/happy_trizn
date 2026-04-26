@@ -58,6 +58,15 @@ defmodule HappyTriznWeb.GameLiveTest do
       assert html =~ "점수:"
     end
 
+    test "GameKeyCapture hook 마운트 — 화살표/WASD/HJKL preventDefault 키", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/2048")
+      assert html =~ "phx-hook=\"GameKeyCapture\""
+      # data-keys 에 화살표 + WASD + HJKL 포함 — 페이지 스크롤 회피.
+      assert html =~ "ArrowUp,ArrowDown,ArrowLeft,ArrowRight"
+      assert html =~ "w,W,a,A,s,S,d,D"
+      assert html =~ "h,H,j,J,k,K,l,L"
+    end
+
     test "WASD / HJKL 도 keydown 받음", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/play/2048")
 

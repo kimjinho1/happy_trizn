@@ -108,7 +108,12 @@ defmodule HappyTriznWeb.GameLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen p-6 max-w-3xl mx-auto" phx-window-keydown="keydown" phx-throttle="80">
+    <div
+      id={"game-page-#{@slug}"}
+      phx-hook="GameKeyCapture"
+      data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L"
+      class="min-h-screen p-6 max-w-3xl mx-auto"
+    >
       <header class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
         <div class="flex items-center gap-2">
