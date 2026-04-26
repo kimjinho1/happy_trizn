@@ -424,7 +424,14 @@ defmodule HappyTrizn.Games.Tetris do
 
         if not Board.valid_placement?(player.board, player.next, 0, spawn_origin) do
           # spawn 못 함 → top out
-          new_player = %{player | hold: player.current.type, top_out: true, hold_used: true}
+          new_player = %{
+            player
+            | hold: player.current.type,
+              top_out: true,
+              top_out_at: System.monotonic_time(:millisecond),
+              hold_used: true
+          }
+
           new_players = Map.put(state.players, player_id, new_player)
           maybe_finish(state, new_players, [{:top_out, player_id}])
         else
@@ -452,7 +459,13 @@ defmodule HappyTrizn.Games.Tetris do
         spawn_origin = Piece.spawn_origin(held_type)
 
         if not Board.valid_placement?(player.board, held_type, 0, spawn_origin) do
-          new_player = %{player | top_out: true, hold_used: true}
+          new_player = %{
+            player
+            | top_out: true,
+              top_out_at: System.monotonic_time(:millisecond),
+              hold_used: true
+          }
+
           new_players = Map.put(state.players, player_id, new_player)
           maybe_finish(state, new_players, [{:top_out, player_id}])
         else
@@ -577,6 +590,7 @@ defmodule HappyTrizn.Games.Tetris do
         player
         | board: board_with_garbage,
           top_out: true,
+          top_out_at: System.monotonic_time(:millisecond),
           score: player.score + score_gain,
           lines: new_lines,
           level: new_level,
@@ -956,11 +970,39 @@ defmodule HappyTrizn.Games.Tetris do
      %{
        winner: w,
        players: public_players,
-       winners_history: state.winners_history || []
+       winners_history: state.winners_history || [],
+       ranking: ranking(state, w)
      }}
   end
 
   def game_over?(_), do: :no
+
+  # 종료 순위 — winner 1등, 나머지는 top_out_at 늦은 순 (오래 살아남은 사람이 위).
+  # winner == nil (모두 top_out) 케이스도 동일 정렬.
+  defp ranking(state, winner) do
+    state.players
+    |> Enum.map(fn {id, p} ->
+      %{
+        player_id: id,
+        nickname: Map.get(p, :nickname, "anon"),
+        score: p.score,
+        lines: p.lines,
+        top_out: p.top_out,
+        top_out_at: Map.get(p, :top_out_at),
+        is_winner: id == winner
+      }
+    end)
+    |> Enum.sort_by(fn entry ->
+      cond do
+        entry.is_winner -> {0, 0}
+        # top_out_at 큰 (늦게 죽은) 사람이 위. nil 은 살아있음 → 가장 위.
+        is_nil(entry.top_out_at) -> {1, 0}
+        true -> {2, -entry.top_out_at}
+      end
+    end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {entry, rank} -> Map.put(entry, :rank, rank) end)
+  end
 
   @doc """
   Player stats 결과 — game_over 시 + match_results 저장 시 사용.
@@ -1064,6 +1106,7 @@ defmodule HappyTrizn.Games.Tetris do
       b2b: false,
       last_was_rotate: false,
       top_out: false,
+      top_out_at: nil,
       # Lock delay (Jstris 표준 ~500ms, 회전/이동 reset 최대 15회).
       lock_delay_ms: nil,
       lock_resets: 0,

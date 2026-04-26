@@ -2032,7 +2032,10 @@ defmodule HappyTriznWeb.GameMultiLive do
     winner = Map.get(assigns.result, :winner)
     me_won? = is_binary(winner) and winner == assigns.player_id
     summary = Map.get(assigns.result, :winners_summary, [])
-    assigns = assign(assigns, winner: winner, me_won?: me_won?, summary: summary)
+    ranking = Map.get(assigns.result, :ranking, [])
+
+    assigns =
+      assign(assigns, winner: winner, me_won?: me_won?, summary: summary, ranking: ranking)
 
     ~H"""
     <!-- Fullscreen popup overlay — 게임 끝났을 때 명확히 보이도록 화면 중앙에. -->
@@ -2067,13 +2070,36 @@ defmodule HappyTriznWeb.GameMultiLive do
           </div>
         </div>
 
+        <%= if @ranking != [] do %>
+          <div class="mb-4">
+            <div class="font-semibold text-base-content/70 mb-2 text-center">최종 순위</div>
+            <div class="space-y-1 text-sm">
+              <%= for entry <- @ranking do %>
+                <div class={[
+                  "flex items-center gap-2 px-3 py-1.5 rounded",
+                  entry.player_id == @player_id && "bg-primary/20 ring-1 ring-primary",
+                  entry.player_id != @player_id && "bg-base-200"
+                ]}>
+                  <span class="font-bold w-6 text-center">
+                    {rank_emoji(entry.rank)}
+                  </span>
+                  <span class="flex-1 truncate font-medium">{entry.nickname}</span>
+                  <span class="text-xs text-base-content/60">
+                    {entry.score}pt · L{entry.lines}
+                  </span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
         <%= if @summary != [] do %>
           <div class="mb-4">
-            <div class="font-semibold text-base-content/70 mb-2 text-center">방 누적 우승</div>
-            <div class="flex flex-wrap gap-2 justify-center">
+            <div class="font-semibold text-base-content/70 mb-2 text-center text-xs">방 누적 우승</div>
+            <div class="flex flex-wrap gap-1 justify-center">
               <%= for entry <- @summary do %>
-                <span class="badge badge-lg">
-                  {entry.nickname} · <strong class="ml-1">{entry.wins}회</strong>
+                <span class="badge badge-sm">
+                  {entry.nickname} · {entry.wins}회
                 </span>
               <% end %>
             </div>
@@ -2087,4 +2113,9 @@ defmodule HappyTriznWeb.GameMultiLive do
     </div>
     """
   end
+
+  defp rank_emoji(1), do: "🥇"
+  defp rank_emoji(2), do: "🥈"
+  defp rank_emoji(3), do: "🥉"
+  defp rank_emoji(n), do: "#{n}"
 end
