@@ -165,7 +165,12 @@ defmodule HappyTriznWeb.GameMultiLive do
            }) do
         {:ok, _} ->
           new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
-          {:noreply, socket |> assign(:key_settings, new_settings) |> put_flash(:info, "저장됨")}
+
+          {:noreply,
+           socket
+           |> assign(:key_settings, new_settings)
+           |> assign(:settings_open, false)
+           |> put_flash(:info, "저장됨")}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "저장 실패")}
@@ -193,7 +198,12 @@ defmodule HappyTriznWeb.GameMultiLive do
            }) do
         {:ok, _} ->
           new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
-          {:noreply, socket |> assign(:key_settings, new_settings) |> put_flash(:info, "저장됨")}
+
+          {:noreply,
+           socket
+           |> assign(:key_settings, new_settings)
+           |> assign(:settings_open, false)
+           |> put_flash(:info, "저장됨")}
 
         {:error, _} ->
           {:noreply, put_flash(socket, :error, "저장 실패")}
@@ -209,7 +219,12 @@ defmodule HappyTriznWeb.GameMultiLive do
     else
       :ok = UserGameSettings.reset(user, socket.assigns.slug)
       new_settings = UserGameSettings.get_for(user, socket.assigns.slug)
-      {:noreply, socket |> assign(:key_settings, new_settings) |> put_flash(:info, "초기화 완료")}
+
+      {:noreply,
+       socket
+       |> assign(:key_settings, new_settings)
+       |> assign(:settings_open, false)
+       |> put_flash(:info, "초기화 완료")}
     end
   end
 
@@ -367,14 +382,11 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp settings_modal(assigns) do
     ~H"""
-    <div
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black/50"
-      phx-click="close_settings"
-    >
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
       <div
+        id="settings-modal-box"
         class="bg-base-100 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
         phx-click-away="close_settings"
-        onclick="event.stopPropagation()"
       >
         <header class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-bold">⚙️ {String.upcase(@slug)} 옵션</h2>
