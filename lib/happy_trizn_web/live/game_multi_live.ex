@@ -937,10 +937,10 @@ defmodule HappyTriznWeb.GameMultiLive do
       </div>
       <div class="inline-flex bg-base-300 p-px gap-px relative w-full justify-center">
         <!-- pending garbage bar -->
-        <div class="flex flex-col-reverse w-1 bg-base-100 overflow-hidden">
+        <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
           <%= if @pending > 0 do %>
             <%= for _ <- 1..@pending//1 do %>
-              <div class="h-1.5 bg-error"></div>
+              <div class="h-3 bg-error"></div>
             <% end %>
           <% end %>
         </div>
@@ -948,7 +948,7 @@ defmodule HappyTriznWeb.GameMultiLive do
           <%= for row <- @visible do %>
             <div class="flex">
               <%= for cell <- row do %>
-                <div class={["w-1.5 h-1.5", cell_color(cell)]}></div>
+                <div class={["w-3 h-3 border border-base-content/5", cell_color(cell)]}></div>
               <% end %>
             </div>
           <% end %>
@@ -1170,7 +1170,7 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp game_room_chat(assigns) do
     ~H"""
-    <div class="bg-base-200 rounded-lg flex flex-col" style="height: 480px;">
+    <div class="bg-base-200 rounded-lg flex flex-col" style="height: 280px;">
       <header class="px-3 py-2 border-b border-base-300 text-sm font-semibold flex items-center gap-2">
         💬 <span>게임방 채팅</span>
         <span class="text-xs font-normal text-base-content/50">방 닫히면 사라짐</span>
@@ -1901,17 +1901,19 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   defp next_queue(assigns) do
     ~H"""
-    <div class="flex flex-col gap-1 bg-base-200 p-1 sm:p-2 rounded min-w-[60px] sm:min-w-[80px]">
-      <div class="text-xs text-base-content/60 mb-1 text-center">다음</div>
+    <div class="flex flex-col gap-2 bg-base-200 p-2 rounded min-w-[64px] sm:min-w-[80px]">
+      <div class="text-xs text-base-content/60 text-center">다음</div>
       <%= for piece <- @nexts || [] do %>
-        <div class="grid grid-cols-4 gap-px">
-          <%= for {r, c} <- piece_preview_cells(piece) do %>
-            <div
-              class={["w-3 h-3", cell_color(piece)]}
-              style={"grid-row: #{r + 1}; grid-column: #{c + 1};"}
-            >
-            </div>
-          <% end %>
+        <div class="bg-base-300/60 rounded p-1.5 flex justify-center">
+          <div class="grid grid-cols-4 gap-px">
+            <%= for {r, c} <- piece_preview_cells(piece) do %>
+              <div
+                class={["w-3 h-3", cell_color(piece)]}
+                style={"grid-row: #{r + 1}; grid-column: #{c + 1};"}
+              >
+              </div>
+            <% end %>
+          </div>
         </div>
       <% end %>
     </div>
@@ -1983,7 +1985,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         <%= for row <- @visible do %>
           <div class="flex">
             <%= for cell <- row do %>
-              <div class={["w-3 h-3 sm:w-5 sm:h-5", cell_color(cell), grid_class(@grid)]}></div>
+              <div class={["w-6 h-6 sm:w-7 sm:h-7", cell_color(cell), grid_class(@grid)]}></div>
             <% end %>
           </div>
         <% end %>
@@ -1992,12 +1994,14 @@ defmodule HappyTriznWeb.GameMultiLive do
     """
   end
 
+  # 빈 셀 bg = base-100 (어두운 배경). border 는 매우 연하게 — base-content/5
+  # (jstris 처럼 은은한 격자, 눈에 거슬리지 않는 정도).
   defp grid_class("none"), do: ""
-  defp grid_class("standard"), do: "border border-base-100"
-  defp grid_class("partial"), do: "border-l border-t border-base-100"
-  defp grid_class("vertical"), do: "border-l border-r border-base-100/50"
-  defp grid_class("full"), do: "border border-base-100/80"
-  defp grid_class(_), do: "border border-base-100"
+  defp grid_class("standard"), do: "border border-base-content/5"
+  defp grid_class("partial"), do: "border-l border-t border-base-content/5"
+  defp grid_class("vertical"), do: "border-l border-r border-base-content/5"
+  defp grid_class("full"), do: "border border-base-content/10"
+  defp grid_class(_), do: "border border-base-content/5"
 
   defp cell_color(nil), do: "bg-base-100"
   defp cell_color(:i), do: "bg-cyan-400"

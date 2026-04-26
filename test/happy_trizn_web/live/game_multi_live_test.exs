@@ -166,8 +166,8 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
 
     test "ghost piece + grid class render", %{conn: conn, room: room} do
       {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
-      # standard grid class (default)
-      assert html =~ "border-base-100"
+      # standard grid class — Sprint 3l-2 후 base-content/15 contrast border.
+      assert html =~ "border-base-content"
       # 옵션 hold/next preview 컴포넌트
       assert html =~ "홀드"
       assert html =~ "다음"
@@ -488,8 +488,8 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       html = render(view_a)
       # 상대 카운트 1명.
       assert html =~ "상대 (1명)"
-      # mini board cell 크기 — w-1.5 h-1.5.
-      assert html =~ "w-1.5 h-1.5"
+      # mini board cell 크기 — w-3 h-3 (Sprint 3l-2 비율 조정 후).
+      assert html =~ "w-3 h-3"
       # 상대 nickname 표시.
       assert html =~ bob.nickname
       _ = host
