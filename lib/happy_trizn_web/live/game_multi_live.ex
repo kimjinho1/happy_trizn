@@ -789,8 +789,8 @@ defmodule HappyTriznWeb.GameMultiLive do
   defp game_over_panel(assigns) do
     winner = Map.get(assigns.result, :winner)
     me_won? = is_binary(winner) and winner == assigns.player_id
-    history = Map.get(assigns.result, :winners_history, [])
-    assigns = assign(assigns, winner: winner, me_won?: me_won?, history: history)
+    summary = Map.get(assigns.result, :winners_summary, [])
+    assigns = assign(assigns, winner: winner, me_won?: me_won?, summary: summary)
 
     ~H"""
     <div class={[
@@ -803,7 +803,7 @@ defmodule HappyTriznWeb.GameMultiLive do
             <% @me_won? -> %>
               🏆 승리!
             <% is_binary(@winner) -> %>
-              😢 패배 — 승자: {String.slice(@winner, 0..7)}
+              😢 패배
             <% true -> %>
               💀 게임 종료
           <% end %>
@@ -811,29 +811,16 @@ defmodule HappyTriznWeb.GameMultiLive do
         <button phx-click="restart" class="btn btn-primary btn-sm">🔄 다시 하기</button>
       </div>
 
-      <%= if @history != [] do %>
-        <div class="text-xs">
-          <div class="font-semibold text-base-content/70 mb-1">방 1등 기록 (최근 {length(@history)}회)</div>
-          <ol class="space-y-1">
-            <%= for {entry, idx} <- Enum.with_index(@history) do %>
-              <li class="flex items-center gap-2">
-                <span class="badge badge-sm">#{idx + 1}</span>
-                <span class="font-mono">
-                  <%= cond do %>
-                    <% entry[:winner_id] -> %>
-                      {String.slice(entry.winner_id, 0..7)}
-                    <% entry[:primary_id] -> %>
-                      {String.slice(entry.primary_id, 0..7)} (솔로)
-                    <% true -> %>
-                      —
-                  <% end %>
-                </span>
-                <%= if entry[:score] do %>
-                  <span class="text-base-content/60">점수 {entry.score} · 라인 {entry[:lines] || 0}</span>
-                <% end %>
-              </li>
+      <%= if @summary != [] do %>
+        <div class="text-sm">
+          <div class="font-semibold text-base-content/70 mb-1">방 누적 우승</div>
+          <div class="flex flex-wrap gap-2">
+            <%= for entry <- @summary do %>
+              <span class="badge badge-lg">
+                {entry.nickname} · <strong class="ml-1">{entry.wins}회</strong>
+              </span>
             <% end %>
-          </ol>
+          </div>
         </div>
       <% end %>
     </div>

@@ -93,6 +93,77 @@ defmodule HappyTrizn.MatchResultsTest do
     end
   end
 
+  describe "winners_summary/1 (방 단위 누적 우승)" do
+    test "winner_id 별 닉네임 + 횟수, 횟수 desc 정렬" do
+      alice = user_fixture()
+      bob = user_fixture()
+      room_id = Ecto.UUID.generate()
+
+      for _ <- 1..3 do
+        {:ok, _} =
+          MatchResults.record(%{
+            game_type: "tetris",
+            room_id: room_id,
+            winner_id: alice.id,
+            duration_ms: 1000,
+            stats: %{}
+          })
+      end
+
+      {:ok, _} =
+        MatchResults.record(%{
+          game_type: "tetris",
+          room_id: room_id,
+          winner_id: bob.id,
+          duration_ms: 1000,
+          stats: %{}
+        })
+
+      summary = MatchResults.winners_summary(room_id)
+      assert length(summary) == 2
+
+      [first, second] = summary
+      assert first.user_id == alice.id
+      assert first.nickname == alice.nickname
+      assert first.wins == 3
+      assert second.user_id == bob.id
+      assert second.wins == 1
+    end
+
+    test "winner_id null row 무시" do
+      room_id = Ecto.UUID.generate()
+
+      {:ok, _} =
+        MatchResults.record(%{
+          game_type: "tetris",
+          room_id: room_id,
+          winner_id: nil,
+          duration_ms: 1,
+          stats: %{}
+        })
+
+      assert MatchResults.winners_summary(room_id) == []
+    end
+
+    test "다른 room 데이터 분리" do
+      alice = user_fixture()
+      room_x = Ecto.UUID.generate()
+      room_y = Ecto.UUID.generate()
+
+      {:ok, _} =
+        MatchResults.record(%{
+          game_type: "tetris",
+          room_id: room_x,
+          winner_id: alice.id,
+          duration_ms: 1,
+          stats: %{}
+        })
+
+      assert [%{wins: 1}] = MatchResults.winners_summary(room_x)
+      assert MatchResults.winners_summary(room_y) == []
+    end
+  end
+
   describe "recent/2" do
     test "최근 N개, game_type 필터" do
       {:ok, _} = MatchResults.record(%{game_type: "tetris", duration_ms: 1, stats: %{}})

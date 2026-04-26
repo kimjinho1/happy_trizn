@@ -212,7 +212,11 @@ defmodule HappyTrizn.Games.GameSession do
           {:noreply, state}
         else
           maybe_record_match(state, results)
-          broadcast_messages(state.room_id, [{:game_over, results}])
+          # 저장 직후 summary 재조회 — 닉네임 누적 우승 횟수.
+          # Tetris module 외 게임에도 동일 적용 (방 단위 winner counts).
+          summary = HappyTrizn.MatchResults.winners_summary(state.room_id || "")
+          enriched = Map.put(results, :winners_summary, summary)
+          broadcast_messages(state.room_id, [{:game_over, enriched}])
           {:noreply, %{state | match_recorded: true}}
         end
 

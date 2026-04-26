@@ -50,4 +50,29 @@ defmodule HappyTrizn.MatchResults do
   end
 
   def get(id), do: Repo.get(MatchResult, id)
+
+  @doc """
+  방 단위 누적 우승 요약 — winner_id 별 닉네임 + 우승 횟수.
+
+  GameSession 가 죽었다 살아도 DB 에서 다시 로드 가능 — 방 살아있는 한 영속.
+  Returns list, 우승 횟수 desc 정렬.
+
+      [
+        %{user_id: "...", nickname: "alice", wins: 5},
+        %{user_id: "...", nickname: "bob", wins: 2}
+      ]
+  """
+  def winners_summary(room_id) when is_binary(room_id) do
+    from(r in MatchResult,
+      join: u in HappyTrizn.Accounts.User,
+      on: u.id == r.winner_id,
+      where: r.room_id == ^room_id and not is_nil(r.winner_id),
+      group_by: [u.id, u.nickname],
+      select: %{user_id: u.id, nickname: u.nickname, wins: count(r.id)},
+      order_by: [desc: count(r.id), asc: u.nickname]
+    )
+    |> Repo.all()
+  end
+
+  def winners_summary(_), do: []
 end
