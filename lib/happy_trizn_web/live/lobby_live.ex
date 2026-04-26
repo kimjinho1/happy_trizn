@@ -189,6 +189,11 @@ defmodule HappyTriznWeb.LobbyLive do
     end
   end
 
+  def handle_event("rooms_page", %{"page" => p}, socket) do
+    page = p |> to_string() |> String.to_integer()
+    {:noreply, socket |> assign(:rooms_page, page) |> load_rooms()}
+  end
+
   def handle_event("open_invite", %{"room-id" => room_id}, socket) do
     case Rooms.get(room_id) do
       nil -> {:noreply, put_flash(socket, :error, "방 없음")}
@@ -316,7 +321,17 @@ defmodule HappyTriznWeb.LobbyLive do
   end
 
   defp load_rooms(socket) do
-    assign(socket, rooms: Rooms.list_open(limit: 50))
+    rooms = Rooms.list_open(limit: 50)
+    page = Map.get(socket.assigns, :rooms_page, 1)
+    page_size = 4
+    total_pages = max(1, ceil(length(rooms) / page_size))
+    page = page |> max(1) |> min(total_pages)
+
+    socket
+    |> assign(:rooms, rooms)
+    |> assign(:rooms_page, page)
+    |> assign(:rooms_page_size, page_size)
+    |> assign(:rooms_total_pages, total_pages)
   end
 
   # game_type slug → 사용자 친화 이름 (캐치마인드, Tetris 등). 없으면 slug 그대로.
@@ -434,22 +449,24 @@ defmodule HappyTriznWeb.LobbyLive do
               <%= if @rooms == [] do %>
                 <p class="text-base-content/50 text-sm py-4 text-center">열린 방 없음. 직접 만들어보세요.</p>
               <% else %>
-                <div class="space-y-1 max-h-48 overflow-y-auto">
-                  <%= for room <- @rooms do %>
-                    <div class="flex items-center justify-between p-2 bg-base-100 rounded text-sm">
-                      <div class="flex items-center gap-2">
-                        <span class="badge badge-sm">{game_display_name(room.game_type)}</span>
-                        <span class="font-semibold">{room.name}</span>
+                <% page_rooms =
+                  Enum.slice(@rooms, (@rooms_page - 1) * @rooms_page_size, @rooms_page_size) %>
+                <div class="space-y-2">
+                  <%= for room <- page_rooms do %>
+                    <div class="flex items-center justify-between p-3 bg-base-100 rounded">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="badge badge-md">{game_display_name(room.game_type)}</span>
+                        <span class="font-semibold text-base">{room.name}</span>
                         <%= if room.password_hash do %>
-                          <span class="text-xs" title="비밀번호 방">🔒</span>
+                          <span class="text-base" title="비밀번호 방">🔒</span>
                         <% end %>
                       </div>
-                      <div class="flex items-center gap-1">
+                      <div class="flex items-center gap-2">
                         <%= if @user && @friends != [] do %>
                           <button
                             phx-click="open_invite"
                             phx-value-room-id={room.id}
-                            class="btn btn-xs btn-ghost"
+                            class="btn btn-sm btn-ghost text-lg"
                             title="친구 초대"
                           >
                             💌
@@ -462,16 +479,16 @@ defmodule HappyTriznWeb.LobbyLive do
                               type="password"
                               name="password"
                               placeholder="비번"
-                              class="input input-bordered input-xs w-24"
+                              class="input input-bordered input-sm w-28"
                               required
                             />
-                            <button type="submit" class="btn btn-xs btn-primary">입장</button>
+                            <button type="submit" class="btn btn-sm btn-primary">입장</button>
                           </form>
                         <% else %>
                           <button
                             phx-click="join_room"
                             phx-value-room-id={room.id}
-                            class="btn btn-xs btn-primary"
+                            class="btn btn-sm btn-primary"
                           >
                             입장
                           </button>
@@ -480,6 +497,39 @@ defmodule HappyTriznWeb.LobbyLive do
                     </div>
                   <% end %>
                 </div>
+
+                <%= if @rooms_total_pages > 1 do %>
+                  <div class="flex items-center justify-center gap-1 mt-3">
+                    <button
+                      phx-click="rooms_page"
+                      phx-value-page={@rooms_page - 1}
+                      class="btn btn-sm btn-ghost"
+                      disabled={@rooms_page <= 1}
+                    >
+                      ←
+                    </button>
+                    <%= for p <- 1..@rooms_total_pages do %>
+                      <button
+                        phx-click="rooms_page"
+                        phx-value-page={p}
+                        class={[
+                          "btn btn-sm",
+                          if(p == @rooms_page, do: "btn-primary", else: "btn-ghost")
+                        ]}
+                      >
+                        {p}
+                      </button>
+                    <% end %>
+                    <button
+                      phx-click="rooms_page"
+                      phx-value-page={@rooms_page + 1}
+                      class="btn btn-sm btn-ghost"
+                      disabled={@rooms_page >= @rooms_total_pages}
+                    >
+                      →
+                    </button>
+                  </div>
+                <% end %>
               <% end %>
             </div>
           </div>

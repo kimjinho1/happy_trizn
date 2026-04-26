@@ -47,7 +47,7 @@
 
       <div class="ml-auto flex items-center gap-2">
         <%= if user = assigns[:current_user] do %>
-          <a href="/dm" class="btn btn-ghost btn-sm relative" title="DM">
+          <a href="/dm" class="btn btn-ghost btn-md text-xl relative" title="DM">
             💬 <% unread = HappyTrizn.Messages.unread_count(user) %>
             <%= if unread > 0 do %>
               <span class="badge badge-error badge-xs absolute -top-1 -right-1 dm-unread-badge">
