@@ -239,5 +239,31 @@ defmodule HappyTrizn.Games.BombermanTest do
     test "그 외 :no" do
       assert :no = Bomberman.game_over?(init_with(2))
     end
+
+    test "ranking — winner 1등, 나머지 dead_at 늦은 (오래 살아남은) 순 (Sprint 3l-6)" do
+      s =
+        init_with(4)
+        |> Map.put(:status, :over)
+        |> Map.put(:winner_id, "p1")
+        |> put_in([:players, "p1", :alive], true)
+        |> put_in([:players, "p2", :alive], false)
+        |> put_in([:players, "p2", :dead_at], 100)
+        |> put_in([:players, "p3", :alive], false)
+        |> put_in([:players, "p3", :dead_at], 300)
+        |> put_in([:players, "p4", :alive], false)
+        |> put_in([:players, "p4", :dead_at], 200)
+
+      {:yes, result} = Bomberman.game_over?(s)
+      ranks = result.ranking
+
+      assert length(ranks) == 4
+      assert Enum.at(ranks, 0).player_id == "p1"
+      assert Enum.at(ranks, 0).is_winner
+      assert Enum.at(ranks, 0).rank == 1
+      # p3 가장 늦게 죽음 → 2위
+      assert Enum.at(ranks, 1).player_id == "p3"
+      assert Enum.at(ranks, 2).player_id == "p4"
+      assert Enum.at(ranks, 3).player_id == "p2"
+    end
   end
 end

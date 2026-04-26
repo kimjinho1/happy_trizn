@@ -291,10 +291,39 @@ defmodule HappyTrizn.Games.Bomberman do
         {id, %{nickname: p.nickname, alive: p.alive}}
       end)
 
-    {:yes, %{winner: state.winner_id, players: public_players}}
+    {:yes,
+     %{
+       winner: state.winner_id,
+       players: public_players,
+       ranking: bomberman_ranking(state)
+     }}
   end
 
   def game_over?(_), do: :no
+
+  # 종료 순위 — winner 1등, 나머지는 dead_at 늦은 (오래 살아남은) 순.
+  defp bomberman_ranking(state) do
+    state.players
+    |> Enum.map(fn {id, p} ->
+      %{
+        player_id: id,
+        nickname: Map.get(p, :nickname, "anon"),
+        alive: p.alive,
+        dead_at: Map.get(p, :dead_at),
+        is_winner: id == state.winner_id
+      }
+    end)
+    |> Enum.sort_by(fn entry ->
+      cond do
+        entry.is_winner -> {0, 0}
+        entry.alive -> {1, 0}
+        is_nil(entry.dead_at) -> {2, 0}
+        true -> {3, -entry.dead_at}
+      end
+    end)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {entry, rank} -> Map.put(entry, :rank, rank) end)
+  end
 
   @impl true
   def terminate(_, _), do: :ok
