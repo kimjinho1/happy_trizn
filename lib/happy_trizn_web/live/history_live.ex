@@ -62,12 +62,9 @@ defmodule HappyTriznWeb.HistoryLive do
     ~H"""
     <div class="max-w-3xl mx-auto p-3 sm:p-6">
       <Layouts.flash_group flash={@flash} />
-      <header class="mb-6 flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold">내 기록</h1>
-          <p class="text-sm text-base-content/60">최근 우승 + 게임별 최고 기록.</p>
-        </div>
-        <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
+      <header class="mb-6">
+        <h1 class="text-2xl font-bold">내 기록</h1>
+        <p class="text-sm text-base-content/60">최근 우승 + 게임별 최고 기록.</p>
       </header>
 
       <%= if is_nil(@current_user) do %>
@@ -153,10 +150,7 @@ defmodule HappyTriznWeb.HistoryLive do
           <h1 class="text-2xl font-bold">{@meta.name} 리더보드</h1>
           <p class="text-sm text-base-content/60">최고 점수 top 20.</p>
         </div>
-        <div class="flex gap-2">
-          <.link navigate={~p"/history"} class="btn btn-ghost btn-sm">← 내 기록</.link>
-          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">🏠 로비</.link>
-        </div>
+        <.link navigate={~p"/history"} class="btn btn-ghost btn-sm">← 내 기록</.link>
       </header>
 
       <%= if @rows == [] do %>

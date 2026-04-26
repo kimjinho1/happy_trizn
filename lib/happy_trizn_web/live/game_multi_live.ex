@@ -633,22 +633,19 @@ defmodule HappyTriznWeb.GameMultiLive do
         >
         </div>
       <% end %>
-      <header class="flex items-center justify-between mb-4">
+      <header class="flex items-center gap-3 mb-4 flex-wrap">
         <div>
           <h1 class="text-2xl font-bold">{@meta.name}</h1>
-          <p class="text-xs text-base-content/60">방: <code>{@room_id}</code> · {@nickname}</p>
+          <p class="text-xs text-base-content/60">방: <code>{@room_id}</code></p>
         </div>
-        <div class="flex gap-2">
-          <button
-            phx-click="open_settings"
-            class="btn btn-ghost btn-sm"
-            title="옵션 모달 — 게임 유지"
-            type="button"
-          >
-            ⚙️ 옵션
-          </button>
-          <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
-        </div>
+        <button
+          phx-click="open_settings"
+          class="btn btn-ghost btn-sm"
+          title="옵션 모달 — 게임 유지"
+          type="button"
+        >
+          ⚙️ 옵션
+        </button>
       </header>
       
     <!-- 공용 result panel 은 Tetris 전용 — Skribbl/Bomberman 은 자체 game_over_modal 사용 -->

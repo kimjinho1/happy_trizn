@@ -8,6 +8,18 @@
       {assigns[:page_title]}
     </.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    <link
+      rel="stylesheet"
+      as="style"
+      crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
+    <style>
+      html, body, button, input, select, textarea {
+        font-family: "Pretendard Variable", Pretendard, ui-sans-serif, system-ui,
+          sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+    </style>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
     <script>
@@ -34,15 +46,17 @@
     <header class="sticky top-0 z-30 bg-base-100/95 backdrop-blur border-b border-base-300 px-4 py-2 flex items-center gap-3 shadow-sm">
       <a
         href="/lobby"
-        class="flex items-center gap-2 font-bold text-base hover:text-primary transition"
+        class="flex items-center gap-2 font-bold text-sm sm:text-base hover:text-primary transition shrink-0 whitespace-nowrap"
         title="로비로"
       >
         <span class="text-xl">🎮</span>
         <span>Happy Trizn</span>
       </a>
       <%= if assigns[:page_title] do %>
-        <span class="text-base-content/30">/</span>
-        <span class="text-base-content/80 font-medium">{assigns[:page_title]}</span>
+        <span class="text-base-content/30 hidden sm:inline">/</span>
+        <span class="text-base-content/80 font-medium hidden sm:inline whitespace-nowrap truncate">
+          {assigns[:page_title]}
+        </span>
       <% end %>
 
       <div class="ml-auto flex items-center gap-1">
@@ -80,8 +94,8 @@
                   {String.first(user.nickname) |> String.upcase()}
                 </div>
               <% end %>
-              <span class="hidden sm:inline">{user.nickname}</span>
-              <span class="text-xs">▾</span>
+              <span class="hidden lg:inline truncate max-w-[120px]">{user.nickname}</span>
+              <span class="text-sm">▾</span>
             </div>
             <ul
               tabindex="0"
@@ -102,8 +116,8 @@
                 class="btn btn-ghost btn-md px-2 flex items-center gap-2"
                 title="메뉴"
               >
-                <span class="hidden sm:inline">(게스트) {guest_nick}</span>
-                <span class="text-xs">▾</span>
+                <span class="hidden lg:inline truncate max-w-[140px]">(게스트) {guest_nick}</span>
+                <span class="text-sm">▾</span>
               </div>
               <ul
                 tabindex="0"

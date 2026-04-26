@@ -201,7 +201,6 @@ defmodule HappyTriznWeb.ProfileLive do
               사진 삭제
             </button>
           <% end %>
-          <.link navigate={~p"/lobby"} class="btn btn-ghost ml-auto">로비로</.link>
         </div>
       </.form>
     </div>
