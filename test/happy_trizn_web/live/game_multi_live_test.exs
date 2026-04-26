@@ -98,5 +98,39 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       state = HappyTrizn.Games.GameSession.get_state(pid)
       assert map_size(state.players) >= 1
     end
+
+    test "두 사용자 동시 입장 → 같은 GameSession 에 둘 다 join (방 만든 사람이 사라지지 않음)",
+         %{conn: conn, host: host, room: room} do
+      # host A 가 게임 방 입장
+      {:ok, view_a, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid_a = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      assert pid_a
+      state_a = HappyTrizn.Games.GameSession.get_state(pid_a)
+      assert map_size(state_a.players) == 1
+
+      # B 가 같은 방으로 입장
+      bob = user_fixture(nickname: "bob_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, _view_b, _} = live(conn_b, ~p"/game/tetris/#{room.id}")
+
+      # 같은 GameSession pid 사용 (host 가 만든 세션 그대로)
+      pid_b = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      assert pid_b == pid_a
+
+      state = HappyTrizn.Games.GameSession.get_state(pid_b)
+      assert map_size(state.players) == 2
+
+      # host (A) 가 여전히 player 안에 있어야 — HTTP mount 의 leave 사이클이 죽이지 않음
+      _ = view_a
+      _ = host
+    end
+
+    test "HTTP-only mount (connected? = false) 는 GameSession 안 건드림", %{conn: conn, room: room} do
+      # disconnected GET 요청만 — websocket 없음 (Phoenix.ConnTest 가 fully render)
+      conn = Phoenix.ConnTest.get(conn, ~p"/game/tetris/#{room.id}")
+      assert conn.status == 200
+      # GameSession 시작 안 됨 (connected 일 때만 시작)
+      assert HappyTrizn.Games.GameSession.whereis_room(room.id) == nil
+    end
   end
 end

@@ -50,47 +50,71 @@ defmodule HappyTriznWeb.GameMultiLive do
               {:ok, socket |> put_flash(:error, "방 없음") |> redirect(to: ~p"/lobby")}
 
             %{game_type: ^slug, status: status} = _room when status != "closed" ->
-              case GameSession.get_or_start_room(room_id, slug) do
-                {:ok, pid} ->
-                  # player_id = session.id (각 브라우저/탭마다 별도 세션이라 같은 사용자가
-                  # 두 디바이스로 같은 방 들어와도 다른 player 로 인식. 사내 dev 테스트 시
-                  # 같은 계정 두 incognito 로 1v1 시뮬 가능).
-                  player_id = socket.assigns.current_session.id
-
-                  case GameSession.player_join(pid, player_id, %{
-                         nickname: nickname,
-                         user_id: user.id
-                       }) do
-                    :ok ->
-                      if connected?(socket), do: GameSession.subscribe_room(room_id)
-
-                      key_settings = UserGameSettings.get_for(user, slug)
-
-                      {:ok,
-                       socket
-                       |> assign(:slug, slug)
-                       |> assign(:meta, meta)
-                       |> assign(:room_id, room_id)
-                       |> assign(:session_pid, pid)
-                       |> assign(:player_id, player_id)
-                       |> assign(:nickname, nickname)
-                       |> assign(:game_state, GameSession.get_state(pid))
-                       |> assign(:key_settings, key_settings)
-                       |> assign(:result, nil)}
-
-                    {:reject, reason} ->
-                      {:ok,
-                       socket |> put_flash(:error, "입장 거부: #{reason}") |> redirect(to: ~p"/lobby")}
-                  end
-
-                {:error, _} ->
-                  {:ok, socket |> put_flash(:error, "게임 세션 시작 실패") |> redirect(to: ~p"/lobby")}
+              # WebSocket connect 됐을 때만 GameSession 에 join — HTTP 첫 mount 는
+              # 즉시 종료되는 임시 프로세스라 join → terminate → leave 사이클이 도는데,
+              # 그 사이에 GameSession 이 player 0 명 → :stop 으로 종료돼버림 (호스트가
+              # 만든 직후 다른 사용자가 들어오면 호스트가 안 보이는 원인).
+              if connected?(socket) do
+                join_connected(socket, slug, meta, room_id, nickname, user)
+              else
+                # HTTP 첫 mount — 화면 초기 렌더만, GameSession 건드리지 않음.
+                # 실제 join 은 WS 가 붙은 후의 mount 에서.
+                {:ok,
+                 socket
+                 |> assign(:slug, slug)
+                 |> assign(:meta, meta)
+                 |> assign(:room_id, room_id)
+                 |> assign(:session_pid, nil)
+                 |> assign(:player_id, socket.assigns.current_session.id)
+                 |> assign(:nickname, nickname)
+                 |> assign(:game_state, %{status: :waiting, players: %{}})
+                 |> assign(:key_settings, UserGameSettings.get_for(user, slug))
+                 |> assign(:result, nil)
+                 |> assign(:joined, false)}
               end
 
             _ ->
               {:ok, socket |> put_flash(:error, "방 종료됨") |> redirect(to: ~p"/lobby")}
           end
         end
+    end
+  end
+
+  defp join_connected(socket, slug, meta, room_id, nickname, user) do
+    case GameSession.get_or_start_room(room_id, slug) do
+      {:ok, pid} ->
+        # player_id = session.id (각 브라우저/탭마다 별도 세션이라 같은 사용자가
+        # 두 디바이스로 같은 방 들어와도 다른 player 로 인식. 사내 dev 테스트 시
+        # 같은 계정 두 incognito 로 1v1 시뮬 가능).
+        player_id = socket.assigns.current_session.id
+
+        case GameSession.player_join(pid, player_id, %{
+               nickname: nickname,
+               user_id: user.id
+             }) do
+          :ok ->
+            GameSession.subscribe_room(room_id)
+            key_settings = UserGameSettings.get_for(user, slug)
+
+            {:ok,
+             socket
+             |> assign(:slug, slug)
+             |> assign(:meta, meta)
+             |> assign(:room_id, room_id)
+             |> assign(:session_pid, pid)
+             |> assign(:player_id, player_id)
+             |> assign(:nickname, nickname)
+             |> assign(:game_state, GameSession.get_state(pid))
+             |> assign(:key_settings, key_settings)
+             |> assign(:result, nil)
+             |> assign(:joined, true)}
+
+          {:reject, reason} ->
+            {:ok, socket |> put_flash(:error, "입장 거부: #{reason}") |> redirect(to: ~p"/lobby")}
+        end
+
+      {:error, _} ->
+        {:ok, socket |> put_flash(:error, "게임 세션 시작 실패") |> redirect(to: ~p"/lobby")}
     end
   end
 
@@ -175,7 +199,10 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   @impl true
   def terminate(_reason, socket) do
-    if pid = socket.assigns[:session_pid] do
+    # joined: true 인 경우만 leave — HTTP 첫 mount 는 join 안 했으니 leave 도 안 함.
+    if socket.assigns[:joined] && socket.assigns[:session_pid] do
+      pid = socket.assigns.session_pid
+
       if Process.alive?(pid) do
         GameSession.player_leave(pid, socket.assigns.player_id, :disconnect)
       end
