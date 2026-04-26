@@ -715,7 +715,9 @@ defmodule HappyTriznWeb.GameMultiLive do
   attr :grid, :string, default: "standard"
 
   defp tetris_board(assigns) do
-    visible = Enum.drop(assigns.board, 2)
+    # board overflow 방어 — drop hidden 2 + take visible 20. board state 가
+    # 어쩌다 길이 비정상이어도 UI 는 20×10 보장.
+    visible = assigns.board |> Enum.drop(2) |> Enum.take(20)
     assigns = assign(assigns, visible: visible)
 
     ~H"""

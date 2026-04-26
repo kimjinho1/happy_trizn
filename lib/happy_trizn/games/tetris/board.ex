@@ -83,40 +83,38 @@ defmodule HappyTrizn.Games.Tetris.Board do
   Returns {:ok, new_board} | {:error, :top_out}
   """
   def add_garbage(board, lines) when lines > 0 do
+    # lines > @height (22) 면 board 길이가 그대로 늘어나는 overflow 버그.
+    # @height 로 capping — 그 이상은 어차피 top_out (visible 다 garbage 로 채움).
+    capped_lines = min(lines, @height)
     visible = Enum.drop(board, @hidden_rows)
-    top_out_check = Enum.take(visible, lines)
+    top_out_check = Enum.take(visible, capped_lines)
 
-    if Enum.any?(top_out_check, fn row -> Enum.any?(row, &(&1 != nil)) end) do
-      # 상단 lines 안에 이미 채워진 cell 있으면 top_out (밀려서 위로 넘어감)
-      shifted = Enum.drop(board, lines)
+    shifted = Enum.drop(board, capped_lines)
+    garbage_rows = build_garbage_rows(capped_lines)
+    new_board = shifted ++ garbage_rows
 
-      garbage_rows =
-        for _ <- 1..lines do
-          hole = :rand.uniform(@width) - 1
-          for c <- 0..(@width - 1), do: if(c == hole, do: nil, else: :garbage)
-        end
-
-      new_board = shifted ++ garbage_rows
-      # 상단 밀려난 cell 검사 — hidden 영역 위로 넘어가면 top_out
-      if length(new_board) == @height and over_top?(new_board) do
+    cond do
+      Enum.any?(top_out_check, fn row -> Enum.any?(row, &(&1 != nil)) end) and
+          over_top?(new_board) ->
         {:error, :top_out}
-      else
+
+      capped_lines >= @visible_height ->
+        # visible 전부 garbage 로 채워짐 → 무조건 top_out.
+        {:error, :top_out}
+
+      true ->
         {:ok, new_board}
-      end
-    else
-      shifted = Enum.drop(board, lines)
-
-      garbage_rows =
-        for _ <- 1..lines do
-          hole = :rand.uniform(@width) - 1
-          for c <- 0..(@width - 1), do: if(c == hole, do: nil, else: :garbage)
-        end
-
-      {:ok, shifted ++ garbage_rows}
     end
   end
 
   def add_garbage(board, _), do: {:ok, board}
+
+  defp build_garbage_rows(lines) do
+    for _ <- 1..lines do
+      hole = :rand.uniform(@width) - 1
+      for c <- 0..(@width - 1), do: if(c == hole, do: nil, else: :garbage)
+    end
+  end
 
   @doc "Spawn 영역 (상단 2행) 에 piece 못 놓으면 top_out."
   def over_top?(board) do

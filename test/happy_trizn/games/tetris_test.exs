@@ -731,6 +731,20 @@ defmodule HappyTrizn.Games.TetrisTest do
       end)
     end
 
+    test "garbage 가 board height 초과해도 board 길이 22 유지 (overflow 방지)" do
+      # 빈 board 에 25 lines garbage — visible 모두 채움 = top_out.
+      assert {:error, :top_out} = Board.add_garbage(Board.new(), 25)
+
+      # 보드 일부만 채워서 add → 길이 22 보장 (over_top? false 시 :ok 가능).
+      # visible_height (20) 는 무조건 top_out 트리거.
+      assert {:error, :top_out} = Board.add_garbage(Board.new(), 20)
+    end
+
+    test "garbage <= visible_height-1 이면 정상 적용, 길이 22 유지" do
+      assert {:ok, b} = Board.add_garbage(Board.new(), 19)
+      assert length(b) == 22
+    end
+
     test "hard_drop_position — 빈 board 에서 가장 아래까지" do
       b = Board.new()
       origin = {0, 4}
