@@ -34,7 +34,7 @@ defmodule HappyTrizn.Games.PacMan do
 
   @behaviour HappyTrizn.Games.GameBehaviour
 
-  @tick_ms 100
+  @tick_ms 110
   @rows 31
   @cols 28
   @initial_lives 3
