@@ -762,20 +762,28 @@ defmodule HappyTrizn.Games.Tetris do
   # ============================================================================
 
   @impl true
-  def tick(%{status: :countdown, countdown_ms: ms} = state) when is_integer(ms) do
+  def tick(%{status: :countdown} = state) do
+    # countdown_ms 가 비정상 (nil 등) 이면 0 으로 fallback — 즉시 :playing 진입.
+    ms = if is_integer(state.countdown_ms), do: state.countdown_ms, else: 0
     new_ms = ms - @tick_ms
 
-    if new_ms <= 0 do
-      # countdown 끝 → :playing 진입. started_at 리셋 (통계 정확히).
-      now = System.monotonic_time(:millisecond)
+    cond do
+      new_ms <= 0 ->
+        now = System.monotonic_time(:millisecond)
 
-      reset_players =
-        Map.new(state.players, fn {pid, p} -> {pid, %{p | started_at: now}} end)
+        reset_players =
+          Map.new(state.players, fn {pid, p} -> {pid, %{p | started_at: now}} end)
 
-      new_state = %{state | status: :playing, countdown_ms: 0, players: reset_players}
-      {:ok, new_state, [{:game_start, %{}}]}
-    else
-      {:ok, %{state | countdown_ms: new_ms}, [{:countdown_tick, new_ms}]}
+        new_state = %{state | status: :playing, countdown_ms: 0, players: reset_players}
+        {:ok, new_state, [{:game_start, %{}}]}
+
+      true ->
+        # 매 50ms 마다 broadcast 하면 PubSub 폭주 (LiveView refresh_state 가 GenServer
+        # call 매번 호출). 1초 boundary 마다만 broadcast → 사운드 / UI 충분.
+        old_sec = div(ms, 1000)
+        new_sec = div(new_ms, 1000)
+        broadcasts = if old_sec != new_sec, do: [{:countdown_tick, new_ms}], else: []
+        {:ok, %{state | countdown_ms: new_ms}, broadcasts}
     end
   end
 

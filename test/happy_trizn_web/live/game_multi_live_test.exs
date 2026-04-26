@@ -266,8 +266,11 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
         %{state | game_state: %{gs | players: new_players}}
       end)
 
-      # PubSub broadcast push — re-render.
-      send(view.pid, {:game_event, {:player_state, "stub", %{}}})
+      # 실제 player_id 의 갱신된 player state 를 broadcast — pending_garbage = 5 반영.
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      [player_id] = Map.keys(state.players)
+      pp = HappyTrizn.Games.Tetris.public_player(state.players[player_id])
+      send(view.pid, {:game_event, {:player_state, player_id, pp}})
       Process.sleep(20)
       html = render(view)
 

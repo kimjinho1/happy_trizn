@@ -270,9 +270,13 @@ defmodule HappyTriznWeb.GameMultiLive do
   # ============================================================================
 
   @impl true
-  def handle_info({:game_event, {:player_state, _pid, _state}}, socket) do
-    # 모든 player_state event 시 server에서 다시 fetch (간단)
-    {:noreply, refresh_state(socket)}
+  def handle_info({:game_event, {:player_state, pid, player_state}}, socket) do
+    # payload 에 새 player state 포함 — GenServer.call(get_state) 안 해도 됨.
+    # 매 50ms tick + 매 input 마다 GenServer call 하면 mailbox 폭주 → freeze.
+    game_state = socket.assigns.game_state
+    new_players = Map.put(game_state.players || %{}, pid, player_state)
+    new_game_state = %{game_state | players: new_players}
+    {:noreply, assign(socket, :game_state, new_game_state)}
   end
 
   def handle_info({:game_event, {:winner, w}}, socket) do
@@ -351,8 +355,17 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   defp refresh_state(socket) do
-    if Process.alive?(socket.assigns.session_pid) do
-      assign(socket, game_state: GameSession.get_state(socket.assigns.session_pid))
+    pid = socket.assigns[:session_pid]
+
+    if pid && Process.alive?(pid) do
+      try do
+        # 5초 timeout — GenServer 가 다른 호출 처리 중이어도 LiveView 안 멈춤.
+        assign(socket, game_state: GenServer.call(pid, :get_state, 5_000))
+      catch
+        :exit, _ ->
+          # GameSession busy / dead — 기존 game_state 유지.
+          socket
+      end
     else
       socket
     end
