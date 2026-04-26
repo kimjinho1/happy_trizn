@@ -237,6 +237,52 @@ defmodule HappyTrizn.UserGameSettings do
   defp normalize_key("Tab"), do: "\t"
   defp normalize_key(k), do: k
 
+  # ============================================================================
+  # Public helpers for forms (display + parse)
+  # ============================================================================
+
+  @doc "키 list → UI 친화 표시 문자열 (\" \" → \"Space\")."
+  def display_keys(keys) when is_list(keys) do
+    keys |> Enum.map(&display_key/1) |> Enum.join(", ")
+  end
+
+  def display_keys(_), do: ""
+
+  def display_key(" "), do: "Space"
+  def display_key("\t"), do: "Tab"
+  def display_key(k), do: k
+
+  @doc "사용자 입력 키 문자열 → KeyboardEvent.key 정규형 (\"Space\" → \" \")."
+  def parse_key("Space"), do: " "
+  def parse_key("space"), do: " "
+  def parse_key("Tab"), do: "\t"
+  def parse_key(""), do: ""
+  def parse_key(k), do: k
+
+  @doc "콤마 분리 + trim + parse + 빈 값 제거."
+  def parse_keys_input(str) when is_binary(str) do
+    str
+    |> String.split(",", trim: true)
+    |> Enum.map(&(&1 |> String.trim() |> parse_key()))
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  def parse_keys_input(_), do: []
+
+  @doc "옵션 값 정규화 (boolean/integer 변환)."
+  def normalize_option_value(_k, "true"), do: true
+  def normalize_option_value(_k, "false"), do: false
+
+  def normalize_option_value(k, v)
+      when k in ~w(das arr sound_volume round_seconds board_size) and is_binary(v) do
+    case Integer.parse(v) do
+      {n, _} -> n
+      :error -> v
+    end
+  end
+
+  def normalize_option_value(_, v), do: v
+
   @doc """
   Upsert 사용자 옵션. (등록자 only)
 

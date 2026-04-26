@@ -63,11 +63,7 @@ defmodule HappyTriznWeb.GameSettingsLive do
     if is_nil(user) do
       {:noreply, put_flash(socket, :error, "게스트는 옵션 저장 불가 (브라우저 임시 저장만)")}
     else
-      keys =
-        keys_str
-        |> String.split(",", trim: true)
-        |> Enum.map(&(&1 |> String.trim() |> parse_key()))
-        |> Enum.reject(&(&1 == ""))
+      keys = UserGameSettings.parse_keys_input(keys_str)
 
       new_bindings = Map.put(socket.assigns.settings.bindings, action, keys)
 
@@ -406,34 +402,6 @@ defmodule HappyTriznWeb.GameSettingsLive do
     ]
   end
 
-  # Display: " " → "Space" (UI 친화 표기). 그 외엔 그대로.
-  defp display_keys(keys) when is_list(keys) do
-    keys |> Enum.map(&display_key/1) |> Enum.join(", ")
-  end
-
-  defp display_key(" "), do: "Space"
-  defp display_key("\t"), do: "Tab"
-  defp display_key(k), do: k
-
-  # Parse: "Space" → " " 등 reverse 매핑. 사용자가 친화 이름 적어도 KeyboardEvent.key 와 매칭.
-  defp parse_key("Space"), do: " "
-  defp parse_key("space"), do: " "
-  defp parse_key("Tab"), do: "\t"
-  defp parse_key(""), do: ""
-  defp parse_key(k), do: k
-
-  # Boolean-like.
-  defp normalize_option_value(_k, "true"), do: true
-  defp normalize_option_value(_k, "false"), do: false
-
-  # Known-integer keys (게임별 + 공통).
-  defp normalize_option_value(k, v)
-       when k in ~w(das arr sound_volume round_seconds board_size) and is_binary(v) do
-    case Integer.parse(v) do
-      {n, _} -> n
-      :error -> v
-    end
-  end
-
-  defp normalize_option_value(_, v), do: v
+  defp display_keys(keys), do: UserGameSettings.display_keys(keys)
+  defp normalize_option_value(k, v), do: UserGameSettings.normalize_option_value(k, v)
 end

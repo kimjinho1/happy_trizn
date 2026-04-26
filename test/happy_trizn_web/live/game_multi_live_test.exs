@@ -172,10 +172,33 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "다음"
     end
 
-    test "옵션 링크 새 탭 (target=_blank)", %{conn: conn, room: room} do
-      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
-      assert html =~ "target=\"_blank\""
-      assert html =~ "/settings/games/tetris"
+    test "⚙️ 옵션 → 모달 인라인 (페이지 안 옮김)", %{conn: conn, room: room} do
+      {:ok, view, _html} = live(conn, ~p"/game/tetris/#{room.id}")
+      # 처음엔 모달 안 열림
+      refute render(view) =~ "modal_save_binding"
+
+      view |> element("button[phx-click='open_settings']") |> render_click()
+      html = render(view)
+      assert html =~ "modal_save_binding"
+      assert html =~ "modal_save_options"
+      assert html =~ "phx-click=\"close_settings\""
+    end
+
+    test "모달 save_binding → key_settings 즉시 갱신 (data-key-bindings 변경)", %{
+      conn: conn,
+      room: room
+    } do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      view |> element("button[phx-click='open_settings']") |> render_click()
+
+      # hard_drop 키를 "Space, q" 로 저장
+      view
+      |> form("form[phx-submit='modal_save_binding']:nth-of-type(1)")
+      |> render_submit(%{"action" => "hard_drop", "keys" => "Space, q"})
+
+      html = render(view)
+      # data-key-bindings 에 새 키 반영 (HTML attribute 안에 q 등장)
+      assert html =~ "&quot;hard_drop&quot;:[&quot; &quot;,&quot;q&quot;]"
     end
 
     test "tetris 일 때 phx-window-keyup 비활성 (JS hook 만 키 처리)", %{conn: conn, room: room} do
