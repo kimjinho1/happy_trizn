@@ -69,10 +69,46 @@ defmodule HappyTriznWeb.GameLive do
     {:noreply, assign(socket, game_state: fresh, result: nil)}
   end
 
+  def handle_event("keydown", %{"key" => key}, socket) do
+    case key_to_action(socket.assigns.slug, key) do
+      nil ->
+        {:noreply, socket}
+
+      payload ->
+        %{module: module, game_state: state, nickname: nickname} = socket.assigns
+        {:ok, new_state, _} = module.handle_input(nickname, payload, state)
+        socket = assign(socket, game_state: new_state)
+
+        case module.game_over?(new_state) do
+          {:yes, results} -> {:noreply, assign(socket, result: results)}
+          :no -> {:noreply, socket}
+        end
+    end
+  end
+
+  # ============================================================================
+  # 키보드 → input action map (싱글 게임)
+  # ============================================================================
+
+  # 2048 — 화살표 + WASD + HJKL.
+  defp key_to_action("2048", k) when k in ~w(ArrowUp w W k K),
+    do: %{"action" => "move", "dir" => "up"}
+
+  defp key_to_action("2048", k) when k in ~w(ArrowDown s S j J),
+    do: %{"action" => "move", "dir" => "down"}
+
+  defp key_to_action("2048", k) when k in ~w(ArrowLeft a A h H),
+    do: %{"action" => "move", "dir" => "left"}
+
+  defp key_to_action("2048", k) when k in ~w(ArrowRight d D l L),
+    do: %{"action" => "move", "dir" => "right"}
+
+  defp key_to_action(_, _), do: nil
+
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen p-6 max-w-3xl mx-auto">
+    <div class="min-h-screen p-6 max-w-3xl mx-auto" phx-window-keydown="keydown" phx-throttle="80">
       <header class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
         <div class="flex items-center gap-2">
@@ -138,7 +174,7 @@ defmodule HappyTriznWeb.GameLive do
         </button>
       </div>
       <div class="text-xs text-base-content/50">
-        키보드 화살표 또는 버튼.
+        키: 화살표 / WASD / HJKL · 버튼 클릭도 동작.
       </div>
     </div>
     """

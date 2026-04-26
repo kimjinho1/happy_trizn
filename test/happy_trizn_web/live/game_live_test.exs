@@ -49,6 +49,30 @@ defmodule HappyTriznWeb.GameLiveTest do
       render_click(view, "restart", %{})
       assert render(view) =~ "점수: <strong>0</strong>"
     end
+
+    test "ArrowLeft keydown → board state 갱신", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/2048")
+
+      html = render_keydown(view, "keydown", %{"key" => "ArrowLeft"})
+      # 페이지 살아 있고 점수 표시 유지
+      assert html =~ "점수:"
+    end
+
+    test "WASD / HJKL 도 keydown 받음", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/2048")
+
+      for key <- ~w(w s a d h j k l) do
+        html = render_keydown(view, "keydown", %{"key" => key})
+        assert html =~ "점수:", "key #{key} 깨짐"
+      end
+    end
+
+    test "관계없는 키는 무시", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/play/2048")
+      html_before = render(view)
+      html = render_keydown(view, "keydown", %{"key" => "Tab"})
+      assert html == html_before
+    end
   end
 
   describe "/play/minesweeper" do
