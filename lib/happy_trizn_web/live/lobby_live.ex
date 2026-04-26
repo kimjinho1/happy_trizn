@@ -629,10 +629,11 @@ defmodule HappyTriznWeb.LobbyLive do
                         </span>
                         <.link
                           navigate={~p"/dm/#{u.id}"}
-                          class="btn btn-sm btn-primary text-sm"
+                          class="btn btn-sm btn-neutral text-sm inline-flex items-center gap-1 leading-none"
                           title="DM 보내기"
                         >
-                          💬 DM
+                          <span class="text-base leading-none">💬</span>
+                          <span class="leading-none">DM</span>
                         </.link>
                       </div>
                     <% end %>
