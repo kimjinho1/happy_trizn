@@ -253,4 +253,97 @@ defmodule HappyTrizn.Games.MinesweeperTest do
       assert fresh.over == nil
     end
   end
+
+  describe "지뢰찾기 rename + 입력 fix (Sprint 4f)" do
+    test "meta name = 지뢰찾기" do
+      assert Minesweeper.meta().name == "지뢰찾기"
+    end
+
+    test "phx-value 가 string r/c 보내도 reveal 동작 (string→int 강제)" do
+      {:ok, state} = Minesweeper.init(%{})
+
+      # phx-value-r/c 는 항상 string 으로 도착.
+      {:ok, s1, _} =
+        Minesweeper.handle_input("p1", %{"action" => "reveal", "r" => "5", "c" => "5"}, state)
+
+      assert Map.fetch!(s1.cells, {5, 5}).revealed
+    end
+
+    test "phx-value 가 string 보내도 flag 동작" do
+      {:ok, state} = Minesweeper.init(%{})
+
+      {:ok, s1, _} =
+        Minesweeper.handle_input("p1", %{"action" => "flag", "r" => "0", "c" => "0"}, state)
+
+      assert Map.fetch!(s1.cells, {0, 0}).flagged
+    end
+
+    test "초기 cursor 는 board 중앙" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+      # easy = 9×9 → 중앙 (4, 4)
+      assert state.cursor == {4, 4}
+    end
+
+    test "move_cursor 화살표 4방향 + boundary clamp" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+      assert state.cursor == {4, 4}
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "up"}, state)
+      assert s.cursor == {3, 4}
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "down"}, s)
+      assert s.cursor == {4, 4}
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "left"}, s)
+      assert s.cursor == {4, 3}
+
+      {:ok, s, _} =
+        Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "right"}, s)
+
+      assert s.cursor == {4, 4}
+    end
+
+    test "boundary — top/left/bottom/right clamp" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+      state = %{state | cursor: {0, 0}}
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "up"}, state)
+      # row 0 에서 up → 0 유지 (clamp)
+      assert s.cursor == {0, 0}
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "left"}, s)
+      assert s.cursor == {0, 0}
+
+      state = %{state | cursor: {8, 8}}
+
+      {:ok, s, _} =
+        Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "down"}, state)
+
+      assert s.cursor == {8, 8}
+
+      {:ok, s, _} =
+        Minesweeper.handle_input("p1", %{"action" => "move_cursor", "dir" => "right"}, s)
+
+      assert s.cursor == {8, 8}
+    end
+
+    test "reveal_cursor — cursor 위치 reveal" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+      assert state.cursor == {4, 4}
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "reveal_cursor"}, state)
+
+      assert Map.fetch!(s.cells, {4, 4}).revealed
+    end
+
+    test "flag_cursor — cursor 위치 flag 토글 (F 키 매핑)" do
+      {:ok, state} = Minesweeper.init(%{"difficulty" => "easy"})
+
+      {:ok, s, _} = Minesweeper.handle_input("p1", %{"action" => "flag_cursor"}, state)
+      assert Map.fetch!(s.cells, {4, 4}).flagged
+
+      {:ok, s2, _} = Minesweeper.handle_input("p1", %{"action" => "flag_cursor"}, s)
+      refute Map.fetch!(s2.cells, {4, 4}).flagged
+    end
+  end
 end

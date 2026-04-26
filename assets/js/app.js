@@ -33,6 +33,7 @@ import {SnakeInput} from "./hooks/snake_input"
 import {SnakeCanvas} from "./hooks/snake_canvas"
 import {GameKeyCapture} from "./hooks/game_key_capture"
 import {PacmanCanvas} from "./hooks/pacman_canvas"
+import {MinesweeperCell} from "./hooks/minesweeper_cell"
 // DM 알림 — side-effect: window phx:dm:notify listener 등록.
 import "./dm_notify"
 
@@ -95,6 +96,8 @@ const Hooks = {
   GameKeyCapture,
   // Pac-Man 캔버스 렌더 — 28×31 maze + ghost AI + dot/pellet.
   PacmanCanvas,
+  // 지뢰찾기 셀 — 우클릭 contextmenu → flag pushEvent.
+  MinesweeperCell,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

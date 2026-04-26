@@ -141,6 +141,25 @@ defmodule HappyTriznWeb.GameLive do
   defp key_to_action("pacman", k) when k in ~w(ArrowRight d D),
     do: %{"action" => "set_dir", "dir" => "right"}
 
+  # Minesweeper (지뢰찾기) — 화살표 cursor 이동, Space/Enter reveal, F flag.
+  defp key_to_action("minesweeper", k) when k in ~w(ArrowUp w W),
+    do: %{"action" => "move_cursor", "dir" => "up"}
+
+  defp key_to_action("minesweeper", k) when k in ~w(ArrowDown s S),
+    do: %{"action" => "move_cursor", "dir" => "down"}
+
+  defp key_to_action("minesweeper", k) when k in ~w(ArrowLeft a A),
+    do: %{"action" => "move_cursor", "dir" => "left"}
+
+  defp key_to_action("minesweeper", k) when k in ~w(ArrowRight d D),
+    do: %{"action" => "move_cursor", "dir" => "right"}
+
+  defp key_to_action("minesweeper", k) when k in [" ", "Spacebar", "Enter"],
+    do: %{"action" => "reveal_cursor"}
+
+  defp key_to_action("minesweeper", k) when k in ~w(f F),
+    do: %{"action" => "flag_cursor"}
+
   defp key_to_action(_, _), do: nil
 
   @impl true
@@ -149,7 +168,7 @@ defmodule HappyTriznWeb.GameLive do
     <div
       id={"game-page-#{@slug}"}
       phx-hook="GameKeyCapture"
-      data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L"
+      data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L,f,F, ,Spacebar,Enter"
       class="min-h-screen p-3 sm:p-6 max-w-3xl mx-auto"
     >
       <header class="flex items-center justify-between mb-4">
@@ -224,6 +243,9 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   defp game_view(%{slug: "minesweeper"} = assigns) do
+    {cur_r, cur_c} = Map.get(assigns.state, :cursor, {0, 0})
+    assigns = assign(assigns, cur_r: cur_r, cur_c: cur_c)
+
     ~H"""
     <div class="space-y-2">
       <div class="text-sm">
@@ -232,31 +254,58 @@ defmodule HappyTriznWeb.GameLive do
           ({@state.difficulty})
         <% end %>
       </div>
+      <div class="text-xs text-base-content/60">
+        키: 화살표 cursor 이동 · Space/Enter reveal · F flag · 우클릭 flag · 좌클릭 reveal
+      </div>
       <div class="inline-block bg-base-300 p-1 overflow-auto max-w-full">
         <%= for r <- 0..(@state.rows - 1) do %>
           <div class="flex">
             <%= for c <- 0..(@state.cols - 1) do %>
               <% cell = Map.fetch!(@state.cells, {r, c}) %>
+              <% cursor? = r == @cur_r and c == @cur_c %>
               <%= cond do %>
                 <% cell.revealed and cell.mine -> %>
-                  <div class="w-7 h-7 bg-error text-base-100 flex items-center justify-center text-xs font-bold border border-base-100">
+                  <div class={[
+                    "w-7 h-7 bg-error text-base-100 flex items-center justify-center text-xs font-bold border border-base-100",
+                    cursor? && "ring-2 ring-primary"
+                  ]}>
                     💣
                   </div>
                 <% cell.revealed -> %>
-                  <div class="w-7 h-7 bg-base-200 flex items-center justify-center text-xs border border-base-100">
+                  <div class={[
+                    "w-7 h-7 bg-base-200 flex items-center justify-center text-xs border border-base-100",
+                    cursor? && "ring-2 ring-primary"
+                  ]}>
                     {if cell.neighbors > 0, do: cell.neighbors, else: ""}
                   </div>
                 <% cell.flagged -> %>
-                  <div class="w-7 h-7 bg-warning flex items-center justify-center text-xs border border-base-100">
+                  <button
+                    phx-click="input"
+                    phx-value-action="flag"
+                    phx-value-r={r}
+                    phx-value-c={c}
+                    class={[
+                      "w-7 h-7 bg-warning flex items-center justify-center text-xs border border-base-100",
+                      cursor? && "ring-2 ring-primary"
+                    ]}
+                    title="좌클릭 = flag 해제"
+                  >
                     🚩
-                  </div>
+                  </button>
                 <% true -> %>
                   <button
                     phx-click="input"
                     phx-value-action="reveal"
                     phx-value-r={r}
                     phx-value-c={c}
-                    class="w-7 h-7 bg-base-100 hover:bg-base-content/10 border border-base-300"
+                    phx-hook="MinesweeperCell"
+                    id={"ms-#{r}-#{c}"}
+                    data-r={r}
+                    data-c={c}
+                    class={[
+                      "w-7 h-7 bg-base-100 hover:bg-base-content/10 border border-base-300",
+                      cursor? && "ring-2 ring-primary"
+                    ]}
                   >
                   </button>
               <% end %>

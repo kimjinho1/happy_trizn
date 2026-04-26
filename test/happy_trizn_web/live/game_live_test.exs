@@ -98,25 +98,65 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, conn: log_in_user(conn, nil, "pms_#{System.unique_integer([:positive])}")}
     end
 
-    test "mount — 게스트 default = medium 프리셋 16×16 grid", %{conn: conn} do
+    test "mount — 지뢰찾기 (Sprint 4f rename) + medium 16×16 grid", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
-      assert html =~ "Minesweeper"
+      # 페이지 제목 = 지뢰찾기 (메타 name). slug "minesweeper" 는 URL/path 라 그대로.
+      assert html =~ "<h1 class=\"text-2xl font-bold\">지뢰찾기</h1>"
       assert html =~ "16×16"
       assert html =~ "지뢰 40개"
       # 256 hidden cell (16×16) 있어야
       assert html |> String.split("phx-value-action=\"reveal\"") |> length() == 257
     end
 
-    test "셀 reveal → state 변화", %{conn: conn} do
+    test "셀 reveal → state 변화 (string r/c 강제 — phx-value 시뮬)", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/play/minesweeper")
 
       view
       |> element("button[phx-value-action='reveal'][phx-value-r='5'][phx-value-c='5']")
       |> render_click()
 
-      # 클릭한 셀이 revealed (색 다른 div)
+      # 클릭한 셀이 revealed → button 안 보임 (div 로 교체).
       html = render(view)
-      assert html =~ "Minesweeper"
+      refute html =~ "phx-value-action=\"reveal\" phx-value-r=\"5\" phx-value-c=\"5\""
+    end
+
+    test "키보드 — 화살표 cursor 이동 + Space reveal + F flag (Sprint 4f)", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/play/minesweeper")
+
+      # cursor 초기 (8, 8) — medium 16×16 중앙. 화살표 up → (7, 8).
+      render_hook(view, "keydown", %{"key" => "ArrowUp"})
+      html = render(view)
+      # cursor highlight = ring-2 ring-primary 클래스 적용된 셀 1개.
+      assert html =~ "ring-2 ring-primary"
+
+      # F → flag_cursor → 해당 셀 flagged.
+      render_hook(view, "keydown", %{"key" => "f"})
+      html = render(view)
+      assert html =~ "🚩"
+
+      # F 다시 → 해제.
+      render_hook(view, "keydown", %{"key" => "F"})
+      html = render(view)
+      refute html =~ "🚩"
+
+      # Space → reveal_cursor.
+      render_hook(view, "keydown", %{"key" => " "})
+      _html = render(view)
+      # cursor 위치 (7, 8) reveal — button 사라짐.
+      refute render(view) =~
+               "phx-value-action=\"reveal\" phx-value-r=\"7\" phx-value-c=\"8\""
+    end
+
+    test "data-keys 에 F / Space 포함 (Sprint 4f)", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
+      assert html =~ "data-keys="
+      assert html =~ "f,F"
+      assert html =~ "Spacebar"
+    end
+
+    test "MinesweeperCell hook — 우클릭 flag 용", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
+      assert html =~ "phx-hook=\"MinesweeperCell\""
     end
   end
 
