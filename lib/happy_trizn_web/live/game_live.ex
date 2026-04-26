@@ -578,7 +578,8 @@ defmodule HappyTriznWeb.GameLive do
               <% fixed? = Map.has_key?(@state.fixed, {r, c}) %>
               <% cursor? = r == @cur_r and c == @cur_c %>
               <% conflict? = sudoku_conflict?(@state.user, r, c, v) %>
-              <% bg = sudoku_cell_bg(cursor?, false, fixed?) %>
+              <% bad? = conflict? and not fixed? %>
+              <% bg = if bad?, do: "bg-error/20", else: sudoku_cell_bg(cursor?, false, fixed?) %>
               <button
                 phx-click="input"
                 phx-value-action="set_cursor"
@@ -589,8 +590,8 @@ defmodule HappyTriznWeb.GameLive do
                   "border border-base-content/15",
                   bg,
                   fixed? && "font-bold text-base-content",
-                  not fixed? && "text-primary",
-                  conflict? && not fixed? && "text-error",
+                  not fixed? && not bad? && "text-primary",
+                  bad? && "text-error font-bold",
                   # 3×3 box 경계 — 안쪽 셀의 윗/왼쪽 border 만 두껍게.
                   rem(r, 3) == 0 and r > 0 && "border-t-2 border-t-base-content/50",
                   rem(c, 3) == 0 and c > 0 && "border-l-2 border-l-base-content/50"
