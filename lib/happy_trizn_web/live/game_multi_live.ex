@@ -833,8 +833,8 @@ defmodule HappyTriznWeb.GameMultiLive do
 
     ~H"""
     <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
-      <!-- 왼쪽: 내 보드 (full size) -->
-      <div>
+      <!-- 왼쪽: 내 보드 (full size, w-fit — 콘텐츠 너비만큼만) -->
+      <div class="w-fit">
         <h3 class="font-semibold mb-2">나 — {@nickname}</h3>
         <%= if @me do %>
           <div class="flex gap-2 items-start">
