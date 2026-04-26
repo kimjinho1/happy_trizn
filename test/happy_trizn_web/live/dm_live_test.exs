@@ -109,4 +109,23 @@ defmodule HappyTriznWeb.DmLiveTest do
       _ = me
     end
   end
+
+  describe "DM 실시간 알림 hook" do
+    test "lobby 같은 다른 LV 에서도 DM 도착 시 dm:notify push_event 발행", %{conn: conn} do
+      {conn, me, peer} = setup_friends(conn, System.unique_integer([:positive]))
+      {:ok, view, _} = live(conn, ~p"/lobby")
+
+      # peer 가 me 에게 DM 보냄.
+      {:ok, _} = Messages.send(peer, me, "ping toast!")
+
+      # hook 이 받아 push_event "dm:notify" 발행.
+      assert_push_event(view, "dm:notify", %{body: "ping toast!", unread_count: 1})
+    end
+
+    test "비로그인 LV — hook attach 안 함 (subscribe / push_event 없음)", %{conn: conn} do
+      conn = Plug.Test.init_test_session(conn, %{})
+      {:error, _} = live(conn, ~p"/lobby")
+      # 로그인 안 했으니 lobby 진입 자체 거부 — hook 도 작동 안 함.
+    end
+  end
 end

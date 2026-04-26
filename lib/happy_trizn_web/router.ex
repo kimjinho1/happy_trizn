@@ -40,7 +40,10 @@ defmodule HappyTriznWeb.Router do
 
     # 로비 — LiveView (글로벌 채팅, 친구 사이드바, 방 리스트, 게임 카테고리).
     live_session :default,
-      on_mount: HappyTriznWeb.Live.Hooks.FetchLiveUser do
+      on_mount: [
+        HappyTriznWeb.Live.Hooks.FetchLiveUser,
+        HappyTriznWeb.Live.Hooks.DmNotifications
+      ] do
       live "/lobby", LobbyLive
 
       # 싱글 게임 (2048 / Minesweeper / Pac-Man stub) — GameLive
