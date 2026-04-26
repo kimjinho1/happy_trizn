@@ -301,6 +301,7 @@ defmodule HappyTriznWeb.GameLive do
       data-keys="ArrowUp,ArrowDown,ArrowLeft,ArrowRight,w,W,a,A,s,S,d,D,h,H,j,J,k,K,l,L,f,F,Space,Spacebar,Enter,Backspace,Delete,0,1,2,3,4,5,6,7,8,9"
       class="min-h-screen p-3 sm:p-6 max-w-3xl mx-auto"
     >
+      <div id={"open-settings-bridge-single-#{@slug}"} phx-hook="OpenSettingsBridge" class="hidden"></div>
       <header class="flex items-center gap-3 mb-4">
         <h1 class="text-2xl font-bold">{@meta.name}</h1>
         <button
