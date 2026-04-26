@@ -38,8 +38,11 @@ defmodule HappyTrizn.Games.Skribbl do
   @drawing_ms 80_000
   @choosing_ms 30_000
   @round_end_ms 5_000
-  @max_rounds_per_player 1
+  # 게임당 총 라운드 수 — player 수와 무관. drawer 는 가장 적게 그린 사람 부터 round-robin.
+  @total_rounds 5
   @max_players 8
+
+  def total_rounds, do: @total_rounds
 
   # 한국어 단어 풀 — 명사 위주, 일상.
   @word_pool ~w(
@@ -363,13 +366,9 @@ defmodule HappyTrizn.Games.Skribbl do
   end
 
   defp next_round(state) do
-    not_drawn_yet =
-      state.players
-      |> Map.keys()
-      |> Enum.reject(&(Map.get(state.drawn_count, &1, 0) >= @max_rounds_per_player))
-
     cond do
-      not_drawn_yet == [] or map_size(state.players) < 2 ->
+      # 총 N 라운드 끝났거나 player 모자라 → :over.
+      state.round_no >= @total_rounds or map_size(state.players) < 2 ->
         winner = highest_scorer(state.players)
         new_state = %{state | status: :over, winner_id: winner}
         {:ok, new_state, [{:game_finished, %{winner: winner}}]}
@@ -379,17 +378,13 @@ defmodule HappyTrizn.Games.Skribbl do
     end
   end
 
+  # 가장 적게 그린 사람부터 round-robin. 동률 시 player_id 알파벳 순.
+  # → 2명 게임 5라운드 = p1, p2, p1, p2, p1 (3:2 분배).
   defp pick_next_drawer(state) do
-    not_drawn =
-      state.players
-      |> Map.keys()
-      |> Enum.reject(&(Map.get(state.drawn_count, &1, 0) >= @max_rounds_per_player))
-      |> Enum.sort()
-
-    case not_drawn do
-      [] -> state.players |> Map.keys() |> Enum.sort() |> List.first()
-      [first | _] -> first
-    end
+    state.players
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.min_by(&Map.get(state.drawn_count, &1, 0), fn -> nil end)
   end
 
   defp pick_words do

@@ -317,22 +317,61 @@ defmodule HappyTrizn.Games.SkribblTest do
       assert ns.drawer_id != d.drawer_id
     end
 
-    test "모든 player drawer 한 번씩 → :over" do
+    test "round_no 가 total_rounds (5) 도달하면 :over" do
       s = init_with(2)
       {:ok, c, _} = Skribbl.handle_input("p1", %{"action" => "start_game"}, s)
       drawer = c.drawer_id
-      other = if drawer == "p1", do: "p2", else: "p1"
 
       ended = %{
         c
         | status: :round_end,
           time_left_ms: 50,
-          drawn_count: %{drawer => 1, other => 1}
+          round_no: Skribbl.total_rounds(),
+          drawn_count: %{drawer => 5}
       }
 
       {:ok, ns, broadcasts} = Skribbl.tick(ended)
       assert ns.status == :over
       assert Enum.any?(broadcasts, fn {tag, _} -> tag == :game_finished end)
+    end
+
+    test "round_no < total_rounds 면 :over 안 됨, 다음 drawer 로 :choosing" do
+      s = init_with(2)
+      {:ok, c, _} = Skribbl.handle_input("p1", %{"action" => "start_game"}, s)
+      drawer = c.drawer_id
+
+      ended = %{
+        c
+        | status: :round_end,
+          time_left_ms: 50,
+          round_no: 1,
+          drawn_count: %{drawer => 1}
+      }
+
+      {:ok, ns, _} = Skribbl.tick(ended)
+      assert ns.status == :choosing
+    end
+  end
+
+  describe "total_rounds + drawer round-robin" do
+    test "total_rounds = 5 (player 수 무관)" do
+      assert Skribbl.total_rounds() == 5
+    end
+
+    test "drawer 가 가장 적게 그린 사람부터 round-robin" do
+      s = init_with(2)
+      {:ok, c, _} = Skribbl.handle_input("p1", %{"action" => "start_game"}, s)
+      drawer1 = c.drawer_id
+
+      # 첫 라운드 끝 → drawn_count[drawer1] = 1.
+      [w | _] = c.word_choices
+      {:ok, d, _} = Skribbl.handle_input(drawer1, %{"action" => "choose_word", "word" => w}, c)
+      ended = %{d | status: :round_end, time_left_ms: 50, drawn_count: %{drawer1 => 1}}
+
+      # next_round → 두번째 drawer 는 안 그린 사람.
+      {:ok, c2, _} = Skribbl.tick(ended)
+      assert c2.status == :choosing
+      assert c2.drawer_id != drawer1
     end
   end
 

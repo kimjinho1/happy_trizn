@@ -836,7 +836,9 @@ defmodule HappyTriznWeb.GameMultiLive do
     ~H"""
     <div class="flex items-center justify-between bg-base-200 rounded p-3">
       <div>
-        <div class="text-xs text-base-content/60">상태</div>
+        <div class="text-xs text-base-content/60">
+          상태 · 라운드 {Map.get(@state, :round_no, 0)} / {HappyTrizn.Games.Skribbl.total_rounds()}
+        </div>
         <div class="font-semibold">
           <%= case @state.status do %>
             <% :waiting -> %>
@@ -868,11 +870,18 @@ defmodule HappyTriznWeb.GameMultiLive do
       </div>
     </div>
 
-    <%= if @state.status in [:waiting, :over] and map_size(@state.players) >= 2 do %>
-      <button phx-click="skribbl_start_game" class="btn btn-primary btn-sm">
-        🎨 게임 시작
-      </button>
-    <% end %>
+    <div class="flex items-center justify-between gap-3">
+      <p class="text-xs text-base-content/50 italic">
+        💡 점수: 빨리 맞출수록 50~150점, 그림 그린 사람도 맞춘 사람당 +50점.
+        총 {HappyTrizn.Games.Skribbl.total_rounds()} 라운드.
+      </p>
+
+      <%= if @state.status in [:waiting, :over] and map_size(@state.players) >= 2 do %>
+        <button phx-click="skribbl_start_game" class="btn btn-primary btn-sm">
+          🎨 게임 시작
+        </button>
+      <% end %>
+    </div>
     """
   end
 
