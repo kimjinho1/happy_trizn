@@ -625,4 +625,151 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "다시 하기"
     end
   end
+
+  # ============================================================================
+  # Bomberman 풀 통합 — 셀 크기, 이모티콘 클래스, scoreboard
+  # ============================================================================
+
+  describe "/game/bomberman/:id — Bomberman 통합" do
+    setup %{conn: conn} do
+      Rooms.clear_kick_bans()
+      host = user_fixture(nickname: "bm_host_#{System.unique_integer([:positive])}")
+
+      {:ok, room} =
+        Rooms.create(host, %{
+          game_type: "bomberman",
+          name: "bm_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, conn: log_in_user(conn, host), host: host, room: room}
+    end
+
+    test "마운트 + 격자 + 조작 안내", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/bomberman/#{room.id}")
+      assert html =~ "Bomberman" or html =~ "봄버맨" or html =~ "폭탄"
+      assert html =~ "phx-hook=\"BombermanInput\""
+      assert html =~ "참가자"
+      # 셀 크기 키운 확인 — w-12 h-12 + text-2xl.
+      assert html =~ "w-12 h-12"
+      assert html =~ "text-2xl"
+    end
+
+    test "플레이어 아바타 (이모지 + ring 컬러) 노출", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/bomberman/#{room.id}")
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      assert pid
+
+      # 시작 안 한 상태도 spawn corner 에 player 가 있어야 (handle_player_join).
+      Process.sleep(20)
+      html = render(view)
+      # 4 색 ring 클래스 중 첫 (red) 하나는 첫 player 라 등장.
+      assert html =~ "ring-red-400"
+    end
+
+    test "chat aside 노출 + 게임방 채팅 입력 form 존재", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/bomberman/#{room.id}")
+      assert html =~ "게임방 채팅"
+      assert html =~ "phx-submit=\"game_chat\""
+      assert html =~ "phx-hook=\"ChatScroll\""
+    end
+  end
+
+  # ============================================================================
+  # 게임방 ephemeral chat — Tetris / Bomberman 양쪽 동작.
+  # ============================================================================
+
+  describe "게임방 채팅 (game_chat)" do
+    setup %{conn: conn} do
+      Rooms.clear_kick_bans()
+      host = user_fixture(nickname: "ch_host_#{System.unique_integer([:positive])}")
+      {:ok, conn: log_in_user(conn, host), host: host}
+    end
+
+    test "tetris 화면 — 채팅 패널 표시", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "ch_t1"})
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "게임방 채팅"
+      assert html =~ "phx-submit=\"game_chat\""
+    end
+
+    test "skribbl 화면 — 게임방 채팅 패널 안 보임 (자체 채팅 사용)", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "skribbl", name: "ch_s1"})
+      {:ok, _view, html} = live(conn, ~p"/game/skribbl/#{room.id}")
+      refute html =~ "게임방 채팅"
+    end
+
+    test "메시지 전송 → 본인 화면에 노출", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "ch_t2"})
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      view
+      |> element("form[phx-submit='game_chat']")
+      |> render_submit(%{"text" => "안녕"})
+
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "안녕"
+      # nickname 도 노출.
+      assert html =~ host.nickname
+    end
+
+    test "메시지 broadcast — 다른 LiveView 도 수신", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "bomberman", name: "ch_b1"})
+      {:ok, view_a, _} = live(conn, ~p"/game/bomberman/#{room.id}")
+
+      bob = user_fixture(nickname: "ch_bob_#{System.unique_integer([:positive])}")
+      conn_b = Phoenix.ConnTest.build_conn() |> log_in_user(bob)
+      {:ok, view_b, _} = live(conn_b, ~p"/game/bomberman/#{room.id}")
+      Process.sleep(20)
+
+      view_a
+      |> element("form[phx-submit='game_chat']")
+      |> render_submit(%{"text" => "GG"})
+
+      Process.sleep(20)
+      assert render(view_a) =~ "GG"
+      assert render(view_b) =~ "GG"
+    end
+
+    test "빈 텍스트 — broadcast 안 함", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "ch_t3"})
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      view
+      |> element("form[phx-submit='game_chat']")
+      |> render_submit(%{"text" => "   "})
+
+      Process.sleep(20)
+      html = render(view)
+      assert html =~ "아직 메시지 없음"
+    end
+
+    test "200자 초과 — slice 후 노출", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "ch_t4"})
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      long = String.duplicate("a", 250)
+
+      view
+      |> element("form[phx-submit='game_chat']")
+      |> render_submit(%{"text" => long})
+
+      Process.sleep(20)
+      html = render(view)
+      # 200자 까지만 보임 — "a" 200개 노출.
+      assert html =~ String.duplicate("a", 200)
+    end
+
+    test "input 비움 push_event (chat:reset_input)", %{conn: conn, host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "ch_t5"})
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      view
+      |> element("form[phx-submit='game_chat']")
+      |> render_submit(%{"text" => "hi"})
+
+      assert_push_event(view, "chat:reset_input", _)
+    end
+  end
 end
