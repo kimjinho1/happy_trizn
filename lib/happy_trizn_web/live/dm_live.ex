@@ -166,12 +166,12 @@ defmodule HappyTriznWeb.DmLive do
     <div class="max-w-5xl mx-auto p-2 sm:p-4">
       <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">💬 DM</h1>
 
-      <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-2 md:gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-2 md:gap-4">
         <aside class={[
           "bg-base-200 rounded p-2 overflow-y-auto h-[40vh] md:h-[70vh]",
           @peer && "hidden md:block"
         ]}>
-          <h2 class="text-sm font-semibold px-2 py-1 text-base-content/60">대화 상대</h2>
+          <h2 class="text-base font-semibold px-2 py-1 text-base-content/70">대화 상대</h2>
           <%= if @threads == [] do %>
             <div class="text-xs text-base-content/40 px-2 py-3">
               친구 추가 후 메시지 가능. <.link navigate={~p"/lobby"} class="link">로비</.link>에서 친구 검색.
@@ -183,17 +183,17 @@ defmodule HappyTriznWeb.DmLive do
                   <.link
                     navigate={~p"/dm/#{t.peer.id}"}
                     class={[
-                      "flex items-center gap-2 p-2 rounded transition",
+                      "flex items-center gap-2 p-2.5 rounded transition",
                       @peer && @peer.id == t.peer.id && "bg-base-300",
                       t.unread > 0 && "bg-error/10 hover:bg-error/20 border-l-4 border-error",
                       !(t.unread > 0) && "hover:bg-base-300"
                     ]}
                   >
-                    <.dm_avatar user={t.peer} size={36} />
+                    <.dm_avatar user={t.peer} size={42} />
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2">
                         <span class={[
-                          "truncate",
+                          "truncate text-base",
                           t.unread > 0 && "font-bold text-error",
                           !(t.unread > 0) && "font-semibold"
                         ]}>
@@ -206,7 +206,7 @@ defmodule HappyTriznWeb.DmLive do
                         <% end %>
                       </div>
                       <div class={[
-                        "text-xs truncate",
+                        "text-sm truncate",
                         t.unread > 0 && "text-base-content/80 font-medium",
                         !(t.unread > 0) && "text-base-content/50"
                       ]}>
@@ -230,10 +230,10 @@ defmodule HappyTriznWeb.DmLive do
               >
                 ←
               </.link>
-              <.dm_avatar user={@peer} size={40} />
+              <.dm_avatar user={@peer} size={44} />
               <div class="min-w-0">
-                <div class="font-bold truncate">{@peer.nickname}</div>
-                <div class="text-xs text-base-content/50 truncate">{@peer.email}</div>
+                <div class="font-bold text-lg truncate">{@peer.nickname}</div>
+                <div class="text-sm text-base-content/50 truncate">{@peer.email}</div>
               </div>
             </header>
 
@@ -255,17 +255,17 @@ defmodule HappyTriznWeb.DmLive do
               id="dm-form"
               phx-submit="send"
               phx-hook="ChatReset"
-              class="border-t border-base-300 p-2 flex gap-1"
+              class="border-t border-base-300 p-3 flex gap-2"
             >
               <input
                 type="text"
                 name="body"
                 autocomplete="off"
                 maxlength="1000"
-                placeholder="메시지..."
-                class="input input-sm input-bordered flex-1"
+                placeholder="메시지를 입력하세요..."
+                class="input input-md input-bordered flex-1 text-base"
               />
-              <button type="submit" class="btn btn-sm btn-primary">전송</button>
+              <button type="submit" class="btn btn-md btn-primary text-base">전송</button>
             </form>
           <% else %>
             <div class="flex-1 flex items-center justify-center text-base-content/50">
@@ -312,7 +312,7 @@ defmodule HappyTriznWeb.DmLive do
     ~H"""
     <div class={["flex", @is_me && "justify-end"]}>
       <div class={[
-        "max-w-[70%] px-3 py-2 rounded-2xl text-sm break-words",
+        "max-w-[70%] px-3 py-2 rounded-2xl text-base break-words",
         @is_me && "bg-primary text-primary-content rounded-br-sm",
         !@is_me && "bg-base-200 rounded-bl-sm"
       ]}>
