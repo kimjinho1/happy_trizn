@@ -288,17 +288,17 @@ defmodule HappyTriznWeb.DmLive do
               id="dm-form"
               phx-submit="send"
               phx-hook="ChatReset"
-              class="border-t border-base-300 p-2 flex gap-1"
+              class="border-t border-base-300 p-2 flex gap-2"
             >
               <input
                 type="text"
                 name="body"
                 autocomplete="off"
                 maxlength="1000"
-                placeholder="메시지..."
-                class="input input-sm input-bordered flex-1"
+                placeholder="메시지를 입력하세요..."
+                class="input input-md input-bordered flex-1 text-base"
               />
-              <button type="submit" class="btn btn-sm btn-primary">전송</button>
+              <button type="submit" class="btn btn-md btn-primary text-base">전송</button>
             </form>
           <% else %>
             <div class="flex-1 flex items-center justify-center text-base-content/50">
