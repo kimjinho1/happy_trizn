@@ -962,15 +962,15 @@ defmodule HappyTriznWeb.GameMultiLive do
       <div class="text-xs font-semibold truncate text-center mb-1" title={@nickname}>
         {@nickname}
       </div>
-      <div class="inline-flex bg-base-300 p-px gap-px relative w-full justify-center">
-        <!-- pending garbage bar -->
-        <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
-          <%= if @pending > 0 do %>
+      <div class="inline-flex bg-base-300 p-px gap-px relative justify-center">
+        <!-- pending garbage bar — pending 있을 때만 -->
+        <%= if @pending > 0 do %>
+          <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
             <%= for _ <- 1..@pending//1 do %>
               <div class="h-3 bg-error"></div>
             <% end %>
-          <% end %>
-        </div>
+          </div>
+        <% end %>
         <div>
           <%= for row <- @visible do %>
             <div class="flex">
@@ -2000,14 +2000,14 @@ defmodule HappyTriznWeb.GameMultiLive do
 
     ~H"""
     <div class="inline-flex bg-base-300 p-1 gap-px">
-      <!-- pending garbage spoiler bar — board 좌측, 받을 양만큼 빨갛게 채움. 아래부터 위로. -->
-      <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
-        <%= for _ <- 1..max(@pending_capped, 1)//1 do %>
-          <%= if @pending_capped > 0 do %>
+      <!-- pending garbage spoiler bar — pending 있을 때만 노출, 없으면 좌측 빈공간 X. -->
+      <%= if @pending_capped > 0 do %>
+        <div class="flex flex-col-reverse w-1.5 bg-base-100 overflow-hidden">
+          <%= for _ <- 1..@pending_capped//1 do %>
             <div class="h-5 bg-error animate-pulse"></div>
           <% end %>
-        <% end %>
-      </div>
+        </div>
+      <% end %>
       <div>
         <%= for row <- @visible do %>
           <div class="flex">
