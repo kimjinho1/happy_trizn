@@ -1,319 +1,325 @@
-# Games Spec — Jstris 수준 본격 기획
+# Games Spec — 사내 게임 허브 (Happy Trizn)
 
-각 멀티 게임의 본격 spec. 현재 stub 또는 minimal 구현된 게임을 **Jstris 등 표준 게임 수준**으로 끌어올린 후속 작업 기획안.
-
-이 문서는 **각 게임 PR 시 참조**해서 빠진 기능 / 옵션 트래킹.
+각 멀티/싱글 게임의 본격 spec + 진행 트래킹. **각 게임 PR 시 참조**.
 
 ## 목차
 
 - [공통 — 사용자 게임 옵션](#공통--사용자-게임-옵션)
-- [Tetris (Jstris 모방)](#tetris-jstris-모방)
-- [Bomberman](#bomberman)
-- [Skribbl](#skribbl)
-- [Snake.io](#snakeio)
-- [2048](#2048)
-- [Minesweeper](#minesweeper)
-- [Pac-Man](#pac-man)
+- [Tetris ✅](#tetris--구현-완료)
+- [캐치마인드 ✅ (구 Skribbl)](#캐치마인드--구현-완료)
+- [Bomberman ⏳](#bomberman--미구현)
+- [Snake.io ⏳](#snakeio--미구현)
+- [Pac-Man ⏳](#pac-man--미구현)
+- [2048 + Minesweeper ⏳ (싱글, 옵션 보강 대기)](#2048--minesweeper--싱글-옵션-보강)
 - [DB 스키마](#db-스키마)
-- [구현 순서](#구현-순서)
+- [구현 진행 상황](#구현-진행-상황)
 
 ---
 
-## 공통 — 사용자 게임 옵션
+## 공통 — 사용자 게임 옵션 ✅
 
-각 사용자가 게임마다 자기 옵션 저장. 로그인 안 한 게스트는 default + localStorage.
+각 사용자가 게임마다 자기 옵션 저장. 게스트 = default (저장 안 함).
 
-### Schema
+### Schema (구현됨)
 
 ```
 user_game_settings
 - id binary_id PK
 - user_id FK users (cascade delete)
-- game_type string(32) — "tetris", "bomberman", ...
-- key_bindings JSON — 키 바인딩 map
-- options JSON — 게임별 자유 옵션
+- game_type string(32)  — "tetris", "skribbl", ...
+- key_bindings JSON
+- options JSON
 - updated_at utc_datetime
 - unique (user_id, game_type)
 ```
 
-### 페이지
+### 페이지 (구현됨)
 
-- `/settings/games/:game_type` — LiveView, 옵션 폼.
-- `/settings/games` — 게임 목록 + "옵션" 링크.
-- 각 게임 페이지 (`/play/:type`, `/game/:type/:id`)에 ⚙️ 버튼 → 옵션 모달.
+- `/settings/games` — 게임 목록 + 옵션 링크
+- `/settings/games/:game_type` — 게임별 폼 (Tetris 전용 + 제너릭 fallback)
+- **각 게임 화면 ⚙️ 옵션 → 인라인 모달** (페이지 안 옮김, 게임 유지)
 
-### 게스트 처리
+### 글로벌 인프라 (구현됨)
 
-- localStorage 사용 (key: `happy_trizn_game_settings_<game_type>`).
-- 등록자 가입 시 localStorage → DB 마이그.
+- 🏠 **글로벌 top nav** (root layout): `Happy Trizn` 브랜드 + `/` + 페이지 타이틀
+- 🏆 **개인 기록 페이지** (`/history`) + **리더보드** (`/history/leaderboard/:type`)
+- **인라인 옵션 모달** — 게임 안에서 즉시 변경, 저장 후 즉시 반영 (data-* 갱신 → JS hook 재파싱)
+- **ChatReset hook 일반화** — chat:reset_input 이벤트 받아 form 안 모든 input 비움
 
 ---
 
-## Tetris (Jstris 모방)
+## Tetris ✅ 구현 완료
 
-가장 디테일하게 작성. 다른 게임 spec 의 reference.
+(Jstris 수준)
 
-### 게임 plan logic
+### 게임 로직 (모두 구현)
 
 - 10×22 board (상단 2행 hidden spawn buffer)
-- **7-bag random** (현재 구현됨)
-- **SRS (Super Rotation System)** — wall kick / floor kick 5-test table (현재 basic rotation 만)
-- **180도 회전** (별도 키, SRS 와 별개)
-- **Hold** — 한 piece 보관 + swap. 라운드당 1회 (lock 후 다음 piece spawn 전까지).
-- **Lock delay** — piece 가 landed 상태에서 일정 시간 (default 500ms) 안에 이동/회전 가능.
-- **Soft drop** — 속도 옵션 (느림/중간/빠름/매우빠름/즉시) per user.
-- **Hard drop** — 즉시 lock + score +(2 × distance).
-- **Line clear** — 표준 점수 (single 100/double 300/triple 500/tetris 800 × level).
-- **Combo** — 연속 line clear, combo bonus (현재 미구현).
-- **B2B (Back-to-Back)** — Tetris/T-spin 연속 시 ×1.5 보너스.
-- **T-spin** — T piece 회전 시 3-corner 검증, T-spin single/double/triple 점수.
-- **Garbage** — Jstris 매핑 (single 0/double 1/triple 2/tetris 4). T-spin/B2B 시 추가.
-- **Garbage queue** — 받을 때 hole column 같으면 합쳐서 한 hole 로.
-- **Top out** — spawn 못 함 = 게임 오버.
+- **7-bag random** ✅
+- **SRS** + wall kick (JLSTZ 5-test + I 5-test + 180 kick) ✅
+- **CW / CCW / 180 회전** (별도 액션) ✅
+- **Hold piece** — 라운드당 1회, swap, top_out 검사 ✅
+- **Lock delay** — 500ms grace, 회전/이동 시 reset (max 15회), tick 강제 lock ✅
+- **Soft / Hard drop** — score +1 / +2×distance ✅
+- **Line clear**: single 100 / double 300 / triple 500 / tetris 800 × level ✅
+- **Combo** + **B2B** (×1.5 점수 + garbage +1) ✅
+- **T-spin detection**: 4-corner test + front corners → tspin / tspin_mini ✅
+- **Garbage table**: cleared - 1, tetris 4, t-spin double 4, triple 6, b2b/combo bonus ✅
+- **Garbage cancel** (jstris): line clear 시 min(send, pending) 차감 ✅
+- **Garbage spoiler bar**: board 좌측 빨간 bar — pending 만큼 미리 경고 ✅
+- **Garbage overflow fix**: lines 캡 + visible_height 도달 시 무조건 top_out ✅
+- **Top out 시 board 에 가비지 적용** (시각적 가득) ✅
+- **Top out** → 상대 자동 winner ✅
 
-### 사용자 게임 옵션
+### 멀티 / 라운드 흐름 (구현)
 
-#### 키 바인딩 (per user, 모두 변경 가능)
+- :waiting (1명) → 🎯 **솔로 연습 (`:practice`)** ✅
+- 2번째 player join → 양쪽 reset → **:countdown 3-2-1** → :playing ✅
+- 한 명 leave → 남은 사람 **자동 :practice** (winner X, 게임 영향 X) ✅
+- 끝나도 GenServer 유지 → **🔄 다시 하기** 가능 ✅
+- 모든 player leave → GenServer :stop → 방 자동 close ✅
+- **Restart action** + winners_history 보존 ✅
 
-| 액션 | default | 추가 옵션 예 |
-|---|---|---|
-| 왼쪽 이동 | ← | a, j |
-| 오른쪽 이동 | → | d, l |
-| 소프트 드랍 | ↓ | s, k |
-| 하드 드랍 | Space | w |
-| 왼쪽 회전 | Ctrl, Z | x |
-| 오른쪽 회전 | ↑ | X, z |
-| 180 회전 | A | c |
-| 홀드 | Shift, C | a, e |
-| 일시정지 | Esc | p |
+### 사용자 게임 옵션 (구현)
 
-`key_bindings` JSON 예:
-```json
-{
-  "move_left": ["ArrowLeft", "j"],
-  "move_right": ["ArrowRight", "l"],
-  "soft_drop": ["ArrowDown", "k"],
-  "hard_drop": [" "],
-  "rotate_cw": ["ArrowUp", "z"],
-  "rotate_ccw": ["x"],
-  "rotate_180": ["c"],
-  "hold": ["a", "Shift"],
-  "pause": ["Escape"]
-}
-```
+- 키 바인딩 9개 (move_left/right/soft_drop/hard_drop/rotate_cw/ccw/180/hold/pause). 사용자 변경 가능 ✅
+- DAS / ARR (ms) ✅
+- 소프트 드랍 속도 ✅
+- 그리드 (none/standard/partial/vertical/full) ✅
+- 고스트 (옵션) — piece type별 색 + 40% opacity + 두꺼운 border ✅
+- 사운드 (마스터 볼륨 + 8개 효과음 on/off) ✅
 
-#### 게임 설정 (`options` JSON)
+### 사운드 (WebAudio 합성) ✅
 
-- **DAS** (Delayed Auto Shift) — 좌우 키 누른 후 자동 반복 시작까지 ms (default 133, 범위 0~500)
-- **ARR** (Auto Repeat Rate) — DAS 후 한 칸 이동마다 ms (default 10, 범위 0~100, 0=즉시)
-- **소프트 드랍 속도** — `:slow` `:medium` `:fast` `:very_fast` `:instant`
-- **그리드** — `:none` `:standard` `:partial` `:vertical` `:full`
-- **고스트** — bool (default true)
-- **블록 스킨** — `:flat_solid` `:translucent` `:default_jstris` `:srs_classic` 등
-- **블록 색** — flat_solid 일 때 hex (default `#5c5c5c`)
-- **사운드 효과음 크기** — 0~100% (default 16)
-- **효과음 옵션** (각 bool):
-  - 게임 시작 알림음
-  - 블록 회전 효과음
-  - 피네스 오류 경고음
-  - 플레이어 접속 알림음
-  - 메시지 알림음
-- **음성 해설** — string (해설자 이름) 또는 nil
-- **표시할 통계** (multi-select):
-  - 라운드 시간 / 점수 / 줄 / 공격 / 받음 / 피네스 / PPS / KPP / APM / 블록 / VS / Wasted / Hold
-- **모드** — `:realtime` `:replay` 등
+- rotate / lock / line_clear / tetris / b2b / garbage / top_out / countdown
+- 외부 mp3 없이 oscillator + envelope 절차 합성
+- 첫 user input 후 AudioContext unlock (autoplay policy)
 
-### Stats 계산
+### 통계 ✅
 
-- **PPS** (Pieces Per Second) — 분당 piece / 60.
-- **KPP** (Keys Per Piece) — input 수 / piece 수.
-- **APM** (Attacks Per Minute) — garbage send / minute.
-- **Finesse** — piece 한 개당 최소 input 수 위반 카운트.
-- **VS** — 상대보다 우위 (점수/공격/받음 종합).
-- **Wasted** — pending garbage 받았는데 line clear 로 cancel 못한 양.
-- **Hold count** — hold 사용 횟수.
+- pieces_placed / keys_pressed / garbage_sent / received / wasted / hold_count
+- PPS / KPP / APM / duration_ms (public_stats/1)
+- match_results 자동 저장 (game_over 시) + dedupe
+- 매 라운드 PersonalRecords.apply_stats 호출 → max_score/lines + max_pps/apm/kpp
 
-라운드 끝 시 `match_results` 에 저장 + Mongo `game_events` 에 매 piece event.
+### UI (구현)
+
+- **Hold (좌) | Board (중) | Nexts ×5 (우)** 3-column 레이아웃 ✅
+- 다음 5 piece 큐 (`Tetris.upcoming/2`) ✅
+- 콤보 / B2B 배지 ✅
+- 게임 종료 popup overlay (큰 이모지 + 누적 우승 + 다시 하기) ✅
+- Lock delay 표시 ("잠금 NNNms") ✅
+
+### JS 입력 모듈 (`assets/js/hooks/tetris_input.js`) ✅
+
+- e.code 기반 매칭 (한/영 IME 우회)
+- 단일 문자 case-insensitive
+- DAS / ARR auto-repeat (left/right/soft_drop)
+- 같은 action 다중 키 OR (ArrowLeft + j)
+- input field 안에서는 skip (모달 입력 가능)
 
 ---
 
-## Bomberman
+## 캐치마인드 ✅ 구현 완료
 
-### 게임 logic
+(구 Skribbl, 이름 변경)
 
-- 격자 13×11 (전형적 Bomberman 사이즈)
+### 게임 로직 (구현)
+
+- 2~8인 멀티 ✅
+- **5 라운드** (player 수 무관) ✅
+- Drawer round-robin (적게 그린 사람부터) ✅
+- 단어 선택 30초 → 그리기 80초 → 라운드 종료 5초 → 다음 ✅
+- 모든 사람 맞추거나 timer 0 → round_end ✅
+- **150+ 한국어 단어** (일상 / 인기 게임 / 유명 만화애니 / 메인스트림 개발 / 일상 활동) ✅
+
+### 점수 (구현)
+
+- guesser: `50 + 100 × (남은시간/80초)` → 50~150점 ✅
+- drawer bonus: 맞춘 사람당 +50 ✅
+
+### 캔버스 (구현)
+
+- HTML `<canvas>` + JS pointer events (mouse + touch) ✅
+- 7색 + 4 크기 + 지우개 (event delegation 으로 LiveView re-render 안전) ✅
+- Stroke 매번 server push + 로컬 즉시 반영 ✅
+- 늦게 join 시 **strokes_replay** ✅
+- Stroke sanitization (color hex / size 1~30 / coords 0~2000 clamp) ✅
+
+### Round / Game 종료 popup ✅
+
+- round_end 모달: 정답 공개 + 맞춘 사람 순위 + 다음 라운드 카운트
+- game_over 모달: 우승자 + top 8 점수 + 다시 하기
+
+### 채팅 ✅
+
+- 정답 누설 방지 (drawer 채팅 차단)
+- 이미 맞춘 사람 추가 chat 차단
+- 입력창 자동 reset (push_event chat:reset_input)
+
+### 옵션 ✅ (제너릭 폼)
+
+- chat_sound (bool)
+- dictionary (한/영 — 현재 한국어만)
+- round_seconds (60/80/100/120)
+- default_pen_color
+
+---
+
+## Bomberman ⏳ 미구현
+
+### 게임 로직 (계획)
+
+- 격자 13×11
 - 4명 동시
-- 벽 (파괴 불가) + 블록 (파괴 가능, 아이템 드롭 가능성 있음)
-- 폭탄 — 길이 / 개수 강화 아이템
+- 벽 (파괴 불가) + 블록 (파괴 가능, 아이템 드롭)
+- 폭탄 — 길이 / 개수 강화
 - 아이템: 화염 강화, 폭탄 +1, 스피드, 발차기, 펀치
 - 60fps tick (서버 권위)
 - 마지막 1명 winner
 
-### 옵션
+### 옵션 (defaults 만 구현, 게임 로직 미구현)
 
-- 키 바인딩: 상하좌우, 폭탄 설치, 발차기, 펀치
+- 키: 상하좌우, 폭탄 설치, 발차기, 펀치
 - 스피드 / 폭탄 효과음
 - 그리드 색 / 캐릭터 스킨
 
 ---
 
-## Skribbl
+## Snake.io ⏳ 미구현
 
-### 게임 logic
+### 게임 로직 (계획)
 
-- 5+ 인 (max 8)
-- 라운드: 한 사람이 그리는 사람 (drawer), 단어 받음, 캔버스에 그림.
-- 다른 사람들 채팅으로 단어 맞추기. 정답 시 점수.
-- 시간 제한 (default 80초). 시간 끝나면 다음 차례.
-- 단어 사전 (한국어/영어 선택).
-- 그림 broadcast 매 stroke (Phoenix Channel 으로 60fps).
-
-### 옵션
-
-- 캔버스 도구: 펜 / 지우개 / 색상 (palette)
-- 채팅 알림음 on/off
-- 단어 사전 (한/영)
-- 라운드 시간 (60/80/100/120)
-
----
-
-## Snake.io
-
-### 게임 logic
-
-- 자유 입퇴장 (캐주얼)
-- 무한 맵 (또는 큰 격자 100×100)
+- 자유 입퇴장
+- 큰 격자 100×100
 - 먹이 random spawn → 길이 +1
-- 다른 뱀 / 자기 몸 부딪히면 죽음 → 길이 dot 흩뿌림
-- 점수 = 길이
+- 부딪히면 죽음 → 길이 dot 흩뿌림
 - 60fps tick
 
-### 옵션
+### 옵션 (defaults 만 구현)
 
-- 키 바인딩 (상하좌우)
-- 색 (랜덤 vs 고정)
-- 미니맵 표시
-
----
-
-## 2048
-
-### 게임 logic (현재 구현됨)
-
-- 4×4 grid
-- swipe (방향키) → 같은 숫자 합쳐서 +
-- win 2048
-- 변화 없는 방향 무효
-
-### 옵션 (추가)
-
-- 키 바인딩 (방향키 외 wasd, hjkl)
-- board 사이즈 (4×4 / 5×5 / 6×6)
-- 다크/라이트 테마
+- 키 (상하좌우)
+- 색
+- 미니맵
 
 ---
 
-## Minesweeper
+## Pac-Man ⏳ 미구현
 
-### 게임 logic (현재 구현됨)
+### 게임 로직 (계획)
 
-- 10×10 / 12 mines
-- first-click safe zone
-- BFS flood reveal
-- flag toggle
-- win/lose
-
-### 옵션 (추가)
-
-- 난이도: easy (9×9, 10 mines) / medium (16×16, 40) / hard (16×30, 99) / custom
-- 시간 표시
-- 좌클릭 reveal vs 우클릭 flag (또는 둘 다 한 버튼)
-
----
-
-## Pac-Man
-
-### 게임 logic (Sprint 3b-3 풀 구현)
-
-- 표준 Pac-Man maze (~28×31)
-- 4 ghost (Blinky/Pinky/Inky/Clyde) AI
+- 표준 maze 28×31
+- 4 ghost AI (Blinky/Pinky/Inky/Clyde)
 - 도트 / 파워 펠릿 / 과일
 - ghost frightened 모드
-- 점수 / 라이프 3 / 레벨
+- 점수 + 라이프 3 + 레벨
 
-### 옵션
+### 옵션 (defaults 만 구현)
 
-- 키 바인딩 (상하좌우 + wasd)
+- 키 (방향키 + WASD)
 - 사운드 (먹기/death/intro)
+
+---
+
+## 2048 + Minesweeper ⏳ 싱글, 옵션 보강
+
+### 2048 (게임 동작 구현됨, 옵션 미보강)
+
+- 4×4 grid + swipe + 합치기 + win 2048
+
+#### 옵션 (defaults 있음)
+
+- 키 (방향키 + WASD + HJKL)
+- board 사이즈 (4/5/6) — **로직 보강 필요**
+- 다크/라이트 테마
+
+### Minesweeper (게임 동작 구현됨, 옵션 미보강)
+
+- 10×10 / 12 mines / first-click safe / BFS reveal / flag
+
+#### 옵션 (defaults 있음)
+
+- 난이도 (easy/medium/hard/custom) — **로직 보강 필요**
+- 시간 표시
+- 좌클 reveal vs 우클 flag
 
 ---
 
 ## DB 스키마
 
-### 새 테이블
+### 구현됨 ✅
 
 ```
-user_game_settings
-- id binary_id PK
-- user_id FK users (cascade delete)
-- game_type string(32)
-- key_bindings JSON
-- options JSON
-- updated_at utc_datetime
+user_game_settings  ✅
+- id, user_id, game_type, key_bindings JSON, options JSON, updated_at
 - unique (user_id, game_type)
 
-match_results (이미 있음, 확장)
-- id binary_id PK
-- game_type string(32)
-- room_id binary_id (멀티만)
-- winner_id binary_id FK users (nullable, 싱글은 null)
-- duration_ms integer
-- stats JSON — 게임별 (Tetris: PPS/APM/lines/score; 2048: max tile/score)
-- finished_at utc_datetime
-- inserted_at utc_datetime
+match_results  ✅
+- id, game_type, room_id, winner_id, duration_ms, stats JSON, finished_at, inserted_at
+- index (game_type, winner_id, finished_at, room_id)
 
-personal_records (싱글 게임용)
-- id binary_id PK
-- user_id FK users
-- game_type string(32)
-- score integer
-- duration_ms integer
-- metadata JSON — 게임별 (Tetris: lines/level; Minesweeper: difficulty/time)
-- achieved_at utc_datetime
-- index (user_id, game_type, achieved_at desc)
+personal_records  ✅
+- id, user_id, game_type, max_score, max_lines, total_wins, metadata JSON, achieved_at
+- unique (user_id, game_type), index (game_type)
+```
+
+### 미구현 (향후)
+
+```
+notifications (?)  — 친구 요청 / 게임 초대 알림
+direct_messages (?) — DM
 ```
 
 ---
 
-## 구현 순서
+## 구현 진행 상황
 
-| Sprint | 게임 / 기능 |
-|---|---|
-| 3b-3 ✅ | **Tetris 본격** — SRS + wall kick (JLSTZ/I), CW/CCW/180 회전, hold (swap+top_out), combo, B2B, T-spin (full/mini), 7-bag, garbage queue, top out |
-| 3b-3 ✅ | **사용자 옵션 시스템 (1차)** — `user_game_settings` schema + `/settings/games/:type` LiveView + Tetris key binding 폼 + DAS/ARR/grid/ghost/skin/sound 옵션 |
-| 3b-3 ✅ | **JS DAS/ARR hook** — TetrisInput hook (keydown→DAS→ARR 자동 반복, keyup release, blur cleanup) |
-| 3b-4 ✅ | **Lock delay** — 500ms grace, 회전/이동 시 reset (max 15회), tick 으로 강제 lock |
-| 3b-4 ✅ | **통계** — pieces_placed / keys_pressed / garbage_sent/received/wasted / hold_count / PPS / KPP / APM / duration_ms |
-| 3b-4 ✅ | **match_results** — `match_results` schema + GameSession 자동 저장 (game_over 시) |
-| 3b-4 ✅ | **Ghost piece + grid 옵션** — LiveView render 에 ghost overlay + grid 클래스 |
-| 3b-4 ✅ | **모든 게임 settings defaults** — Bomberman/Skribbl/Snake/2048/Minesweeper/Pacman 기본 옵션 + 제너릭 폼 |
-| 3b-4 ✅ | **Lobby 옵션 링크** — 로비 헤더 ⚙️ 옵션 버튼 |
-| 3b-5 | **JS 클라이언트 canvas** — Tetris board canvas render (skin + DAS/ARR client-side timing) |
-| 3b-6 | **Finesse 분석** — 최소 input 위반 카운트 (현재 finesse_violations 0 으로 stub) |
-| 3b-7 | **사운드** — 효과음 + 음성 해설 |
-| 3b-8 | **match_results UI** — 라운드 결과 화면 + personal_records 페이지 |
-| 3c | Bomberman 풀 구현 |
-| 3d | Skribbl 풀 구현 |
-| 3e | Snake.io 풀 구현 |
-| 3f | Pac-Man 풀 구현 |
-| 3g | 2048 / Minesweeper 옵션 보강 |
-| 4 | DM Channel + match_results / personal_records UI + Broadway Mongo 큐 |
+| Sprint | 내용 | 상태 |
+|---|---|---|
+| **3b-3** | Tetris 본격 (SRS / wall kick / hold / 180 / combo / B2B / T-spin / 7-bag / garbage queue / top out) | ✅ |
+| **3b-3** | 사용자 옵션 시스템 1차 (`user_game_settings` schema + LiveView + Tetris key binding 폼) | ✅ |
+| **3b-3** | JS DAS/ARR hook (TetrisInput) | ✅ |
+| **3b-4** | Lock delay (500ms, max 15 resets) | ✅ |
+| **3b-4** | 통계 (PPS/KPP/APM/pieces/garbage/wasted/hold_count) | ✅ |
+| **3b-4** | match_results auto save (game_over) + dedupe | ✅ |
+| **3b-4** | Ghost piece + grid 옵션 + 모든 게임 settings defaults | ✅ |
+| **3b-4** | Lobby ⚙️ 옵션 링크 + 글로벌 페이지 link | ✅ |
+| **3b-4** | 솔로 연습 + 3-2-1 카운트다운 + 다시 하기 | ✅ |
+| **3b-5** | 사운드 시스템 (8 효과음 WebAudio) + 옵션 마스터 볼륨 + 각 on/off | ✅ |
+| **3b-5** | 매치 히스토리 (`/history`) + 리더보드 (`/history/leaderboard/:game_type`) | ✅ |
+| **3b-5** | 개인 기록 (`personal_records` schema + apply_stats max merge + leaderboard) | ✅ |
+| **3b-5** | GenServer freeze fix (player_state payload 직접 사용 + countdown throttle) | ✅ |
+| **3b-5** | top_out 시 board 에 가비지 적용 (시각적 패배) | ✅ |
+| **3b-5** | 가비지 cancel 로직 + 빨간 spoiler bar | ✅ |
+| **3b-5** | Hold/Board/Nexts 3-column + 다음 5 piece 큐 | ✅ |
+| **3d** | 캐치마인드 풀 구현 — state machine / canvas / chat / 점수 / 5 라운드 / round_end & game_over popup | ✅ |
+| **3d** | Tetris leave :practice 자동 전환 (1명 남으면 게임 영향 X) | ✅ |
+| **3d** | 글로벌 top nav (Happy Trizn 브랜드 + 페이지 타이틀) | ✅ |
+| **3d** | 게임명 캐치마인드 (lobby badge 친화 이름) | ✅ |
+| **3e** | Bomberman 풀 구현 | ⏳ |
+| **3f** | Snake.io 풀 구현 | ⏳ |
+| **3g** | Pac-Man 풀 구현 (싱글) | ⏳ |
+| **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ⏳ |
+| **3i** | Finesse 분석 (현재 stub 0) | ⏳ |
+| **3j** | JS Tetris canvas (블록 스킨 / DAS-ARR client-side timing — 현재 server timing) | ⏳ |
+| **3k** | 모바일 반응형 (canvas / 옵션 모달 / 채팅) | ⏳ |
+| **4** | DM Channel + 알림 시스템 + Broadway Mongo 큐 (game_events) | ⏳ |
 
 ---
 
-## 우선순위
+## 우선순위 (남은 작업)
 
-1. **Tetris 본격** (Jstris 수준) — 사용자 가장 좋아함. Hold / SRS / 좌우 회전 / 180 / 키 바인딩 customizable.
-2. **사용자 옵션 시스템** — 모든 게임 공통 인프라.
-3. JS canvas (DAS/ARR client-side).
-4. 다른 게임 풀 구현.
+1. **Bomberman 풀 구현** (3e) — 4인 동시, 60fps tick, 폭탄 chain reaction. 회식 분위기 좋음.
+2. **Snake.io 풀 구현** (3f) — 자유 입퇴장 + 큰 격자.
+3. **Pac-Man 풀 구현** (3g) — 싱글 + ghost AI.
+4. **2048 / Minesweeper 옵션 로직 보강** (3h) — 보드 사이즈 / 난이도 적용.
+5. **모바일 반응형** (3k) — 캔버스 / 모달 / 채팅 layout.
+6. **JS Tetris canvas + skin** (3j) — 더 화려한 렌더 (현재 LiveView grid).
+7. **Finesse 분석** (3i) — Tetris finesse_violations 카운트.
+8. **DM + 알림** (4) — 친구 1:1 채팅, 게임 초대.
+
+## 테스트 현황
+
+- **430 tests, 0 failures** (Sprint 3d 기준).
+- ExUnit 단위/통합 + LiveView 테스트.
+- E2E (Playwright) 미구현 (TEST_PLAN.md 참조).
