@@ -73,7 +73,12 @@
         <% end %>
         <%= if assigns[:current_nickname] do %>
           <a href="/history" class="btn btn-ghost btn-md px-2" title="내 기록">🏆 기록</a>
-          <a href="/settings/games" class="btn btn-ghost btn-md px-2" title="게임 옵션">⚙️ 옵션</a>
+          <a
+            href="/settings/games"
+            class="btn btn-ghost btn-md px-2"
+            title="게임 옵션 (게임 중에는 모달로 열림)"
+            onclick="if (window.__hasOpenSettingsBridge) { event.preventDefault(); window.dispatchEvent(new CustomEvent('phx:open-settings')); }"
+          >⚙️ 옵션</a>
         <% end %>
         <%= if user = assigns[:current_user] do %>
           <div class="dropdown dropdown-end">

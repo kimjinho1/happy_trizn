@@ -151,4 +151,43 @@ defmodule HappyTriznWeb.Layouts do
     </div>
     """
   end
+
+  @doc """
+  4-테마 picker. 라벨, 이모지, daisyUI 테마 키, primary 색 미리보기 dot.
+
+  `phx:set-theme` 이벤트를 dispatch — 이미 root.html.heex 가 listen 중.
+  localStorage 에 저장됨, 페이지 이동에도 유지.
+
+  새 테마 추가는 @themes 리스트에 한 줄 + assets/css/app.css 에 daisyUI plugin 한 블록.
+  """
+  def theme_picker(assigns) do
+    themes = [
+      %{key: "light", label: "Light+", emoji: "☀️", desc: "기본 밝음"},
+      %{key: "dark", label: "Dark+", emoji: "🌙", desc: "기본 다크 (slate + violet)"},
+      %{key: "night-owl", label: "Night Owl", emoji: "🦉", desc: "VSCode 스타일 azure"},
+      %{key: "hacker-terminal", label: "Hacker Terminal", emoji: "💻", desc: "CRT phosphor green"}
+    ]
+
+    assigns = assign(assigns, :themes, themes)
+
+    ~H"""
+    <div class="theme-picker grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <%= for t <- @themes do %>
+        <button
+          type="button"
+          class="theme-picker-btn card bg-base-200 hover:bg-base-300 transition border-2 border-transparent"
+          phx-click={JS.dispatch("phx:set-theme")}
+          data-phx-theme={t.key}
+          aria-label={"테마: #{t.label}"}
+        >
+          <div class="card-body p-3 text-center">
+            <div class="text-2xl leading-none">{t.emoji}</div>
+            <div class="font-semibold text-sm mt-1">{t.label}</div>
+            <div class="text-xs text-base-content/60">{t.desc}</div>
+          </div>
+        </button>
+      <% end %>
+    </div>
+    """
+  end
 end

@@ -616,6 +616,7 @@ defmodule HappyTriznWeb.GameMultiLive do
       data-key-bindings={Jason.encode!(@key_settings.bindings)}
       class="min-h-screen p-3 sm:p-6 max-w-6xl mx-auto"
     >
+      <div id={"open-settings-bridge-multi-#{@slug}"} phx-hook="OpenSettingsBridge" class="hidden"></div>
       <%= if @slug == "tetris" do %>
         <div
           id="tetris-sound"
@@ -997,7 +998,12 @@ defmodule HappyTriznWeb.GameMultiLive do
           <%= for row <- @visible do %>
             <div class="flex">
               <%= for cell <- row do %>
-                <div class={["w-3 h-3 border border-base-content/5", cell_color(cell)]}></div>
+                <div class={[
+                  "w-3 h-3 border border-base-content/5",
+                  cell_color(cell),
+                  if(cell != nil, do: "tetris-filled-mini")
+                ]}>
+                </div>
               <% end %>
             </div>
           <% end %>
@@ -1094,20 +1100,20 @@ defmodule HappyTriznWeb.GameMultiLive do
       tabindex="0"
       class="outline-none"
     >
-      <div class="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 lg:items-stretch">
         <div>
           <.bomberman_status state={@state} me={@me} />
           <.bomberman_grid state={@state} player_id={@player_id} />
         </div>
 
-        <aside class="space-y-3">
+        <aside class="flex flex-col gap-3 min-h-0">
           <.bomberman_scoreboard players={@state.players} />
-          <div class="bg-base-200 rounded p-3 text-xs space-y-1">
+          <div class="bg-base-200 rounded p-3 text-xs space-y-1 shrink-0">
             <div class="font-semibold">조작</div>
             <div>이동: ← → ↑ ↓ / WASD</div>
             <div>폭탄: Space</div>
           </div>
-          <.game_room_chat messages={@messages} />
+          <.game_room_chat messages={@messages} height_class="flex-1 min-h-0" />
         </aside>
       </div>
 
@@ -1161,7 +1167,7 @@ defmodule HappyTriznWeb.GameMultiLive do
       tabindex="0"
       class="outline-none"
     >
-      <div class="grid grid-cols-1 lg:grid-cols-[auto_260px] gap-4 justify-start">
+      <div class="grid grid-cols-1 lg:grid-cols-[auto_260px] gap-4 justify-start lg:items-stretch">
         <div>
           <.snake_status state={@state} me={@me} />
           <div
@@ -1184,15 +1190,15 @@ defmodule HappyTriznWeb.GameMultiLive do
           </div>
         </div>
 
-        <aside class="space-y-3">
+        <aside class="flex flex-col gap-3 min-h-0">
           <.snake_scoreboard players={@state.players} player_id={@player_id} />
-          <div class="bg-base-200 rounded p-3 text-xs space-y-1">
+          <div class="bg-base-200 rounded p-3 text-xs space-y-1 shrink-0">
             <div class="font-semibold">조작</div>
             <div>방향: ← → ↑ ↓ / WASD</div>
             <div>180° 반대 방향 무시</div>
             <div>사망 시 3초 후 자동 부활</div>
           </div>
-          <.game_room_chat messages={@messages} />
+          <.game_room_chat messages={@messages} height_class="flex-1 min-h-0" />
         </aside>
       </div>
     </div>
@@ -1217,9 +1223,14 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   attr :messages, :list, required: true
 
+  attr :height_class, :string,
+    default: "h-[280px]",
+    doc:
+      "채팅 패널 height. 기본 280px. Bomberman 처럼 게임 grid 가 큰 경우 'flex-1 min-h-0' 전달해서 sidebar 남은 height 꽉 차게."
+
   defp game_room_chat(assigns) do
     ~H"""
-    <div class="bg-base-200 rounded-lg flex flex-col" style="height: 280px;">
+    <div class={["bg-base-200 rounded-lg flex flex-col", @height_class]}>
       <header class="px-3 py-2 border-b border-base-300 text-sm font-semibold flex items-center gap-2">
         💬 <span>게임방 채팅</span>
         <span class="text-xs font-normal text-base-content/50">방 닫히면 사라짐</span>
@@ -1422,7 +1433,7 @@ defmodule HappyTriznWeb.GameMultiLive do
         <div class="flex">
           <%= for c <- 0..(@cols - 1) do %>
             <div class={[
-              "w-7 h-7 sm:w-12 sm:h-12 flex items-center justify-center text-base sm:text-2xl transition-all",
+              "relative w-7 h-7 sm:w-12 sm:h-12 flex items-center justify-center text-base sm:text-2xl transition-all",
               bomberman_cell_class(@grid, r, c, @explosion_set)
             ]}>
               {Phoenix.HTML.raw(bomberman_cell_content(@state, r, c, @player_index))}
@@ -1455,16 +1466,31 @@ defmodule HappyTriznWeb.GameMultiLive do
   defp bomberman_terrain_class(_), do: "bg-base-100"
 
   defp bomberman_cell_content(state, r, c, player_index) do
+    bomb = Map.get(state.bombs, {r, c})
+    item = Map.get(state.items, {r, c})
+    pair = bomberman_player_pair_at(state, r, c)
+
     cond do
-      bomb = Map.get(state.bombs, {r, c}) ->
-        bomb_visual(bomb)
+      # Player + bomb 같은 셀 — 폭탄을 깔고 그 위에 player.
+      # absolute 로 겹치되 player 가 z-10 으로 위에. (자기 위치에 폭탄 놓으면 안 사라짐 fix)
+      pair && bomb ->
+        {pid, p} = pair
 
-      item = Map.get(state.items, {r, c}) ->
-        item_visual(item)
+        ~s|<span class="absolute inset-0 flex items-center justify-center">| <>
+          bomb_visual(bomb) <>
+          ~s|</span><span class="absolute inset-0 flex items-center justify-center z-10">| <>
+          player_visual(p, Map.get(player_index, pid, 0)) <>
+          ~s|</span>|
 
-      pair = bomberman_player_pair_at(state, r, c) ->
+      pair ->
         {pid, p} = pair
         player_visual(p, Map.get(player_index, pid, 0))
+
+      bomb ->
+        bomb_visual(bomb)
+
+      item ->
+        item_visual(item)
 
       true ->
         ""
@@ -2157,7 +2183,8 @@ defmodule HappyTriznWeb.GameMultiLive do
               <div class={[
                 "w-6 h-6 sm:w-7 sm:h-7",
                 cell_color(cell, @skin),
-                grid_class(@grid)
+                grid_class(@grid),
+                if(cell != nil, do: "tetris-filled")
               ]}>
               </div>
             <% end %>

@@ -1,6 +1,6 @@
 # Test Plan
 
-Branch tracking. 최근 갱신: Sprint 3m 스도쿠 + Sprint 4f 지뢰찾기 fix + Sprint 4g Presence (친구 접속중) + Sprint 4h Lobby/DM/Nav UX 풀세트 머지 후.
+Branch tracking. 최근 갱신: Sprint 3m 스도쿠 + Sprint 4f 지뢰찾기 fix + Sprint 4g Presence (친구 접속중) + Sprint 4h Lobby/DM/Nav UX 풀세트 + Sprint 4i 4-테마 시스템 + Bomberman 폭발 자동 클리어/z-order + Snake.io 채팅 fill + Tetris 셀 bevel + 모달 브릿지 머지 후.
 
 ## Status
 
@@ -110,6 +110,13 @@ MIX_ENV=test bin/mix test
 - Presence (Sprint 4g) — Phoenix.Presence track / online_user_ids / online?, fetch_live_user hook 자동 track + 연결 종료 시 untrack, presence_diff PubSub 실시간 갱신, Lobby 친구 list + DM 좌측 list + thread header 🟢 dot 표시 ✅
 - Lobby UX (Sprint 4h) — 헤더 통합 (root nav 만, lobby 자체 헤더 제거), 닉네임 dropdown (마이페이지/로그아웃), 활성방 페이지네이션 4개/페이지 (← 1 2 3 →), 카드 padding p-3, 친구 섹션 색깔/icon/badge 시각 구분 ✅
 - DM UX — 좌(친구 list) 우(채팅창) 모두 h-[70vh] 동기화, 모바일 단일창 toggle, 채팅 input/전송 키움 ✅
+- 4 테마 시스템 (Sprint 4i) — Light+ / Dark+ / Night Owl / Hacker Terminal daisyUI 플러그인. `/settings/games` 상단 picker 카드 4개 → `phx:set-theme` JS dispatch, localStorage 저장. 활성 테마 picker 버튼 highlight (`[data-theme=X] .theme-picker-btn[data-phx-theme=X]` CSS). 페이지 새로고침 후 유지. ✅
+- Bomberman 폭발 자동 클리어 (Sprint 4i) — `tick/1` 에서 bombs/explosions 활성 시 `:state_changed` PubSub broadcast → catch-all `refresh_state` 트리거. 비활성 시 broadcast 안 함 (50ms tick spam 방지). 사용자 입력 없어도 폭발 ttl (~400ms) 끝나면 화면 자동 갱신. ✅
+- Bomberman 폭탄 + 플레이어 z-order (Sprint 4i) — 같은 셀 player + bomb 동시 처리. cell wrapper `relative` + 두 visual 을 absolute 로 겹쳐 player 가 z-10 위. 자기 위치에 폭탄 놓아도 캐릭터 안 사라짐. ✅
+- Bomberman 채팅 height (Sprint 4i) — aside `flex flex-col gap-3 min-h-0`, `game_room_chat` 에 `height_class="flex-1 min-h-0"` 패스 → 게임 grid 높이 만큼 늘어남 (기존 280px 고정 → 동적). ✅
+- Snake.io 채팅 height (Sprint 4i) — Bomberman 동일 패턴. 캔버스 (640px) 만큼 채팅 늘어남. ✅
+- Tetris 셀 inset bevel (Sprint 4i) — `.tetris-filled` (메인 24px) / `.tetris-filled-mini` (opp 12px) `box-shadow`. 빈 셀 무영향. 같은 색 인접 블록끼리 셀 윤곽 분리. ✅
+- 전역 옵션 모달 브릿지 (Sprint 4i) — `OpenSettingsBridge` JS hook (`assets/js/app.js`) 게임 LV 컨테이너에 부착, `window.__hasOpenSettingsBridge` flag + `phx:open-settings` window listener → LV `open_settings` push. `root.html.heex` ⚙️ 옵션 anchor onclick 에서 flag 체크. 게임 중 페이지 이동 X, 모달만 열림. 게임 외 페이지에선 기존대로 `/settings/games` 이동. ✅
 
 ## E2E 미구현 (계획)
 

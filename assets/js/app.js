@@ -98,6 +98,25 @@ const Hooks = {
   PacmanCanvas,
   // 지뢰찾기 셀 — 우클릭 contextmenu → flag pushEvent.
   MinesweeperCell,
+
+  // 게임 페이지 안 에서 top-nav ⚙️ 옵션 클릭 시 modal 열기.
+  // root.html.heex 의 옵션 버튼이 'phx:open-settings' window 이벤트 dispatch →
+  // 게임 LV 컨테이너에 hook 부착되어 있으면 이걸 받아서 LV로 push, 모달 open.
+  // 게임 LV 가 아니면 버튼 default href 로 /settings/games 이동.
+  OpenSettingsBridge: {
+    mounted() {
+      this._listener = (e) => {
+        e?.preventDefault?.()
+        this.pushEvent("open_settings", {})
+      }
+      window.addEventListener("phx:open-settings", this._listener)
+      window.__hasOpenSettingsBridge = true
+    },
+    destroyed() {
+      window.removeEventListener("phx:open-settings", this._listener)
+      window.__hasOpenSettingsBridge = false
+    },
+  },
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

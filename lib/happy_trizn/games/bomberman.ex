@@ -271,11 +271,25 @@ defmodule HappyTrizn.Games.Bomberman do
 
   @impl true
   def tick(%{status: :playing} = state) do
+    pre_bombs = map_size(state.bombs)
+    pre_explosions = length(state.explosions)
+
     {state, b1} = tick_bombs(state)
     state = tick_explosions(state)
     state = check_all_players_on_explosion(state)
     {state, b2} = check_game_over(state)
-    {:ok, state, b1 ++ b2}
+
+    # 폭탄/폭발 상태가 변하면 LiveView 가 다시 그리도록 :state_changed 방출.
+    # 정적 (변화 없음) 상태에선 broadcast 안 함 → 50ms tick spam 방지.
+    # bomb fuse 줄어드는 건 항상 변화 → 폭탄 있는 동안은 매 tick refresh.
+    visual_changed? =
+      pre_bombs > 0 or pre_explosions > 0 or
+        map_size(state.bombs) != pre_bombs or
+        length(state.explosions) != pre_explosions
+
+    extra = if visual_changed?, do: [{:state_changed, %{}}], else: []
+
+    {:ok, state, b1 ++ b2 ++ extra}
   end
 
   def tick(state), do: {:ok, state, []}
