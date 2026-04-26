@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/happy_trizn"
 import topbar from "../vendor/topbar"
 import {TetrisInput} from "./hooks/tetris_input"
+import {TetrisSound} from "./hooks/tetris_sound"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -63,6 +64,8 @@ const Hooks = {
 
   // Tetris 키 입력 — 별도 모듈 (./hooks/tetris_input.js).
   TetrisInput,
+  // Tetris 효과음 — WebAudio 합성 (./hooks/tetris_sound.js).
+  TetrisSound,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

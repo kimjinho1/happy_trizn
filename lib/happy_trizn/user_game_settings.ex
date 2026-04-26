@@ -163,12 +163,18 @@ defmodule HappyTrizn.UserGameSettings do
         "ghost" => true,
         "block_skin" => "default_jstris",
         "block_color" => "#5c5c5c",
+        # 효과음 마스터 볼륨 (0~100). 각 효과음 on/off (rotate / lock / line_clear /
+        # tetris / b2b / garbage / top_out / countdown).
         "sound_volume" => 16,
-        "sound_start" => true,
         "sound_rotate" => true,
-        "sound_finesse" => false,
-        "sound_join" => true,
-        "sound_message" => true
+        "sound_lock" => true,
+        "sound_line_clear" => true,
+        "sound_tetris" => true,
+        "sound_b2b" => true,
+        "sound_garbage" => true,
+        "sound_top_out" => true,
+        "sound_countdown" => true,
+        "sound_finesse" => false
       },
       das: 133,
       arr: 10,

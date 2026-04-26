@@ -327,6 +327,41 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "방 누적 우승"
     end
 
+    test "TetrisSound 훅 + 사운드 옵션 data attrs 노출", %{conn: conn, room: room} do
+      {:ok, _, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "phx-hook=\"TetrisSound\""
+      assert html =~ "data-sound-rotate"
+      assert html =~ "data-sound-tetris"
+      assert html =~ "data-sound-volume"
+    end
+
+    test "lock event → tetris:sfx push (lock)", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+
+      # 첫 player_id 가져오기
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      [player_id] = Map.keys(state.players)
+
+      send(view.pid, {:game_event, {:locked, player_id}})
+      assert_push_event(view, "tetris:sfx", %{event: "lock"})
+    end
+
+    test "line_clear (4 lines) → tetris sfx", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      [player_id] = Map.keys(state.players)
+
+      send(
+        view.pid,
+        {:game_event,
+         {:line_clear, %{player: player_id, lines: 4, b2b: false, tspin: :none, combo: 0}}}
+      )
+
+      assert_push_event(view, "tetris:sfx", %{event: "tetris"})
+    end
+
     test "modal reset 버튼 → bindings/options 초기화 + 모달 유지", %{conn: conn, room: room, host: host} do
       {:ok, _} =
         HappyTrizn.UserGameSettings.upsert(host, "tetris", %{

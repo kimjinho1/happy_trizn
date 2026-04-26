@@ -344,7 +344,9 @@ defmodule HappyTrizn.Games.Tetris do
           |> post_action_lock_check()
 
         new_state = put_in(state.players[player_id], new_player)
-        {:ok, new_state, [{:player_state, player_id, public_player(new_player)}]}
+
+        {:ok, new_state,
+         [{:rotated, player_id}, {:player_state, player_id, public_player(new_player)}]}
     end
   end
 
@@ -574,7 +576,11 @@ defmodule HappyTrizn.Games.Tetris do
       }
 
       new_players = Map.put(state.players, player_id, new_player)
-      base_broadcasts = [{:player_state, player_id, public_player(new_player)}]
+
+      base_broadcasts = [
+        {:locked, player_id},
+        {:player_state, player_id, public_player(new_player)}
+      ]
 
       base_broadcasts =
         if cleared > 0 do
