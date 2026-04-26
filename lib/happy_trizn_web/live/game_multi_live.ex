@@ -72,6 +72,7 @@ defmodule HappyTriznWeb.GameMultiLive do
                  |> assign(:settings_open, false)
                  |> assign(:result, nil)
                  |> assign(:joined, false)
+                 |> assign(:game_messages, [])
                  |> assign(:page_title, meta.name)}
               end
 
@@ -96,6 +97,12 @@ defmodule HappyTriznWeb.GameMultiLive do
              }) do
           :ok ->
             GameSession.subscribe_room(room_id)
+            # 게임방 ephemeral chat — 방 단위 PubSub. 페이지 떠나면 history 휘발.
+            # Skribbl 은 자체 추측/채팅 시스템 있어 별도 channel 안 씀.
+            if slug in ["tetris", "bomberman"] do
+              Phoenix.PubSub.subscribe(HappyTrizn.PubSub, "chat:game:" <> room_id)
+            end
+
             key_settings = UserGameSettings.get_for(user, slug)
             initial_state = GameSession.get_state(pid)
 
@@ -112,6 +119,7 @@ defmodule HappyTriznWeb.GameMultiLive do
               |> assign(:settings_open, false)
               |> assign(:result, nil)
               |> assign(:joined, true)
+              |> assign(:game_messages, [])
               |> assign(:page_title, meta.name)
 
             # Skribbl 늦게 join 한 사람 — 현재까지 strokes 다시 그려야.
@@ -188,6 +196,54 @@ defmodule HappyTriznWeb.GameMultiLive do
 
     # 입력창 비움 — morphdom 은 typed input value 안 건드림. ChatReset hook 이 받음.
     {:noreply, push_event(socket, "chat:reset_input", %{})}
+  end
+
+  # ============================================================================
+  # Bomberman events
+  # ============================================================================
+
+  def handle_event("bomberman_input", payload, socket) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, payload)
+    {:noreply, socket}
+  end
+
+  def handle_event("bomberman_start", _, socket) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
+      "action" => "start_game"
+    })
+
+    {:noreply, socket}
+  end
+
+  # ============================================================================
+  # 게임방 ephemeral chat (Tetris / Bomberman 전용 — Skribbl 은 자체 채팅).
+  # PubSub 만 사용. 영속 X. 방 떠나면 history 휘발.
+  # ============================================================================
+
+  def handle_event("game_chat", %{"text" => text}, socket) when is_binary(text) do
+    text = String.trim(text)
+
+    if text == "" or socket.assigns.slug not in ["tetris", "bomberman"] do
+      {:noreply, push_event(socket, "chat:reset_input", %{})}
+    else
+      # 너무 긴 메시지 차단 (200자).
+      text = String.slice(text, 0, 200)
+
+      msg = %{
+        nickname: socket.assigns.nickname,
+        player_id: socket.assigns.player_id,
+        text: text,
+        ts: System.system_time(:millisecond)
+      }
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "chat:game:" <> socket.assigns.room_id,
+        {:game_chat, msg}
+      )
+
+      {:noreply, push_event(socket, "chat:reset_input", %{})}
+    end
   end
 
   # ============================================================================
@@ -465,6 +521,16 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   def handle_info({:game_event, _other}, socket), do: {:noreply, refresh_state(socket)}
 
+  # 게임방 채팅 — 최근 50개만 유지.
+  def handle_info({:game_chat, msg}, socket) do
+    msgs = [msg | socket.assigns[:game_messages] || []] |> Enum.take(50)
+
+    {:noreply,
+     socket
+     |> assign(:game_messages, msgs)
+     |> push_event("chat_message_added", %{})}
+  end
+
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp sfx_for_game_over(%{winner: w}, me) when is_binary(w) and w == me, do: "tetris"
@@ -559,8 +625,9 @@ defmodule HappyTriznWeb.GameMultiLive do
           <.link navigate={~p"/lobby"} class="btn btn-ghost btn-sm">로비로</.link>
         </div>
       </header>
-
-      <%= if @result && @result != %{} do %>
+      
+    <!-- 공용 result panel 은 Tetris 전용 — Skribbl/Bomberman 은 자체 game_over_modal 사용 -->
+      <%= if @result && @result != %{} && @slug == "tetris" do %>
         <.game_over_panel result={@result} player_id={@player_id} />
       <% end %>
 
@@ -573,6 +640,9 @@ defmodule HappyTriznWeb.GameMultiLive do
         state={@game_state}
         player_id={@player_id}
         options={@key_settings.options}
+        key_settings={@key_settings}
+        nickname={@nickname}
+        messages={@game_messages}
       />
 
       <div class="mt-4 text-xs text-base-content/50">
@@ -733,89 +803,92 @@ defmodule HappyTriznWeb.GameMultiLive do
     assigns = assign(assigns, me: me, other: other_player, ghost?: ghost?, grid: grid)
 
     ~H"""
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <h3 class="font-semibold mb-2">나 ({@player_id |> String.slice(0..7)})</h3>
-        <%= if @me do %>
-          <div class="flex gap-2 items-start">
-            <!-- 좌측: 홀드 -->
-            <div class="flex flex-col gap-2">
-              <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
-              <%= if Map.get(@me, :lock_delay_ms) do %>
-                <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
-              <% end %>
-            </div>
-            <!-- 중앙: 보드 -->
-            <.tetris_board
-              board={with_ghost_and_current(@me, @ghost?)}
-              grid={@grid}
-              pending={@me.pending_garbage}
-            />
-            <!-- 우측: 다음 큐 -->
-            <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
-          </div>
-          <div class="text-sm mt-2 space-y-1">
-            <div>점수: <strong>{@me.score}</strong></div>
-            <div>라인: {@me.lines} · 레벨: {@me.level}</div>
-            <div>
-              받을 가비지:
-              <span class={if @me.pending_garbage > 0, do: "text-error font-bold", else: ""}>
-                {@me.pending_garbage}
-              </span>
-            </div>
-            <div class="flex gap-2">
-              <%= if Map.get(@me, :combo, -1) >= 1 do %>
-                <span class="badge badge-warning">콤보 ×{@me.combo}</span>
-              <% end %>
-              <%= if Map.get(@me, :b2b, false) do %>
-                <span class="badge badge-info">B2B</span>
-              <% end %>
-            </div>
-            <%= if @me.top_out do %>
-              <div class="text-error font-bold">탑아웃</div>
-            <% end %>
-          </div>
-        <% else %>
-          <div class="text-base-content/40">로딩...</div>
-        <% end %>
-      </div>
-
-      <div>
-        <h3 class="font-semibold mb-2">상대</h3>
-        <%= if @other do %>
-          <div class="flex gap-2 items-start">
-            <div class="flex flex-col gap-2">
-              <.piece_preview
-                label="홀드"
-                piece={@other.hold}
-                dim={Map.get(@other, :hold_used, false)}
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <h3 class="font-semibold mb-2">나 ({@player_id |> String.slice(0..7)})</h3>
+          <%= if @me do %>
+            <div class="flex gap-2 items-start">
+              <!-- 좌측: 홀드 -->
+              <div class="flex flex-col gap-2">
+                <.piece_preview label="홀드" piece={@me.hold} dim={Map.get(@me, :hold_used, false)} />
+                <%= if Map.get(@me, :lock_delay_ms) do %>
+                  <div class="text-xs text-warning">잠금 {@me.lock_delay_ms}ms</div>
+                <% end %>
+              </div>
+              <!-- 중앙: 보드 -->
+              <.tetris_board
+                board={with_ghost_and_current(@me, @ghost?)}
+                grid={@grid}
+                pending={@me.pending_garbage}
               />
+              <!-- 우측: 다음 큐 -->
+              <.next_queue nexts={Map.get(@me, :nexts, [@me.next])} />
             </div>
-            <.tetris_board
-              board={with_ghost_and_current(@other, false)}
-              grid={@grid}
-              pending={@other.pending_garbage}
-            />
-            <.next_queue nexts={Map.get(@other, :nexts, [@other.next])} />
-          </div>
-          <div class="text-sm mt-2 space-y-1">
-            <div>점수: {@other.score} · 라인: {@other.lines} · 레벨: {@other.level}</div>
-            <div class="flex gap-2">
-              <%= if Map.get(@other, :combo, -1) >= 1 do %>
-                <span class="badge badge-warning">콤보 ×{@other.combo}</span>
-              <% end %>
-              <%= if Map.get(@other, :b2b, false) do %>
-                <span class="badge badge-info">B2B</span>
+            <div class="text-sm mt-2 space-y-1">
+              <div>점수: <strong>{@me.score}</strong></div>
+              <div>라인: {@me.lines} · 레벨: {@me.level}</div>
+              <div>
+                받을 가비지:
+                <span class={if @me.pending_garbage > 0, do: "text-error font-bold", else: ""}>
+                  {@me.pending_garbage}
+                </span>
+              </div>
+              <div class="flex gap-2">
+                <%= if Map.get(@me, :combo, -1) >= 1 do %>
+                  <span class="badge badge-warning">콤보 ×{@me.combo}</span>
+                <% end %>
+                <%= if Map.get(@me, :b2b, false) do %>
+                  <span class="badge badge-info">B2B</span>
+                <% end %>
+              </div>
+              <%= if @me.top_out do %>
+                <div class="text-error font-bold">탑아웃</div>
               <% end %>
             </div>
-            <%= if @other.top_out do %>
-              <div class="text-error font-bold">탑아웃</div>
-            <% end %>
-          </div>
-        <% else %>
-          <div class="text-base-content/40">상대방 대기 중...</div>
-        <% end %>
+          <% else %>
+            <div class="text-base-content/40">로딩...</div>
+          <% end %>
+        </div>
+
+        <div>
+          <h3 class="font-semibold mb-2">상대</h3>
+          <%= if @other do %>
+            <div class="flex gap-2 items-start">
+              <div class="flex flex-col gap-2">
+                <.piece_preview
+                  label="홀드"
+                  piece={@other.hold}
+                  dim={Map.get(@other, :hold_used, false)}
+                />
+              </div>
+              <.tetris_board
+                board={with_ghost_and_current(@other, false)}
+                grid={@grid}
+                pending={@other.pending_garbage}
+              />
+              <.next_queue nexts={Map.get(@other, :nexts, [@other.next])} />
+            </div>
+            <div class="text-sm mt-2 space-y-1">
+              <div>점수: {@other.score} · 라인: {@other.lines} · 레벨: {@other.level}</div>
+              <div class="flex gap-2">
+                <%= if Map.get(@other, :combo, -1) >= 1 do %>
+                  <span class="badge badge-warning">콤보 ×{@other.combo}</span>
+                <% end %>
+                <%= if Map.get(@other, :b2b, false) do %>
+                  <span class="badge badge-info">B2B</span>
+                <% end %>
+              </div>
+              <%= if @other.top_out do %>
+                <div class="text-error font-bold">탑아웃</div>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="text-base-content/40">상대방 대기 중...</div>
+          <% end %>
+        </div>
       </div>
+      <.game_room_chat messages={@messages} />
     </div>
     """
   end
@@ -883,13 +956,349 @@ defmodule HappyTriznWeb.GameMultiLive do
     """
   end
 
+  defp game_view(%{slug: "bomberman"} = assigns) do
+    state = ensure_bomberman_state(assigns.state)
+    me_id = assigns.player_id
+    me = Map.get(state.players, me_id) || %{}
+    bindings = assigns.key_settings.bindings || %{}
+
+    assigns = assign(assigns, state: state, me: me, bindings: bindings)
+
+    ~H"""
+    <div
+      id="bomberman-input-host"
+      phx-hook="BombermanInput"
+      data-key-bindings={Jason.encode!(@bindings)}
+      tabindex="0"
+      class="outline-none"
+    >
+      <div class="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
+        <div>
+          <.bomberman_status state={@state} me={@me} />
+          <.bomberman_grid state={@state} player_id={@player_id} />
+        </div>
+
+        <aside class="space-y-3">
+          <.bomberman_scoreboard players={@state.players} />
+          <div class="bg-base-200 rounded p-3 text-xs space-y-1">
+            <div class="font-semibold">조작</div>
+            <div>이동: ← → ↑ ↓ / WASD</div>
+            <div>폭탄: Space</div>
+          </div>
+          <.game_room_chat messages={@messages} />
+        </aside>
+      </div>
+
+      <%= if @state.status == :over do %>
+        <.bomberman_game_over_modal state={@state} player_id={@player_id} />
+      <% end %>
+    </div>
+    """
+  end
+
   defp game_view(assigns) do
     ~H"""
     <div class="card bg-base-200">
       <div class="card-body">
         <h3 class="card-title">{@slug}</h3>
-        <p class="text-sm">이 게임은 Sprint 3b 진행 중. 풀 클라이언트 구현 예정.</p>
+        <p class="text-sm">이 게임은 Sprint 3 진행 중. 풀 구현 예정.</p>
         <pre class="text-xs bg-base-100 p-2 rounded overflow-auto max-h-64">{inspect(@state, pretty: true, limit: 50)}</pre>
+      </div>
+    </div>
+    """
+  end
+
+  # ============================================================================
+  # 게임방 ephemeral chat 패널 — Tetris / Bomberman 공용. 방 안에서만 살아있음.
+  # ============================================================================
+
+  attr :messages, :list, required: true
+
+  defp game_room_chat(assigns) do
+    ~H"""
+    <div class="bg-base-200 rounded-lg flex flex-col h-[480px] lg:h-[520px]">
+      <header class="px-3 py-2 border-b border-base-300 text-sm font-semibold flex items-center gap-2">
+        💬 <span>게임방 채팅</span>
+        <span class="text-xs font-normal text-base-content/50">방 닫히면 사라짐</span>
+      </header>
+
+      <div
+        id="game-chat-scroll"
+        phx-hook="ChatScroll"
+        class="flex-1 overflow-y-auto px-3 py-2 flex flex-col-reverse gap-1 text-sm"
+      >
+        <%= if @messages == [] do %>
+          <div class="text-xs text-base-content/40 text-center my-auto">아직 메시지 없음</div>
+        <% else %>
+          <%= for m <- @messages do %>
+            <div class="leading-tight">
+              <span class="font-semibold text-primary">{m.nickname}</span>
+              <span class="text-base-content/50">:</span>
+              <span class="break-words">{m.text}</span>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+
+      <form
+        id="game-chat-form"
+        phx-submit="game_chat"
+        phx-hook="ChatReset"
+        class="border-t border-base-300 p-2 flex gap-1"
+      >
+        <input
+          type="text"
+          name="text"
+          autocomplete="off"
+          maxlength="200"
+          placeholder="메시지..."
+          class="input input-sm input-bordered flex-1"
+        />
+        <button type="submit" class="btn btn-sm btn-primary">전송</button>
+      </form>
+    </div>
+    """
+  end
+
+  # Bomberman placeholder state 보강 — HTTP 첫 mount 안전.
+  defp ensure_bomberman_state(state) do
+    state
+    |> Map.put_new(:status, :waiting)
+    |> Map.put_new(:players, %{})
+    |> Map.put_new(:grid, [])
+    |> Map.put_new(:bombs, %{})
+    |> Map.put_new(:explosions, [])
+    |> Map.put_new(:items, %{})
+    |> Map.put_new(:winner_id, nil)
+  end
+
+  attr :state, :map, required: true
+  attr :me, :map, required: true
+
+  defp bomberman_status(assigns) do
+    ~H"""
+    <div class="bg-base-200 rounded p-3 mb-3 flex items-center justify-between">
+      <div>
+        <%= case @state.status do %>
+          <% :waiting -> %>
+            <span class="text-sm">대기 중 — 2명 이상 시 시작 가능</span>
+            <%= if map_size(@state.players) >= 2 do %>
+              <button phx-click="bomberman_start" class="btn btn-primary btn-sm ml-3">💣 시작</button>
+            <% end %>
+          <% :playing -> %>
+            <span class="text-sm font-semibold">게임 중</span>
+          <% :over -> %>
+            <span class="text-sm">게임 종료</span>
+        <% end %>
+      </div>
+      <%= if Map.get(@me, :alive) do %>
+        <div class="text-xs space-x-3">
+          <span>💣 {Map.get(@me, :bomb_max, 1)}</span>
+          <span>🔥 {Map.get(@me, :bomb_range, 2)}</span>
+          {if Map.get(@me, :kick?), do: "🦵"}
+        </div>
+      <% else %>
+        <%= if @state.status == :playing do %>
+          <span class="badge badge-error">사망</span>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp bomberman_grid(assigns) do
+    rows = HappyTrizn.Games.Bomberman.rows()
+    cols = HappyTrizn.Games.Bomberman.cols()
+    grid = assigns.state.grid
+
+    explosion_set =
+      assigns.state.explosions
+      |> Enum.flat_map(fn e -> e.cells end)
+      |> MapSet.new()
+
+    # 안정적 player index — sorted player_id 기준.
+    player_index =
+      assigns.state.players
+      |> Map.keys()
+      |> Enum.sort()
+      |> Enum.with_index()
+      |> Map.new()
+
+    assigns =
+      assign(assigns,
+        rows: rows,
+        cols: cols,
+        grid: grid,
+        explosion_set: explosion_set,
+        player_index: player_index
+      )
+
+    ~H"""
+    <div class="inline-block bg-gradient-to-br from-slate-800 to-slate-900 p-2 rounded-xl shadow-2xl ring-2 ring-slate-700">
+      <%= for r <- 0..(@rows - 1) do %>
+        <div class="flex">
+          <%= for c <- 0..(@cols - 1) do %>
+            <div class={[
+              "w-12 h-12 flex items-center justify-center text-2xl transition-all",
+              bomberman_cell_class(@grid, r, c, @explosion_set)
+            ]}>
+              {Phoenix.HTML.raw(bomberman_cell_content(@state, r, c, @player_index))}
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp bomberman_cell_class(grid, r, c, explosion_set) do
+    base = bomberman_terrain_class(Enum.at(Enum.at(grid, r) || [], c))
+
+    if MapSet.member?(explosion_set, {r, c}),
+      do:
+        "bg-gradient-to-br from-orange-400 via-red-500 to-yellow-300 animate-pulse shadow-lg shadow-red-500/50",
+      else: base
+  end
+
+  defp bomberman_terrain_class(:wall),
+    do: "bg-gradient-to-br from-slate-600 to-slate-800 border border-slate-900 shadow-inner"
+
+  defp bomberman_terrain_class(:block),
+    do: "bg-gradient-to-br from-amber-600 to-amber-800 border border-amber-950 shadow-md"
+
+  defp bomberman_terrain_class(:empty),
+    do: "bg-gradient-to-br from-emerald-900/40 to-slate-900/40 border border-slate-700/50"
+
+  defp bomberman_terrain_class(_), do: "bg-base-100"
+
+  defp bomberman_cell_content(state, r, c, player_index) do
+    cond do
+      bomb = Map.get(state.bombs, {r, c}) ->
+        bomb_visual(bomb)
+
+      item = Map.get(state.items, {r, c}) ->
+        item_visual(item)
+
+      pair = bomberman_player_pair_at(state, r, c) ->
+        {pid, p} = pair
+        player_visual(p, Map.get(player_index, pid, 0))
+
+      true ->
+        ""
+    end
+  end
+
+  defp bomberman_player_pair_at(state, r, c) do
+    state.players
+    |> Enum.find(fn {_, p} -> p.alive and p.row == r and p.col == c end)
+  end
+
+  # 폭탄 — fuse 가까울 수록 빠르게 깜빡.
+  defp bomb_visual(bomb) do
+    pulse =
+      cond do
+        bomb.fuse_ms < 1000 -> "animate-bounce"
+        bomb.fuse_ms < 2000 -> "animate-pulse"
+        true -> ""
+      end
+
+    ~s|<span class="#{pulse} drop-shadow-[0_0_6px_rgba(255,80,80,0.9)]">💣</span>|
+  end
+
+  # 아이템 — 둥둥 떠다니는 효과 + 색 별 글로우.
+  defp item_visual(:bomb_up),
+    do: ~s|<span class="animate-bounce drop-shadow-[0_0_8px_rgba(239,68,68,0.9)]">💥</span>|
+
+  defp item_visual(:range_up),
+    do: ~s|<span class="animate-bounce drop-shadow-[0_0_8px_rgba(251,146,60,0.9)]">🔥</span>|
+
+  defp item_visual(:speed_up),
+    do: ~s|<span class="animate-bounce drop-shadow-[0_0_8px_rgba(34,197,94,0.9)]">⚡</span>|
+
+  defp item_visual(:kick),
+    do: ~s|<span class="animate-bounce drop-shadow-[0_0_8px_rgba(168,85,247,0.9)]">🦵</span>|
+
+  defp item_visual(_),
+    do: ~s|<span>?</span>|
+
+  # Player — 인덱스별 다른 아바타 + 컬러 ring.
+  @player_avatars {"🤺", "🦸", "🥷", "🧙"}
+  @player_rings {
+    "ring-2 ring-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.9)]",
+    "ring-2 ring-blue-400 drop-shadow-[0_0_6px_rgba(96,165,250,0.9)]",
+    "ring-2 ring-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.9)]",
+    "ring-2 ring-yellow-400 drop-shadow-[0_0_6px_rgba(250,204,21,0.9)]"
+  }
+
+  defp player_visual(_p, idx) do
+    avatar = elem(@player_avatars, rem(idx, 4))
+    ring = elem(@player_rings, rem(idx, 4))
+
+    ~s|<span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-base-100/80 #{ring}">#{avatar}</span>|
+  end
+
+  attr :players, :map, required: true
+
+  defp bomberman_scoreboard(assigns) do
+    sorted = assigns.players |> Enum.sort_by(fn {_, p} -> not p.alive end)
+    assigns = assign(assigns, sorted: sorted)
+
+    ~H"""
+    <div class="bg-base-200 rounded p-3">
+      <h3 class="font-semibold mb-2 text-sm">참가자</h3>
+      <ul class="space-y-1 text-sm">
+        <%= for {_, p} <- @sorted do %>
+          <li class="flex items-center justify-between">
+            <span class="font-mono">{p.nickname}</span>
+            <span>
+              <%= if p.alive do %>
+                <span class="badge badge-success badge-xs">생존</span>
+              <% else %>
+                <span class="badge badge-error badge-xs">탈락</span>
+              <% end %>
+            </span>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+    """
+  end
+
+  attr :state, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp bomberman_game_over_modal(assigns) do
+    winner_id = assigns.state.winner_id
+    winner = winner_id && Map.get(assigns.state.players, winner_id)
+    me_won? = winner_id == assigns.player_id
+    assigns = assign(assigns, winner: winner, me_won?: me_won?)
+
+    ~H"""
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div class={[
+        "rounded-xl shadow-2xl max-w-md w-full p-6 border-4",
+        if(@me_won?, do: "bg-success/30 border-success", else: "bg-base-100 border-base-300")
+      ]}>
+        <div class="text-center mb-4">
+          <div class="text-5xl mb-2">{if @me_won?, do: "🏆", else: "💥"}</div>
+          <div class="text-2xl font-bold">
+            <%= cond do %>
+              <% @me_won? -> %>
+                승리!
+              <% @winner -> %>
+                {@winner.nickname} 우승
+              <% true -> %>
+                무승부
+            <% end %>
+          </div>
+        </div>
+
+        <button phx-click="bomberman_start" class="btn btn-primary w-full">
+          🔄 다시 하기
+        </button>
       </div>
     </div>
     """

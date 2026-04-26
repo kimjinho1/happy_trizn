@@ -34,7 +34,7 @@ defmodule HappyTrizn.Games.StubGamesTest do
       assert {:reject, :full} = Bomberman.handle_player_join("p5", %{}, filled)
     end
 
-    test "playing 중 leave → 1명 남으면 winner" do
+    test "playing 중 leave → 1명 남으면 game_finished + winner" do
       {:ok, state} = Bomberman.init(%{})
       {:ok, s1, _} = Bomberman.handle_player_join("p1", %{}, state)
       {:ok, s2, _} = Bomberman.handle_player_join("p2", %{}, s1)
@@ -42,7 +42,12 @@ defmodule HappyTrizn.Games.StubGamesTest do
 
       {:ok, after_leave, broadcasts} = Bomberman.handle_player_leave("p1", :disconnect, s2)
       assert after_leave.status == :over
-      assert {:winner, "p2"} in broadcasts
+      assert after_leave.winner_id == "p2"
+
+      assert Enum.any?(broadcasts, fn
+               {:game_finished, %{winner: "p2"}} -> true
+               _ -> false
+             end)
     end
   end
 

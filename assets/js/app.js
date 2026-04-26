@@ -27,6 +27,7 @@ import topbar from "../vendor/topbar"
 import {TetrisInput} from "./hooks/tetris_input"
 import {TetrisSound} from "./hooks/tetris_sound"
 import {SkribblCanvas} from "./hooks/skribbl_canvas"
+import {BombermanInput} from "./hooks/bomberman_input"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -75,6 +76,8 @@ const Hooks = {
   TetrisSound,
   // Skribbl 캔버스 — drawer 그리기 + 모든 사람 보기.
   SkribblCanvas,
+  // Bomberman 키 입력 — 방향키 + 폭탄 설치.
+  BombermanInput,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
