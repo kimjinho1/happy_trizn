@@ -1076,7 +1076,7 @@ defmodule HappyTriznWeb.GameMultiLive do
             data-me-id={@player_id}
             class="bg-slate-900 rounded-xl shadow-2xl ring-2 ring-slate-700 p-1 inline-block"
           >
-            <canvas id="snake-canvas" width="512" height="512" class="block"></canvas>
+            <canvas id="snake-canvas" width="720" height="720" class="block"></canvas>
           </div>
         </div>
 

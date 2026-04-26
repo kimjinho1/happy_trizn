@@ -1,8 +1,8 @@
 // Snake.io 캔버스 — 본인 head 중심 viewport + 매 frame 보간 + 둥근 segment.
 // data-grid-size = 월드 격자 크기 (200), data-snakes / data-food (json), data-me-id, data-tick-ms.
 
-const VIEWPORT_CELLS = 32 // viewport 안 셀 수 (32×32) — 채팅방 옆 비율 적절.
-const CELL_PX = 16        // 셀 한 변 픽셀 (= 32×16 = 512px canvas).
+const VIEWPORT_CELLS = 30 // viewport 안 셀 수 (30×30) — 사이드바 (리더보드+조작+채팅) 높이 매칭.
+const CELL_PX = 24        // 셀 한 변 픽셀 (= 30×24 = 720px 정사각형 canvas).
 const HEAD_RADIUS = CELL_PX * 0.55
 const BODY_RADIUS = CELL_PX * 0.45
 const FOOD_RADIUS = CELL_PX * 0.32
