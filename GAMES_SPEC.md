@@ -7,8 +7,8 @@
 - [공통 — 사용자 게임 옵션](#공통--사용자-게임-옵션)
 - [Tetris ✅](#tetris--구현-완료)
 - [캐치마인드 ✅ (구 Skribbl)](#캐치마인드--구현-완료)
-- [Bomberman ⏳](#bomberman--미구현)
-- [Snake.io ⏳](#snakeio--미구현)
+- [Bomberman ✅](#bomberman--구현-완료)
+- [Snake.io ✅](#snakeio--구현-완료)
 - [Pac-Man ⏳](#pac-man--미구현)
 - [2048 + Minesweeper ✅ (싱글, 옵션 보강 완료)](#2048--minesweeper--옵션-로직-보강-완료-sprint-3h)
 - [DB 스키마](#db-스키마)
@@ -166,41 +166,82 @@ user_game_settings
 
 ---
 
-## Bomberman ⏳ 미구현
+## Bomberman ✅ 구현 완료
 
-### 게임 로직 (계획)
+### 게임 로직 (구현)
 
-- 격자 13×11
-- 4명 동시
-- 벽 (파괴 불가) + 블록 (파괴 가능, 아이템 드롭)
-- 폭탄 — 길이 / 개수 강화
-- 아이템: 화염 강화, 폭탄 +1, 스피드, 발차기, 펀치
-- 60fps tick (서버 권위)
-- 마지막 1명 winner
+- 13×13 격자 (체스판 wall + 70% destructible block) ✅
+- 2~4명 동시. spawn corner = (1,1) (1,11) (9,1) (9,11) ✅
+- 50ms tick (20fps) ✅
+- 폭탄 fuse 3000ms → ray-cast 폭발 + chain reaction ✅
+- 4 아이템 종류 (block 파괴 시 20% drop): bomb_up / range_up / speed_up / kick ✅
+- 마지막 1명 alive → :over + winner_id ✅
+- player_id = session.id (multi-tab 테스트 가능) ✅
 
-### 옵션 (defaults 만 구현, 게임 로직 미구현)
+### UI (구현)
 
-- 키: 상하좌우, 폭탄 설치, 발차기, 펀치
-- 스피드 / 폭탄 효과음
-- 그리드 색 / 캐릭터 스킨
+- 셀 48px (`w-12 h-12 text-2xl`), 보드 외곽 gradient ring + shadow ✅
+- terrain gradient (벽 slate / 블록 amber / empty emerald-tinted) ✅
+- 폭탄 fuse 별 animate-bounce/animate-pulse + glow drop-shadow ✅
+- 아이템 4종 컬러별 glow + bounce (💥🔥⚡🦵) ✅
+- 플레이어 4 아바타 (🤺🦸🥷🧙) + 4색 ring (red/blue/emerald/yellow), index 안정 매핑 ✅
+- 게임방 ephemeral chat (Skribbl 제외, 방 닫히면 휘발) ✅
+
+### Stuck modal 회피 (Sprint 3e+)
+
+- :over 후 1명 leave → handle_player_leave 가 자동 :waiting 리셋 (grid/bombs/items/winner_id 초기화 + spawn corner 재배치).
+- :over + 인원 부족 시 "다시 하기" → reset_to_waiting (modal 사라지게).
+- Skribbl 도 동일 패턴 적용. Tetris 는 기존 :practice 자동 전환으로 안전.
+
+### 옵션
+
+- 키: 상하좌우, 폭탄 설치 (defaults), 발차기/펀치 (defaults; 로직 미구현)
+- 스피드 / 폭탄 효과음 (defaults; 사운드 모듈 미구현)
+- 그리드 색 / 캐릭터 스킨 (defaults; 미구현)
+
+### JS 입력 (`assets/js/hooks/bomberman_input.js`) ✅
+
+- e.code 기반 매칭, isFormTarget skip, OS auto-repeat.
 
 ---
 
-## Snake.io ⏳ 미구현
+## Snake.io ✅ 구현 완료
 
-### 게임 로직 (계획)
+### 게임 로직 (구현)
 
-- 자유 입퇴장
-- 큰 격자 100×100
-- 먹이 random spawn → 길이 +1
-- 부딪히면 죽음 → 길이 dot 흩뿌림
-- 60fps tick
+- **200×200 월드 격자** (io 게임 느낌, 큰 맵), 자유 입퇴장, 항상 :playing (캐주얼)
+- 50ms tick (20fps)
+- food 항상 max(60, players × 8) 개 유지
+- food 먹으면 length +1 (grow 카운터로 다음 trim skip)
+- 충돌 (벽 / 자기 몸 / 타 snake 몸) → 사망 + body 절반 food drop
+- 머리 vs 머리 → 양쪽 사망
+- tail follow 허용 (tail 다음 tick 에 빠지므로 self-collision 시 tail 제외)
+- 사망 후 60 tick (3초) 자동 부활 (length 3 + 랜덤 위치)
+- 180° 반대 방향 입력 무시
+- best_length / kills 누적 — 리더보드.
+- `game_over?` 항상 `:no`.
 
-### 옵션 (defaults 만 구현)
+### UI — 카메라 추적 viewport
 
-- 키 (상하좌우)
-- 색
-- 미니맵
+- 월드 200×200 → 클라가 본인 head 중심 **40×40 셀 viewport** (640×640 px) 만 그림.
+- 셀 16px (이전 6px → 2.7배 키움) — 조작 편함.
+- viewport 가 월드 가장자리 도달하면 clamp + 외곽 dark zone 표시.
+- 색 16종 자동 unique 분배 + 본인 head 흰색 ring.
+- 사망 snake 25% 알파.
+- 리더보드 best_length 정렬 + 본인 굵은 표시.
+- HUD: 좌상단 좌표 (`(r, c) / 200`).
+- 게임방 ephemeral chat (Tetris/Bomberman 과 동일).
+
+### Tick broadcast (구현)
+
+- `Snake.tick` 마다 `[{:snake_state, %{players, food, tick_no}}]` PubSub.
+- LiveView handle_info 가 payload 로 game_state 직접 갱신 (GenServer.call 안 함 — Tetris freeze 패턴 회피).
+- canvas 라 DOM diff 부담 X.
+
+### JS hook (구현)
+
+- `snake_input.js` — 4 방향 + WASD, 25ms throttle, isFormTarget skip.
+- `snake_canvas.js` — mounted/updated 마다 dataset 파싱 + 본인 head 중심 카메라 + viewport 그리기.
 
 ---
 
@@ -319,10 +360,13 @@ direct_messages (?) — DM
 | **3d** | Tetris leave :practice 자동 전환 (1명 남으면 게임 영향 X) | ✅ |
 | **3d** | 글로벌 top nav (Happy Trizn 브랜드 + 페이지 타이틀) | ✅ |
 | **3d** | 게임명 캐치마인드 (lobby badge 친화 이름) | ✅ |
-| **3e** | Bomberman 풀 구현 | ⏳ |
-| **3f** | Snake.io 풀 구현 | ⏳ |
+| **3e** | Bomberman 풀 구현 + 셀/이모티콘 폴리시 + 게임방 채팅 | ✅ |
+| **3e+** | 게임 종료 후 1명 남으면 :waiting 자동 리셋 (Bomberman/Skribbl stuck modal 회피) | ✅ |
+| **3f** | Snake.io 풀 구현 (100×100 격자 + 캔버스 + 자동 부활) | ✅ |
 | **3g** | Pac-Man 풀 구현 (싱글) | ⏳ |
 | **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ✅ |
+| **3h** | 2048 키보드 입력 (화살표 / WASD / HJKL) | ✅ |
+| **3h** | Settings slug ↔ game_type alias 정규화 (`2048` → `games_2048`) | ✅ |
 | **3i** | Finesse 분석 (현재 stub 0) | ⏳ |
 | **3j** | JS Tetris canvas (블록 스킨 / DAS-ARR client-side timing — 현재 server timing) | ⏳ |
 | **3k** | 모바일 반응형 (canvas / 옵션 모달 / 채팅) | ⏳ |
@@ -332,16 +376,15 @@ direct_messages (?) — DM
 
 ## 우선순위 (남은 작업)
 
-1. **Bomberman 풀 구현** (3e) — 4인 동시, 60fps tick, 폭탄 chain reaction. 회식 분위기 좋음.
-2. **Snake.io 풀 구현** (3f) — 자유 입퇴장 + 큰 격자.
-3. **Pac-Man 풀 구현** (3g) — 싱글 + ghost AI.
-4. **모바일 반응형** (3k) — 캔버스 / 모달 / 채팅 layout.
-5. **JS Tetris canvas + skin** (3j) — 더 화려한 렌더 (현재 LiveView grid).
-6. **Finesse 분석** (3i) — Tetris finesse_violations 카운트.
-7. **DM + 알림** (4) — 친구 1:1 채팅, 게임 초대.
+1. **Pac-Man 풀 구현** (3g) — 싱글 + ghost AI (Blinky/Pinky/Inky/Clyde).
+2. **모바일 반응형** (3k) — 캔버스 / 모달 / 채팅 layout.
+3. **JS Tetris canvas + skin** (3j) — 더 화려한 렌더 (현재 LiveView grid).
+4. **Finesse 분석** (3i) — Tetris finesse_violations 카운트.
+5. **DM + 알림** (4) — 친구 1:1 채팅, 게임 초대.
 
 ## 테스트 현황
 
-- **430 tests, 0 failures** (Sprint 3d 기준).
+- **513 tests, 0 failures** (Sprint 3f / 3h 머지 후 기준).
 - ExUnit 단위/통합 + LiveView 테스트.
+- 새로 추가: Bomberman + Skribbl `:over → leave/restart → :waiting 리셋`, Snake.io 19 tests, 게임방 채팅 broadcast.
 - E2E (Playwright) 미구현 (TEST_PLAN.md 참조).

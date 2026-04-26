@@ -158,10 +158,39 @@ defmodule HappyTrizn.Games.Skribbl do
         {:ok, %{state | players: new_players, drawn_count: new_drawn, status: :over},
          [{:player_left, player_id}]}
 
+      # 게임 종료 후 한 명만 남음 — 다시 하기 가 min_players 2 로 거부됨. 자동 :waiting 리셋.
+      state.status == :over and map_size(new_players) < 2 ->
+        ns = %{state | players: new_players, drawn_count: new_drawn}
+        {:ok, reset_to_waiting(ns), [{:player_left, player_id}]}
+
       true ->
         {:ok, %{state | players: new_players, drawn_count: new_drawn},
          [{:player_left, player_id}]}
     end
+  end
+
+  # 점수 / 라운드 / 단어 / strokes 다 초기화. nickname 유지.
+  defp reset_to_waiting(state) do
+    fresh_players =
+      Enum.into(state.players, %{}, fn {pid, p} ->
+        {pid, %{nickname: p.nickname, score: 0, guessed_at: nil, was_drawer: false}}
+      end)
+
+    %{
+      state
+      | status: :waiting,
+        drawer_id: nil,
+        drawn_count: %{},
+        word: nil,
+        word_choices: [],
+        word_revealed: false,
+        time_left_ms: 0,
+        strokes: [],
+        messages: [],
+        round_no: 0,
+        winner_id: nil,
+        players: fresh_players
+    }
   end
 
   # ============================================================================
@@ -174,10 +203,14 @@ defmodule HappyTrizn.Games.Skribbl do
       state.status not in [:waiting, :over] ->
         {:ok, state, []}
 
-      map_size(state.players) < 2 ->
+      not Map.has_key?(state.players, player_id) ->
         {:ok, state, []}
 
-      not Map.has_key?(state.players, player_id) ->
+      # :over + 인원 부족 — modal 에서 "다시 하기" 누른 경우. modal 빠지게 :waiting 리셋.
+      state.status == :over and map_size(state.players) < 2 ->
+        {:ok, reset_to_waiting(state), [{:reset, player_id}]}
+
+      map_size(state.players) < 2 ->
         {:ok, state, []}
 
       true ->

@@ -1,10 +1,10 @@
 # Test Plan
 
-Branch tracking. 최근 갱신: Sprint 3d 종합 (캐치마인드 + UX 개선).
+Branch tracking. 최근 갱신: Sprint 3f (Snake.io) + 3h (2048/Minesweeper 옵션 보강) 머지 후.
 
 ## Status
 
-**430 tests, 0 failures** (Sprint 3d 기준).
+**513 tests, 0 failures**.
 
 ```bash
 docker compose up -d
@@ -20,18 +20,20 @@ MIX_ENV=test bin/mix test
 | Friends + Rooms + RateLimit + Chat | friends_test / rooms_test / rate_limit_test / chat_test | 40+ |
 | Admin context | admin_test | 8 |
 | **Tetris module** | tetris_test (state / SRS / hold / lock delay / combo / B2B / T-spin / garbage / countdown / restart / leave practice) | 75+ |
-| **캐치마인드 (Skribbl)** | skribbl_test (state / join / start / choose / stroke / guess / tick / round-robin / total_rounds / word_pool 카테고리) | 32 |
+| **캐치마인드 (Skribbl)** | skribbl_test (state / join / start / choose / stroke / guess / tick / round-robin / total_rounds / word_pool 카테고리 + `:over → leave/restart → :waiting 리셋`) | 34 |
+| **Bomberman** | bomberman_test (init / spawn corner / move / place_bomb / fuse / chain / item drop / game_over / `:over → leave/restart → :waiting 리셋`) | 22 |
+| **Snake.io** | snake_io_test (meta / init / join / leave / set_dir / 180° 무시 / tick 전진 / 벽 충돌 / 자기 몸 / tail follow 허용 / food eat / kill credit / respawn 60 tick / best_length) | 19 |
 | GameSession | game_session_test (lifecycle / dedupe / terminate cleanup / match_record top_out) | 12 |
 | 다른 게임 stub | stub_games_test (Bomberman/Snake/Pacman/Skribbl 인터페이스 검증) | 12 |
-| 2048 | games_2048_test (board_size 4/5/6 + restart 보존) | 16+ |
+| 2048 | games_2048_test (board_size 4/5/6 + restart 보존 + 키보드 input) | 25+ |
 | Minesweeper | minesweeper_test (난이도 easy/medium/hard/custom + clamp + restart 보존) | 19+ |
 | **MatchResults** | match_results_test (record/for_user/recent/winners_summary) | 12 |
 | **PersonalRecords** | personal_records_test (apply_stats max / metadata merge / leaderboard) | 8 |
 | Registry | registry_test | 5 |
-| **UserGameSettings** | user_game_settings_test (defaults 모든 게임 / get_for normalize / upsert / reset / list) | 16 |
+| **UserGameSettings** | user_game_settings_test (defaults 모든 게임 / get_for normalize / upsert / reset / list / `2048 → games_2048 alias`) | 18 |
 | **Lobby LiveView** | lobby_live_test (인증 / 채팅 / 친구 / 방 / 글로벌 nav / 캐치마인드 badge) | 27 |
-| **Game Multi LiveView** | game_multi_live_test (Tetris + Skribbl 통합) | 35+ |
-| **Game Settings LiveView** | game_settings_live_test (인증 / index / Tetris show / 제너릭 폼 / save / reset) | 16 |
+| **Game Multi LiveView** | game_multi_live_test (Tetris + Skribbl + Bomberman + Snake.io 통합 + 게임방 ephemeral chat broadcast) | 56 |
+| **Game Settings LiveView** | game_settings_live_test (인증 / index / Tetris show / 제너릭 폼 / save / reset / `/settings/games/2048` slug alias) | 18 |
 | **History LiveView** | history_live_test (인증 / index / leaderboard / invalid slug) | 5 |
 
 ## Affected Pages/Routes

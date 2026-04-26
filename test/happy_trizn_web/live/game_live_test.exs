@@ -58,6 +58,15 @@ defmodule HappyTriznWeb.GameLiveTest do
       assert html =~ "점수:"
     end
 
+    test "GameKeyCapture hook 마운트 — 화살표/WASD/HJKL preventDefault 키", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/2048")
+      assert html =~ "phx-hook=\"GameKeyCapture\""
+      # data-keys 에 화살표 + WASD + HJKL 포함 — 페이지 스크롤 회피.
+      assert html =~ "ArrowUp,ArrowDown,ArrowLeft,ArrowRight"
+      assert html =~ "w,W,a,A,s,S,d,D"
+      assert html =~ "h,H,j,J,k,K,l,L"
+    end
+
     test "WASD / HJKL 도 keydown 받음", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/play/2048")
 
@@ -67,11 +76,20 @@ defmodule HappyTriznWeb.GameLiveTest do
       end
     end
 
-    test "관계없는 키는 무시", %{conn: conn} do
+    test "관계없는 키는 무시 — board 상태 변화 X", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/play/2048")
-      html_before = render(view)
-      html = render_keydown(view, "keydown", %{"key" => "Tab"})
-      assert html == html_before
+      board_before = extract_board(render(view))
+      html_after = render_keydown(view, "keydown", %{"key" => "Tab"})
+      board_after = extract_board(html_after)
+      # render(view) 는 inner template, render_keydown 은 LV wrapper 포함 — 그래서
+      # 전체 HTML 비교 X. game-2048 안의 board markup 만 비교 (Tab 후 동일해야).
+      assert board_before == board_after
+    end
+
+    defp extract_board(html) do
+      [_, after_open] = String.split(html, "<div id=\"game-2048\">", parts: 2)
+      [board, _] = String.split(after_open, "</div>", parts: 2)
+      board
     end
   end
 

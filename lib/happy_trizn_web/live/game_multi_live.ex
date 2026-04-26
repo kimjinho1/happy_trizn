@@ -99,7 +99,7 @@ defmodule HappyTriznWeb.GameMultiLive do
             GameSession.subscribe_room(room_id)
             # 게임방 ephemeral chat — 방 단위 PubSub. 페이지 떠나면 history 휘발.
             # Skribbl 은 자체 추측/채팅 시스템 있어 별도 channel 안 씀.
-            if slug in ["tetris", "bomberman"] do
+            if slug in ["tetris", "bomberman", "snake_io"] do
               Phoenix.PubSub.subscribe(HappyTrizn.PubSub, "chat:game:" <> room_id)
             end
 
@@ -216,6 +216,19 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   # ============================================================================
+  # Snake.io events
+  # ============================================================================
+
+  def handle_event("snake_set_dir", %{"dir" => dir}, socket) when is_binary(dir) do
+    GameSession.handle_input(socket.assigns.session_pid, socket.assigns.player_id, %{
+      "action" => "set_dir",
+      "dir" => dir
+    })
+
+    {:noreply, socket}
+  end
+
+  # ============================================================================
   # 게임방 ephemeral chat (Tetris / Bomberman 전용 — Skribbl 은 자체 채팅).
   # PubSub 만 사용. 영속 X. 방 떠나면 history 휘발.
   # ============================================================================
@@ -223,7 +236,7 @@ defmodule HappyTriznWeb.GameMultiLive do
   def handle_event("game_chat", %{"text" => text}, socket) when is_binary(text) do
     text = String.trim(text)
 
-    if text == "" or socket.assigns.slug not in ["tetris", "bomberman"] do
+    if text == "" or socket.assigns.slug not in ["tetris", "bomberman", "snake_io"] do
       {:noreply, push_event(socket, "chat:reset_input", %{})}
     else
       # 너무 긴 메시지 차단 (200자).
@@ -517,6 +530,17 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   def handle_info({:game_event, {:drawer_left, _}}, socket) do
     {:noreply, refresh_state(socket)}
+  end
+
+  # Snake.io 매 tick payload — GenServer.call 회피. canvas 라 DOM diff 부담 X.
+  def handle_info({:game_event, {:snake_state, payload}}, socket) do
+    new_state =
+      socket.assigns.game_state
+      |> Map.put(:players, payload.players)
+      |> Map.put(:food, payload.food)
+      |> Map.put(:tick_no, payload.tick_no)
+
+    {:noreply, assign(socket, :game_state, new_state)}
   end
 
   def handle_info({:game_event, _other}, socket), do: {:noreply, refresh_state(socket)}
@@ -996,6 +1020,81 @@ defmodule HappyTriznWeb.GameMultiLive do
     """
   end
 
+  defp game_view(%{slug: "snake_io"} = assigns) do
+    state = ensure_snake_state(assigns.state)
+    me_id = assigns.player_id
+    me = Map.get(state.players, me_id) || %{}
+    bindings = assigns.key_settings.bindings || %{}
+    grid_size = HappyTrizn.Games.SnakeIo.grid_size()
+
+    # canvas 에 그릴 가벼운 payload — body 좌표 array, color, alive.
+    # Jason 은 tuple 인코딩 불가 → {r,c} → [r,c] 로 변환.
+    snakes_payload =
+      Enum.map(state.players, fn {id, p} ->
+        %{
+          id: id,
+          color: p.color,
+          alive: p.alive,
+          body: Enum.map(p.body, fn {r, c} -> [r, c] end),
+          is_me: id == me_id
+        }
+      end)
+
+    food_payload =
+      state.food
+      |> MapSet.to_list()
+      |> Enum.map(fn {r, c} -> [r, c] end)
+
+    assigns =
+      assign(assigns,
+        state: state,
+        me: me,
+        bindings: bindings,
+        grid_size: grid_size,
+        snakes_payload: snakes_payload,
+        food_payload: food_payload
+      )
+
+    ~H"""
+    <div
+      id="snake-input-host"
+      phx-hook="SnakeInput"
+      data-key-bindings={Jason.encode!(@bindings)}
+      tabindex="0"
+      class="outline-none"
+    >
+      <div class="grid grid-cols-1 lg:grid-cols-[auto_260px] gap-4 justify-start">
+        <div>
+          <.snake_status state={@state} me={@me} />
+          <div
+            id="snake-canvas-host"
+            phx-hook="SnakeCanvas"
+            data-grid-size={@grid_size}
+            data-tick-ms="80"
+            data-snakes={Jason.encode!(@snakes_payload)}
+            data-food={Jason.encode!(@food_payload)}
+            data-me-id={@player_id}
+            class="bg-slate-900 rounded-xl shadow-2xl ring-2 ring-slate-700 p-1 inline-block"
+          >
+            <canvas id="snake-canvas" width="640" height="640" class="block"></canvas>
+          </div>
+        </div>
+
+        <aside class="space-y-3">
+          <.snake_scoreboard players={@state.players} player_id={@player_id} />
+          <div class="bg-base-200 rounded p-3 text-xs space-y-1">
+            <div class="font-semibold">조작</div>
+            <div>방향: ← → ↑ ↓ / WASD</div>
+            <div>180° 반대 방향 무시</div>
+            <div>사망 시 3초 후 자동 부활</div>
+          </div>
+          <.game_room_chat messages={@messages} />
+        </aside>
+      </div>
+    </div>
+    """
+  end
+
   defp game_view(assigns) do
     ~H"""
     <div class="card bg-base-200">
@@ -1056,6 +1155,83 @@ defmodule HappyTriznWeb.GameMultiLive do
         />
         <button type="submit" class="btn btn-sm btn-primary">전송</button>
       </form>
+    </div>
+    """
+  end
+
+  # ============================================================================
+  # Snake.io UI helpers
+  # ============================================================================
+
+  defp ensure_snake_state(state) do
+    state
+    |> Map.put_new(:status, :playing)
+    |> Map.put_new(:players, %{})
+    |> Map.put_new(:food, MapSet.new())
+    |> Map.put_new(:tick_no, 0)
+    |> Map.put_new(:grid_size, HappyTrizn.Games.SnakeIo.grid_size())
+  end
+
+  attr :state, :map, required: true
+  attr :me, :map, required: true
+
+  defp snake_status(assigns) do
+    ~H"""
+    <div class="bg-base-200 rounded p-3 mb-3 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-3">
+        <span class="badge badge-success">진행 중 (캐주얼)</span>
+        <span class="text-sm">참가자 {map_size(@state.players)} / 16</span>
+      </div>
+      <%= if Map.get(@me, :alive) do %>
+        <div class="flex items-center gap-2 text-sm">
+          <span
+            class="inline-block w-3 h-3 rounded"
+            style={"background: #{Map.get(@me, :color, "#888")}"}
+          >
+          </span>
+          <span>길이 {length(Map.get(@me, :body, []))}</span>
+          <span>최고 {Map.get(@me, :best_length, 0)}</span>
+          <span>kill {Map.get(@me, :kills, 0)}</span>
+        </div>
+      <% else %>
+        <%= if Map.get(@me, :died_at_tick) do %>
+          <span class="badge badge-error">사망 — 3초 후 부활</span>
+        <% else %>
+          <span class="badge">대기</span>
+        <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :players, :map, required: true
+  attr :player_id, :string, required: true
+
+  defp snake_scoreboard(assigns) do
+    sorted =
+      assigns.players
+      |> Enum.sort_by(fn {_, p} -> -Map.get(p, :best_length, 0) end)
+
+    assigns = assign(assigns, sorted: sorted)
+
+    ~H"""
+    <div class="bg-base-200 rounded p-3">
+      <h3 class="font-semibold mb-2 text-sm">리더보드 (최대 길이)</h3>
+      <ul class="space-y-1 text-sm max-h-72 overflow-y-auto">
+        <%= for {id, p} <- @sorted do %>
+          <li class={[
+            "flex items-center justify-between gap-2",
+            id == @player_id && "font-bold"
+          ]}>
+            <span class="flex items-center gap-2 truncate">
+              <span class="inline-block w-3 h-3 rounded shrink-0" style={"background: #{p.color}"}>
+              </span>
+              <span class="truncate">{p.nickname}</span>
+            </span>
+            <span class="text-xs text-base-content/60">{p.best_length}</span>
+          </li>
+        <% end %>
+      </ul>
     </div>
     """
   end

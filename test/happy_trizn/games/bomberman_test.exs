@@ -66,9 +66,33 @@ defmodule HappyTrizn.Games.BombermanTest do
       assert ns.winner_id == "p2"
       assert Enum.any?(broadcasts, fn {tag, _} -> tag == :game_finished end)
     end
+
+    test ":over 상태에서 leave → 1명 남으면 :waiting 리셋 (stuck modal 회피)" do
+      # 게임 종료 후 (:over) 한 명이 나가면 남은 사람은 :waiting 으로 빠져야.
+      s = init_with(2) |> start_game()
+      s = %{s | status: :over, winner_id: "p1"}
+      {:ok, ns, _} = Bomberman.handle_player_leave("p2", :disconnect, s)
+      assert ns.status == :waiting
+      assert ns.winner_id == nil
+      assert ns.bombs == %{}
+      assert ns.explosions == []
+      assert ns.items == %{}
+      # 남은 player 는 spawn corner 로 재배치 + alive=true.
+      assert map_size(ns.players) == 1
+      assert ns.players["p1"].alive
+      assert {ns.players["p1"].row, ns.players["p1"].col} == {1, 1}
+    end
   end
 
   describe "start_game" do
+    test ":over + 1명 → reset_to_waiting (stuck modal 회피)" do
+      # 게임 끝나고 ("다시 하기" 클릭) 인원 부족 시 :waiting 리셋.
+      s = init_with(1) |> Map.put(:status, :over) |> Map.put(:winner_id, "p1")
+      {:ok, ns, _} = Bomberman.handle_input("p1", %{"action" => "start_game"}, s)
+      assert ns.status == :waiting
+      assert ns.winner_id == nil
+    end
+
     test "2명 미만 무시" do
       s = init_with(1)
       assert {:ok, ^s, []} = Bomberman.handle_input("p1", %{"action" => "start_game"}, s)
