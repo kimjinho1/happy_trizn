@@ -32,6 +32,8 @@ import {SnakeInput} from "./hooks/snake_input"
 import {SnakeCanvas} from "./hooks/snake_canvas"
 import {GameKeyCapture} from "./hooks/game_key_capture"
 import {PacmanCanvas} from "./hooks/pacman_canvas"
+// DM 알림 — side-effect: window phx:dm:notify listener 등록.
+import "./dm_notify"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 

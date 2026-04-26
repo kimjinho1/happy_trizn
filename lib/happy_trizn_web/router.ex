@@ -40,7 +40,10 @@ defmodule HappyTriznWeb.Router do
 
     # 로비 — LiveView (글로벌 채팅, 친구 사이드바, 방 리스트, 게임 카테고리).
     live_session :default,
-      on_mount: HappyTriznWeb.Live.Hooks.FetchLiveUser do
+      on_mount: [
+        HappyTriznWeb.Live.Hooks.FetchLiveUser,
+        HappyTriznWeb.Live.Hooks.DmNotifications
+      ] do
       live "/lobby", LobbyLive
 
       # 싱글 게임 (2048 / Minesweeper / Pac-Man stub) — GameLive
@@ -59,6 +62,10 @@ defmodule HappyTriznWeb.Router do
 
       # 마이페이지 — 닉네임 수정 + 프로필 사진 업로드 (등록 사용자 전용).
       live "/me", ProfileLive
+
+      # DM (Direct Messages) — 친구 사이 1:1 채팅.
+      live "/dm", DmLive
+      live "/dm/:peer_id", DmLive
     end
 
     # Admin 로그인 (browser pipeline, EnsureAdmin 미적용 — 로그인 폼 자체)
