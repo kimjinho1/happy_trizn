@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/happy_trizn"
 import topbar from "../vendor/topbar"
 import {TetrisInput} from "./hooks/tetris_input"
 import {TetrisSound} from "./hooks/tetris_sound"
+import {TetrisCanvas} from "./hooks/tetris_canvas"
 import {SkribblCanvas} from "./hooks/skribbl_canvas"
 import {BombermanInput} from "./hooks/bomberman_input"
 import {SnakeInput} from "./hooks/snake_input"
@@ -80,6 +81,8 @@ const Hooks = {
   TetrisInput,
   // Tetris 효과음 — WebAudio 합성 (./hooks/tetris_sound.js).
   TetrisSound,
+  // Tetris HTML5 Canvas renderer — Sprint 3j (opt-in via tetris_renderer 옵션).
+  TetrisCanvas,
   // Skribbl 캔버스 — drawer 그리기 + 모든 사람 보기.
   SkribblCanvas,
   // Bomberman 키 입력 — 방향키 + 폭탄 설치.

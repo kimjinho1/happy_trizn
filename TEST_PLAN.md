@@ -1,10 +1,10 @@
 # Test Plan
 
-Branch tracking. 최근 갱신: Sprint 4a (DM + 알림) + 4b (친구 게임 초대) + 4c (채팅창 height 고정) 머지 후.
+Branch tracking. 최근 갱신: Sprint 3 100% 완료 (3j Tetris Canvas + skin) + 3l 시리즈 (UI 개편 / N-player / ranking modal) 머지 후.
 
 ## Status
 
-**606 tests, 0 failures**.
+**609 tests, 0 failures**.
 
 ```bash
 docker compose up -d
@@ -37,6 +37,7 @@ MIX_ENV=test bin/mix test
 | **DM LiveView** | dm_live_test (인증 / 친구 list / thread mount + mark_read / send / PubSub 실시간 / unread badge / DM bubble URL link / 알림 hook) | 14 |
 | **Messages context** | messages_test (send / list_thread / unread_count / mark_thread_read / cap 300+) | 14 |
 | **GameEvents (Sprint 4d)** | game_events_test (emit best-effort / Producer 단독 push / dispatch / atom·string event_name / tuple→list) | 8 |
+| **Sprint 3j Canvas + Skin** | game_multi_live_test 추가 케이스 (default dom 렌더러 / canvas opt-in 시 phx-hook=TetrisCanvas + data-board JSON + data-skin) + user_game_settings_test (block_skin / tetris_renderer defaults) | 3 |
 | **Game Multi LiveView** | game_multi_live_test (Tetris + Skribbl + Bomberman + Snake.io 통합 + 게임방 ephemeral chat broadcast) | 56 |
 | **Game Settings LiveView** | game_settings_live_test (인증 / index / Tetris show / 제너릭 폼 / save / reset / `/settings/games/2048` slug alias) | 18 |
 | **History LiveView** | history_live_test (인증 / index / leaderboard / invalid slug) | 5 |
@@ -101,6 +102,7 @@ MIX_ENV=test bin/mix test
 - Tetris live HUD (Sprint 3l-4) — public_player 에 pps/apm/vs/kpp/garbage_sent 포함, 매 lock broadcast 시 갱신, UI grid-cols-3 사이드 패널 ✅
 - Bomberman ranking modal (Sprint 3l-6) — game_over.ranking, dead_at monotonic 순서, 🥇🥈🥉 + 본인 row primary highlight + 생존/💥 표시 ✅
 - Skribbl ranking modal (Sprint 3l-7) — 점수 내림차순, 🥇🥈🥉 + 본인 row primary highlight + 점수 표시 (Tetris/Bomberman 와 일관) ✅
+- Tetris JS Canvas + skin (Sprint 3j) — block_skin 4종 (default_jstris/vivid/monochrome/neon), tetris_renderer "dom" 기본 / "canvas" opt-in, JS hook TetrisCanvas 가 data-board JSON 받아 redraw ✅
 
 ## E2E 미구현 (계획)
 

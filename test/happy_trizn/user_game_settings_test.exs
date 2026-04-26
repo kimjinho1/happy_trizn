@@ -28,6 +28,12 @@ defmodule HappyTrizn.UserGameSettingsTest do
       assert d.options["ghost"] == true
     end
 
+    test "tetris Sprint 3j — block_skin + tetris_renderer defaults" do
+      opts = UserGameSettings.defaults("tetris").options
+      assert opts["block_skin"] == "default_jstris"
+      assert opts["tetris_renderer"] == "dom"
+    end
+
     test "각 게임 별 defaults 존재" do
       for slug <- ~w(tetris bomberman skribbl snake_io games_2048 minesweeper pacman) do
         d = UserGameSettings.defaults(slug)

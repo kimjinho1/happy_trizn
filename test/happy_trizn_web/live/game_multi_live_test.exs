@@ -173,6 +173,25 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert html =~ "다음"
     end
 
+    test "Sprint 3j — default 렌더러 = dom (canvas hook 안 노출)", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      refute html =~ "phx-hook=\"TetrisCanvas\""
+    end
+
+    test "Sprint 3j — tetris_renderer=canvas 옵션 시 canvas hook + data-board / data-skin 노출",
+         %{conn: conn, host: host, room: room} do
+      {:ok, _} =
+        HappyTrizn.UserGameSettings.upsert(host, "tetris", %{
+          options: %{"tetris_renderer" => "canvas", "block_skin" => "neon"}
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      assert html =~ "phx-hook=\"TetrisCanvas\""
+      assert html =~ "data-board="
+      assert html =~ "data-skin=\"neon\""
+      assert html =~ "data-cell-size=\"28\""
+    end
+
     test "⚙️ 옵션 → 모달 인라인 (페이지 안 옮김)", %{conn: conn, room: room} do
       {:ok, view, _html} = live(conn, ~p"/game/tetris/#{room.id}")
       # 처음엔 모달 안 열림

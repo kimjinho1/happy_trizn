@@ -176,7 +176,10 @@ defmodule HappyTrizn.UserGameSettings do
         "soft_drop_speed" => "medium",
         "grid" => "standard",
         "ghost" => true,
+        # Sprint 3j — block_skin: 색 팔레트 (default_jstris / vivid / monochrome / neon).
+        # tetris_renderer: "dom" (HEEx 셀, 기본) | "canvas" (HTML5 canvas, 빠름).
         "block_skin" => "default_jstris",
+        "tetris_renderer" => "dom",
         "block_color" => "#5c5c5c",
         # 효과음 마스터 볼륨 (0~100). 각 효과음 on/off (rotate / lock / line_clear /
         # tetris / b2b / garbage / top_out / countdown).
