@@ -220,7 +220,7 @@ defmodule HappyTriznWeb.DmLive do
           <% end %>
         </aside>
 
-        <main class="bg-base-100 rounded border border-base-300 flex flex-col">
+        <main class="bg-base-100 rounded border border-base-300 flex flex-col h-[70vh]">
           <%= if @peer do %>
             <header class="border-b border-base-300 p-3 flex items-center gap-2">
               <.link
@@ -240,7 +240,7 @@ defmodule HappyTriznWeb.DmLive do
             <div
               id="dm-thread-scroll"
               phx-hook="ChatScroll"
-              class="overflow-y-auto p-3 flex flex-col-reverse gap-2 h-[60vh]"
+              class="overflow-y-auto p-3 flex flex-col-reverse gap-2 flex-1 min-h-0"
             >
               <%= if @messages == [] do %>
                 <div class="text-xs text-base-content/40 text-center my-auto">메시지 없음 — 첫 인사를</div>
@@ -255,17 +255,17 @@ defmodule HappyTriznWeb.DmLive do
               id="dm-form"
               phx-submit="send"
               phx-hook="ChatReset"
-              class="border-t border-base-300 p-3 flex gap-2"
+              class="border-t border-base-300 p-2 flex gap-1"
             >
               <input
                 type="text"
                 name="body"
                 autocomplete="off"
                 maxlength="1000"
-                placeholder="메시지를 입력하세요..."
-                class="input input-md input-bordered flex-1 text-base"
+                placeholder="메시지..."
+                class="input input-sm input-bordered flex-1"
               />
-              <button type="submit" class="btn btn-md btn-primary text-base">전송</button>
+              <button type="submit" class="btn btn-sm btn-primary">전송</button>
             </form>
           <% else %>
             <div class="flex-1 flex items-center justify-center text-base-content/50">
@@ -312,7 +312,7 @@ defmodule HappyTriznWeb.DmLive do
     ~H"""
     <div class={["flex", @is_me && "justify-end"]}>
       <div class={[
-        "max-w-[70%] px-3 py-2 rounded-2xl text-base break-words",
+        "max-w-[70%] px-3 py-2 rounded-2xl text-sm break-words",
         @is_me && "bg-primary text-primary-content rounded-br-sm",
         !@is_me && "bg-base-200 rounded-bl-sm"
       ]}>
