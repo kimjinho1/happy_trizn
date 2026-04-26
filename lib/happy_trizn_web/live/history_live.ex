@@ -60,7 +60,7 @@ defmodule HappyTriznWeb.HistoryLive do
   @impl true
   def render(%{live_action: :index} = assigns) do
     ~H"""
-    <div class="max-w-3xl mx-auto p-6">
+    <div class="max-w-3xl mx-auto p-3 sm:p-6">
       <Layouts.flash_group flash={@flash} />
       <header class="mb-6 flex items-center justify-between">
         <div>
@@ -146,7 +146,7 @@ defmodule HappyTriznWeb.HistoryLive do
 
   def render(%{live_action: :leaderboard} = assigns) do
     ~H"""
-    <div class="max-w-3xl mx-auto p-6">
+    <div class="max-w-3xl mx-auto p-3 sm:p-6">
       <Layouts.flash_group flash={@flash} />
       <header class="mb-6 flex items-center justify-between">
         <div>

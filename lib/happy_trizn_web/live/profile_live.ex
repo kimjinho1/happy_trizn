@@ -134,7 +134,7 @@ defmodule HappyTriznWeb.ProfileLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-2xl mx-auto p-6">
+    <div class="max-w-2xl mx-auto p-3 sm:p-6">
       <h1 class="text-2xl font-bold mb-4">마이페이지</h1>
 
       <.flash kind={:info} flash={@flash} />

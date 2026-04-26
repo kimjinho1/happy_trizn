@@ -335,24 +335,26 @@ defmodule HappyTriznWeb.LobbyLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="min-h-screen p-6 max-w-7xl mx-auto">
-      <header class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold">Happy Trizn — 로비</h1>
-        <div class="flex items-center gap-2">
-          <span class="text-sm text-base-content/70">
+    <div class="min-h-screen p-3 sm:p-6 max-w-7xl mx-auto">
+      <header class="flex flex-wrap items-center justify-between gap-2 mb-4 sm:mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold">Happy Trizn — 로비</h1>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-sm text-base-content/70 hidden sm:inline">
             <%= if @user do %>
               <strong>{@nickname}</strong>
             <% else %>
               (게스트) <strong>{@nickname}</strong>
             <% end %>
           </span>
-          <.link navigate={~p"/history"} class="btn btn-ghost btn-sm" title="내 기록">
-            🏆 기록
+          <.link navigate={~p"/history"} class="btn btn-ghost btn-xs sm:btn-sm" title="내 기록">
+            🏆 <span class="hidden sm:inline">기록</span>
           </.link>
-          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-sm" title="게임 옵션">
-            ⚙️ 옵션
+          <.link navigate={~p"/settings/games"} class="btn btn-ghost btn-xs sm:btn-sm" title="게임 옵션">
+            ⚙️ <span class="hidden sm:inline">옵션</span>
           </.link>
-          <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-sm">로그아웃</.link>
+          <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-xs sm:btn-sm">
+            로그아웃
+          </.link>
         </div>
       </header>
 
