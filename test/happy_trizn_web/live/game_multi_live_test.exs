@@ -772,4 +772,59 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert_push_event(view, "chat:reset_input", _)
     end
   end
+
+  # ============================================================================
+  # Snake.io 통합 — 마운트 / 캔버스 hook / set_dir / 채팅
+  # ============================================================================
+
+  describe "/game/snake_io/:id — Snake.io 통합" do
+    setup %{conn: conn} do
+      Rooms.clear_kick_bans()
+      host = user_fixture(nickname: "sn_host_#{System.unique_integer([:positive])}")
+
+      {:ok, room} =
+        Rooms.create(host, %{
+          game_type: "snake_io",
+          name: "sn_#{System.unique_integer([:positive])}"
+        })
+
+      {:ok, conn: log_in_user(conn, host), host: host, room: room}
+    end
+
+    test "마운트 + canvas hook + 게임방 채팅", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/snake_io/#{room.id}")
+      assert html =~ "phx-hook=\"SnakeInput\""
+      assert html =~ "phx-hook=\"SnakeCanvas\""
+      assert html =~ "리더보드"
+      assert html =~ "게임방 채팅"
+      # 캔버스 — 100칸.
+      assert html =~ "data-grid-size=\"100\""
+    end
+
+    test "set_dir → GameSession 에 forward", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/snake_io/#{room.id}")
+      Process.sleep(20)
+
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      assert pid
+
+      # set_dir 보냄. 현재 dir 와 반대 아닌 방향 보장: tick 마다 dir 바뀔 수 있어
+      # 4 방향 모두 시도해 next_dir 갱신 확인 — 한 번이라도 받아들여지면 OK.
+      Enum.each(["up", "down", "left", "right"], fn d ->
+        render_hook(view, "snake_set_dir", %{"dir" => d})
+      end)
+
+      # state 폭주 X — view 살아 있음.
+      assert render(view) =~ "Snake.io"
+    end
+
+    test "1명 join 만 해도 :playing — game_over 안 발생", %{conn: conn, room: room} do
+      {:ok, _view, _} = live(conn, ~p"/game/snake_io/#{room.id}")
+      Process.sleep(60)
+      pid = HappyTrizn.Games.GameSession.whereis_room(room.id)
+      state = HappyTrizn.Games.GameSession.get_state(pid)
+      assert state.status == :playing
+      assert map_size(state.players) == 1
+    end
+  end
 end

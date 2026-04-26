@@ -131,9 +131,51 @@ defmodule HappyTrizn.Games.Bomberman do
         {:ok, %{new_state | status: :over, winner_id: winner},
          [{:player_left, player_id}, {:game_finished, %{winner: winner}}]}
 
+      # 게임 종료 후 한 명만 남음 — :over 에서 나가지 못하면 "다시 하기" 가
+      # 시작 거부 (min_players 2). 자동으로 :waiting 리셋해서 stuck 회피.
+      state.status == :over and map_size(new_players) < 2 ->
+        {:ok, reset_to_waiting(new_state), [{:player_left, player_id}]}
+
       true ->
         {:ok, new_state, [{:player_left, player_id}]}
     end
+  end
+
+  # 남은 player 만 spawn corner 재배치 + grid/bombs/explosions/items/winner_id 초기화.
+  # players nickname 등 metadata 는 유지.
+  defp reset_to_waiting(state) do
+    fresh_players =
+      state.players
+      |> Map.keys()
+      |> Enum.sort()
+      |> Enum.with_index()
+      |> Enum.into(%{}, fn {pid, idx} ->
+        prev = Map.fetch!(state.players, pid)
+        {row, col} = Enum.at(@spawn_corners, idx)
+
+        {pid,
+         %{
+           nickname: prev.nickname,
+           row: row,
+           col: col,
+           alive: true,
+           bomb_max: 1,
+           bomb_range: 2,
+           kick?: false,
+           dead_at: nil
+         }}
+      end)
+
+    %{
+      state
+      | status: :waiting,
+        grid: empty_grid(),
+        players: fresh_players,
+        bombs: %{},
+        explosions: [],
+        items: %{},
+        winner_id: nil
+    }
   end
 
   # ============================================================================
@@ -143,10 +185,22 @@ defmodule HappyTrizn.Games.Bomberman do
   @impl true
   def handle_input(player_id, %{"action" => "start_game"}, state) do
     cond do
-      state.status not in [:waiting, :over] -> {:ok, state, []}
-      map_size(state.players) < 2 -> {:ok, state, []}
-      not Map.has_key?(state.players, player_id) -> {:ok, state, []}
-      true -> start_game(state)
+      state.status not in [:waiting, :over] ->
+        {:ok, state, []}
+
+      not Map.has_key?(state.players, player_id) ->
+        {:ok, state, []}
+
+      # :over 상태 + 인원 부족 — modal 에서 "다시 하기" 클릭한 경우. 시작 못 하지만
+      # 적어도 modal 은 사라지도록 :waiting 으로 리셋. ("혼자 대기 중" 상태 진입.)
+      state.status == :over and map_size(state.players) < 2 ->
+        {:ok, reset_to_waiting(state), [{:reset, player_id}]}
+
+      map_size(state.players) < 2 ->
+        {:ok, state, []}
+
+      true ->
+        start_game(state)
     end
   end
 

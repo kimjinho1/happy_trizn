@@ -58,9 +58,30 @@ defmodule HappyTrizn.Games.SkribblTest do
       assert ns.status == :round_end
       assert Enum.any?(broadcasts, fn {tag, _} -> tag == :drawer_left end)
     end
+
+    test ":over 상태에서 leave → 1명 남으면 :waiting 리셋 + 점수 0 (stuck modal 회피)" do
+      s = init_with(2) |> Map.put(:status, :over) |> Map.put(:winner_id, "p1")
+      # 점수 추가해놓고 리셋 검증.
+      s = put_in(s.players["p1"].score, 300)
+      {:ok, ns, _} = Skribbl.handle_player_leave("p2", :disconnect, s)
+      assert ns.status == :waiting
+      assert ns.winner_id == nil
+      assert ns.round_no == 0
+      assert ns.strokes == []
+      # 남은 player 점수도 리셋 (새 게임 의미).
+      assert ns.players["p1"].score == 0
+    end
   end
 
   describe "start_game + 단어 선택" do
+    test ":over + 1명 → reset_to_waiting (stuck modal 회피)" do
+      s = init_with(1) |> Map.put(:status, :over) |> Map.put(:winner_id, "p1")
+      {:ok, ns, _} = Skribbl.handle_input("p1", %{"action" => "start_game"}, s)
+      assert ns.status == :waiting
+      assert ns.winner_id == nil
+      assert ns.round_no == 0
+    end
+
     test "2명 미만 → start 무시" do
       s = init_with(1)
       assert {:ok, ^s, []} = Skribbl.handle_input("p1", %{"action" => "start_game"}, s)

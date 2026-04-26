@@ -313,6 +313,7 @@ defmodule HappyTrizn.UserGameSettings do
   """
   def upsert(%{id: user_id}, game_type, attrs) do
     game_type = normalize_game_type(game_type)
+
     # 신규 row 는 game_type 미설정 상태로 만들어 changeset 의 validate_inclusion 이 실행되도록.
     # (validate_change 는 cast 시 변경된 field 에만 동작 — 미리 채워두면 검증 누락.)
     setting =

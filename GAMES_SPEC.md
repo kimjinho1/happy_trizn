@@ -186,21 +186,34 @@ user_game_settings
 
 ---
 
-## Snake.io ⏳ 미구현
+## Snake.io ✅ 구현 완료
 
-### 게임 로직 (계획)
+### 게임 로직 (구현)
 
-- 자유 입퇴장
-- 큰 격자 100×100
-- 먹이 random spawn → 길이 +1
-- 부딪히면 죽음 → 길이 dot 흩뿌림
-- 60fps tick
+- 100×100 격자, 자유 입퇴장, 항상 :playing (캐주얼)
+- 50ms tick (20fps)
+- food 항상 max(30, players × 5) 개 유지
+- food 먹으면 length +1 (grow 카운터로 다음 trim skip)
+- 충돌 (벽 / 자기 몸 / 타 snake 몸) → 사망 + body 절반 food drop
+- 머리 vs 머리 → 양쪽 사망
+- tail follow 허용 (tail 다음 tick 에 빠지므로 self-collision 시 tail 제외)
+- 사망 후 60 tick (3초) 자동 부활 (length 3 + 랜덤 위치)
+- 180° 반대 방향 입력 무시
+- best_length / kills 누적 — 리더보드.
+- `game_over?` 항상 `:no`.
 
-### 옵션 (defaults 만 구현)
+### UI (구현)
 
-- 키 (상하좌우)
-- 색
-- 미니맵
+- canvas 600×600, 셀 6px (100×100).
+- 색 16종 자동 unique 분배 + 본인 head 흰색 ring.
+- 사망 snake 25% 알파.
+- 리더보드 best_length 정렬 + 본인 굵은 표시.
+- 게임방 ephemeral chat (Tetris/Bomberman 과 동일).
+
+### JS hook (구현)
+
+- `snake_input.js` — 4 방향 + WASD, 25ms throttle, isFormTarget skip.
+- `snake_canvas.js` — mounted/updated 마다 dataset 파싱 + render.
 
 ---
 
@@ -319,8 +332,9 @@ direct_messages (?) — DM
 | **3d** | Tetris leave :practice 자동 전환 (1명 남으면 게임 영향 X) | ✅ |
 | **3d** | 글로벌 top nav (Happy Trizn 브랜드 + 페이지 타이틀) | ✅ |
 | **3d** | 게임명 캐치마인드 (lobby badge 친화 이름) | ✅ |
-| **3e** | Bomberman 풀 구현 | ⏳ |
-| **3f** | Snake.io 풀 구현 | ⏳ |
+| **3e** | Bomberman 풀 구현 + 셀/이모티콘 폴리시 + 게임방 채팅 | ✅ |
+| **3e+** | 게임 종료 후 1명 남으면 :waiting 자동 리셋 (Bomberman/Skribbl stuck modal 회피) | ✅ |
+| **3f** | Snake.io 풀 구현 (100×100 격자 + 캔버스 + 자동 부활) | ✅ |
 | **3g** | Pac-Man 풀 구현 (싱글) | ⏳ |
 | **3h** | 2048 / Minesweeper 옵션 로직 보강 (board 사이즈 / 난이도) | ✅ |
 | **3i** | Finesse 분석 (현재 stub 0) | ⏳ |

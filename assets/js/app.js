@@ -28,6 +28,8 @@ import {TetrisInput} from "./hooks/tetris_input"
 import {TetrisSound} from "./hooks/tetris_sound"
 import {SkribblCanvas} from "./hooks/skribbl_canvas"
 import {BombermanInput} from "./hooks/bomberman_input"
+import {SnakeInput} from "./hooks/snake_input"
+import {SnakeCanvas} from "./hooks/snake_canvas"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
@@ -78,6 +80,10 @@ const Hooks = {
   SkribblCanvas,
   // Bomberman 키 입력 — 방향키 + 폭탄 설치.
   BombermanInput,
+  // Snake.io 키 입력 — 4 방향만, set_dir 이벤트.
+  SnakeInput,
+  // Snake.io 캔버스 렌더 — server 가 보낸 snakes/food payload.
+  SnakeCanvas,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
