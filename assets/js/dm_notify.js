@@ -30,7 +30,13 @@ function playDing() {
   }
 }
 
+function badgeText(count) {
+  if (count > 300) return "300+"
+  return String(count)
+}
+
 function updateBadge(count) {
+  // 모든 unread badge — top nav 의 동적 1개 외에 다른 곳도 있을 수 있음.
   const link = document.querySelector('a[href="/dm"]')
   if (!link) return
   let badge = link.querySelector(".dm-unread-badge")
@@ -43,7 +49,7 @@ function updateBadge(count) {
     badge.className = "badge badge-error badge-xs absolute -top-1 -right-1 dm-unread-badge"
     link.appendChild(badge)
   }
-  badge.textContent = String(count)
+  badge.textContent = badgeText(count)
 }
 
 function showToast(text, href) {

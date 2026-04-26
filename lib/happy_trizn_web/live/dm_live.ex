@@ -112,37 +112,41 @@ defmodule HappyTriznWeb.DmLive do
     me = socket.assigns.user
     peer = socket.assigns[:peer]
 
-    cond do
-      # 현재 열려있는 thread 와 일치하면 메시지 추가 + mark_read.
-      peer && msg.from_user_id == peer.id ->
-        Messages.mark_thread_read(me, peer)
+    socket =
+      cond do
+        # 현재 열려있는 thread 와 일치하면 메시지 추가 + mark_read.
+        peer && msg.from_user_id == peer.id ->
+          Messages.mark_thread_read(me, peer)
 
-        {:noreply,
-         socket
-         |> update(:messages, fn ms -> ms ++ [msg] end)
-         |> push_event("chat_message_added", %{})}
+          socket
+          |> update(:messages, fn ms -> ms ++ [msg] end)
+          |> push_event("chat_message_added", %{})
 
-      true ->
-        # 리스트 갱신 (unread 카운트 변경).
-        {:noreply, assign(socket, :threads, Messages.recent_threads(me))}
-    end
+        true ->
+          socket
+      end
+
+    # 어느 케이스든 좌측 conversation list 갱신 — 마지막 메시지 / unread 빨간 숫자.
+    {:noreply, assign(socket, :threads, Messages.recent_threads(me))}
   end
 
   def handle_info({:dm_sent, msg}, socket) do
     me = socket.assigns.user
     peer = socket.assigns[:peer]
 
-    if peer && msg.to_user_id == peer.id do
-      # 본인이 보낸 메시지도 thread 에 추가 (다른 디바이스 sync 와 통일).
-      {:noreply,
-       socket
-       |> update(:messages, fn ms ->
-         if Enum.any?(ms, &(&1.id == msg.id)), do: ms, else: ms ++ [msg]
-       end)
-       |> push_event("chat_message_added", %{})}
-    else
-      {:noreply, assign(socket, :threads, Messages.recent_threads(me))}
-    end
+    socket =
+      if peer && msg.to_user_id == peer.id do
+        # 본인이 보낸 메시지도 thread 에 추가 (다른 디바이스 sync 와 통일).
+        socket
+        |> update(:messages, fn ms ->
+          if Enum.any?(ms, &(&1.id == msg.id)), do: ms, else: ms ++ [msg]
+        end)
+        |> push_event("chat_message_added", %{})
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, :threads, Messages.recent_threads(me))}
   end
 
   def handle_info({:dm_read, _}, socket) do
@@ -176,19 +180,33 @@ defmodule HappyTriznWeb.DmLive do
                   <.link
                     navigate={~p"/dm/#{t.peer.id}"}
                     class={[
-                      "flex items-center gap-2 p-2 rounded hover:bg-base-300 transition",
-                      @peer && @peer.id == t.peer.id && "bg-base-300"
+                      "flex items-center gap-2 p-2 rounded transition",
+                      @peer && @peer.id == t.peer.id && "bg-base-300",
+                      t.unread > 0 && "bg-error/10 hover:bg-error/20 border-l-4 border-error",
+                      !(t.unread > 0) && "hover:bg-base-300"
                     ]}
                   >
                     <.dm_avatar user={t.peer} size={36} />
                     <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-1">
-                        <span class="font-semibold truncate">{t.peer.nickname}</span>
+                      <div class="flex items-center gap-2">
+                        <span class={[
+                          "truncate",
+                          t.unread > 0 && "font-bold text-error",
+                          !(t.unread > 0) && "font-semibold"
+                        ]}>
+                          {t.peer.nickname}
+                        </span>
                         <%= if t.unread > 0 do %>
-                          <span class="badge badge-error badge-sm">{t.unread}</span>
+                          <span class="badge badge-error badge-sm font-bold">
+                            {if t.unread > 300, do: "300+", else: t.unread}
+                          </span>
                         <% end %>
                       </div>
-                      <div class="text-xs text-base-content/50 truncate">
+                      <div class={[
+                        "text-xs truncate",
+                        t.unread > 0 && "text-base-content/80 font-medium",
+                        !(t.unread > 0) && "text-base-content/50"
+                      ]}>
                         {dm_preview(t.last)}
                       </div>
                     </div>

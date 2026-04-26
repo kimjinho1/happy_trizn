@@ -50,7 +50,9 @@
           <a href="/dm" class="btn btn-ghost btn-sm relative" title="DM">
             💬 <% unread = HappyTrizn.Messages.unread_count(user) %>
             <%= if unread > 0 do %>
-              <span class="badge badge-error badge-xs absolute -top-1 -right-1">{unread}</span>
+              <span class="badge badge-error badge-xs absolute -top-1 -right-1 dm-unread-badge">
+                {if unread > 300, do: "300+", else: unread}
+              </span>
             <% end %>
           </a>
           <a
