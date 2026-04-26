@@ -88,6 +88,11 @@ ENV PHX_SERVER="true"
 
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/happy_trizn ./
 
+# 마이페이지 프로필 사진 업로드 디렉토리 — docker volume mount point.
+# 미리 만들고 chown 해야 named volume 첫 init 시 nobody 소유로 생성됨.
+RUN mkdir -p /app/lib/happy_trizn-0.1.0/priv/static/uploads/avatars \
+    && chown -R nobody:root /app/lib/happy_trizn-0.1.0/priv/static/uploads
+
 USER nobody
 
 # rel/overlays/bin/server 가 PHX_SERVER=true 세팅 후 happy_trizn start 실행

@@ -105,17 +105,19 @@ defmodule HappyTriznWeb.ProfileLive do
     case uploads do
       {[entry | _], _} ->
         try do
-          url =
+          # 콜백은 항상 `{:ok, term}` 반환. term 은 `{:ok, url}` 또는 `{:error, reason}`.
+          # 그래야 entry consumed + 결과 분기 처리 가능 (postpone 쓰면 entry 남아 다음 save 때
+          # 또 시도 → race 위험).
+          result =
             consume_uploaded_entry(socket, entry, fn %{path: tmp_path} ->
               ext = Path.extname(entry.client_name) |> String.downcase()
-
-              case Avatars.install(user_id, tmp_path, ext) do
-                {:ok, url} -> {:ok, url}
-                {:error, reason} -> {:postpone, reason}
-              end
+              {:ok, Avatars.install(user_id, tmp_path, ext)}
             end)
 
-          {url, nil}
+          case result do
+            {:ok, url} -> {url, nil}
+            {:error, reason} -> {nil, error_reason_to_string(reason)}
+          end
         rescue
           e -> {nil, Exception.message(e)}
         end
@@ -124,6 +126,10 @@ defmodule HappyTriznWeb.ProfileLive do
         {nil, nil}
     end
   end
+
+  defp error_reason_to_string(:invalid_ext), do: "지원 안 된 확장자 (PNG/JPG/WEBP 만)"
+  defp error_reason_to_string(:no_src), do: "임시 파일 못 찾음"
+  defp error_reason_to_string(other), do: to_string(other)
 
   @impl true
   def render(assigns) do
