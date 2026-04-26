@@ -121,8 +121,14 @@ defmodule HappyTrizn.UserGameSettings do
   defp do_defaults("minesweeper") do
     %{
       bindings: %{
-        "reveal" => ["click"],
-        "flag" => ["right_click", "f"]
+        # Sprint 4f — keyboard cursor 이동 + reveal/flag. game_live 가
+        # bindings 을 읽어 key → action mapping. 사용자 옵션에서 변경 가능.
+        "move_up" => ["ArrowUp", "w", "k"],
+        "move_down" => ["ArrowDown", "s", "j"],
+        "move_left" => ["ArrowLeft", "a", "h"],
+        "move_right" => ["ArrowRight", "d", "l"],
+        "reveal" => ["click", " ", "Enter"],
+        "flag" => ["right_click", "f", "F"]
       },
       options: %{
         "difficulty" => "medium",

@@ -158,6 +158,37 @@ defmodule HappyTriznWeb.GameLiveTest do
       {:ok, _view, html} = live(conn, ~p"/play/minesweeper")
       assert html =~ "phx-hook=\"MinesweeperCell\""
     end
+
+    test "사용자 binding 설정 → 새 키 즉시 반영 (Sprint 4f-2)", %{conn: conn} do
+      # 게스트 → 회원 user 가 binding 변경 시나리오.
+      user = user_fixture(nickname: "ms_kb_#{System.unique_integer([:positive])}")
+
+      # flag 키를 "g" 로 변경. (schema field = key_bindings)
+      {:ok, _} =
+        HappyTrizn.UserGameSettings.upsert(user, "minesweeper", %{
+          key_bindings: %{
+            "move_up" => ["ArrowUp"],
+            "move_down" => ["ArrowDown"],
+            "move_left" => ["ArrowLeft"],
+            "move_right" => ["ArrowRight"],
+            "reveal" => [" "],
+            "flag" => ["g"]
+          }
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _} = live(conn, ~p"/play/minesweeper")
+
+      # g 누르면 cursor 위치에 flag.
+      render_hook(view, "keydown", %{"key" => "g"})
+      html = render(view)
+      assert html =~ "🚩"
+
+      # f 는 더 이상 안 먹음 (binding 에서 빠짐).
+      render_hook(view, "keydown", %{"key" => "f"})
+      # 위 g 로 토글된 flag 가 그대로 — f 가 안 먹었으므로.
+      assert render(view) =~ "🚩"
+    end
   end
 
   describe "/play/pacman (stub)" do

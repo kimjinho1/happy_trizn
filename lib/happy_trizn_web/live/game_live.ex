@@ -31,7 +31,9 @@ defmodule HappyTriznWeb.GameLive do
           {:ok, socket |> put_flash(:error, "이 게임은 멀티 — 방을 만들어 주세요") |> redirect(to: ~p"/lobby")}
         else
           module = GameRegistry.get_module(slug)
-          options = UserGameSettings.get_for(socket.assigns[:current_user], slug).options
+          settings = UserGameSettings.get_for(socket.assigns[:current_user], slug)
+          options = settings.options
+          bindings = settings.bindings
           {:ok, game_state} = module.init(options)
           # 싱글 게임은 player_id = nickname.
           {:ok, game_state, _} = module.handle_player_join(nickname, %{}, game_state)
@@ -50,6 +52,7 @@ defmodule HappyTriznWeb.GameLive do
            |> assign(:game_state, game_state)
            |> assign(:nickname, nickname)
            |> assign(:options, options)
+           |> assign(:bindings, bindings)
            |> assign(:result, nil)}
         end
     end
@@ -95,7 +98,7 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   def handle_event("keydown", %{"key" => key}, socket) do
-    case key_to_action(socket.assigns.slug, key) do
+    case key_to_action(socket.assigns.slug, key, socket.assigns[:bindings] || %{}) do
       nil ->
         {:noreply, socket}
 
@@ -116,51 +119,58 @@ defmodule HappyTriznWeb.GameLive do
   # ============================================================================
 
   # 2048 — 화살표 + WASD + HJKL.
-  defp key_to_action("2048", k) when k in ~w(ArrowUp w W k K),
+  defp key_to_action("2048", k, _) when k in ~w(ArrowUp w W k K),
     do: %{"action" => "move", "dir" => "up"}
 
-  defp key_to_action("2048", k) when k in ~w(ArrowDown s S j J),
+  defp key_to_action("2048", k, _) when k in ~w(ArrowDown s S j J),
     do: %{"action" => "move", "dir" => "down"}
 
-  defp key_to_action("2048", k) when k in ~w(ArrowLeft a A h H),
+  defp key_to_action("2048", k, _) when k in ~w(ArrowLeft a A h H),
     do: %{"action" => "move", "dir" => "left"}
 
-  defp key_to_action("2048", k) when k in ~w(ArrowRight d D l L),
+  defp key_to_action("2048", k, _) when k in ~w(ArrowRight d D l L),
     do: %{"action" => "move", "dir" => "right"}
 
   # Pac-Man — 화살표 + WASD.
-  defp key_to_action("pacman", k) when k in ~w(ArrowUp w W),
+  defp key_to_action("pacman", k, _) when k in ~w(ArrowUp w W),
     do: %{"action" => "set_dir", "dir" => "up"}
 
-  defp key_to_action("pacman", k) when k in ~w(ArrowDown s S),
+  defp key_to_action("pacman", k, _) when k in ~w(ArrowDown s S),
     do: %{"action" => "set_dir", "dir" => "down"}
 
-  defp key_to_action("pacman", k) when k in ~w(ArrowLeft a A),
+  defp key_to_action("pacman", k, _) when k in ~w(ArrowLeft a A),
     do: %{"action" => "set_dir", "dir" => "left"}
 
-  defp key_to_action("pacman", k) when k in ~w(ArrowRight d D),
+  defp key_to_action("pacman", k, _) when k in ~w(ArrowRight d D),
     do: %{"action" => "set_dir", "dir" => "right"}
 
-  # Minesweeper (지뢰찾기) — 화살표 cursor 이동, Space/Enter reveal, F flag.
-  defp key_to_action("minesweeper", k) when k in ~w(ArrowUp w W),
-    do: %{"action" => "move_cursor", "dir" => "up"}
+  # 지뢰찾기 (Sprint 4f) — bindings 기반. 사용자 옵션에서 변경한 키 즉시 반영.
+  defp key_to_action("minesweeper", key, bindings) do
+    cond do
+      key in Map.get(bindings, "move_up", []) ->
+        %{"action" => "move_cursor", "dir" => "up"}
 
-  defp key_to_action("minesweeper", k) when k in ~w(ArrowDown s S),
-    do: %{"action" => "move_cursor", "dir" => "down"}
+      key in Map.get(bindings, "move_down", []) ->
+        %{"action" => "move_cursor", "dir" => "down"}
 
-  defp key_to_action("minesweeper", k) when k in ~w(ArrowLeft a A),
-    do: %{"action" => "move_cursor", "dir" => "left"}
+      key in Map.get(bindings, "move_left", []) ->
+        %{"action" => "move_cursor", "dir" => "left"}
 
-  defp key_to_action("minesweeper", k) when k in ~w(ArrowRight d D),
-    do: %{"action" => "move_cursor", "dir" => "right"}
+      key in Map.get(bindings, "move_right", []) ->
+        %{"action" => "move_cursor", "dir" => "right"}
 
-  defp key_to_action("minesweeper", k) when k in [" ", "Spacebar", "Enter"],
-    do: %{"action" => "reveal_cursor"}
+      key in Map.get(bindings, "reveal", []) ->
+        %{"action" => "reveal_cursor"}
 
-  defp key_to_action("minesweeper", k) when k in ~w(f F),
-    do: %{"action" => "flag_cursor"}
+      key in Map.get(bindings, "flag", []) ->
+        %{"action" => "flag_cursor"}
 
-  defp key_to_action(_, _), do: nil
+      true ->
+        nil
+    end
+  end
+
+  defp key_to_action(_, _, _), do: nil
 
   @impl true
   def render(assigns) do

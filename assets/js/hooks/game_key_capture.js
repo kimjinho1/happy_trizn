@@ -48,8 +48,11 @@ export const GameKeyCapture = {
   onKeyDown(e) {
     if (isFormTarget(e.target)) return
     // 게임 capture key — preventDefault + server 로 forward.
+    // Space 는 e.key === " " 인데 CSV 의 " " 가 trim 으로 사라지므로
+    // "Space"/"Spacebar" alias 로 capture. server 에는 e.key 그대로 전달.
     const k = e.key
-    if (!this.keys.has(k)) return
+    const isSpace = k === " " && (this.keys.has("Space") || this.keys.has("Spacebar"))
+    if (!this.keys.has(k) && !isSpace) return
     e.preventDefault()
     this.pushEvent("keydown", { key: k })
   },
