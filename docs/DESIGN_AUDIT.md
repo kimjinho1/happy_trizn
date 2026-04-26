@@ -7,6 +7,8 @@
 - **Classifier**: APP UI (workspace + 게임 dashboard)
 - **Scope**: 수정안만 제시 (auto-fix 안 함, 원래 기능에 지장 없게)
 
+> **Note (2026-04-27 후속, Sprint 4i)**: 본 audit 시점 이후 다음 항목이 추가/해소됨 — 4 테마 시스템 (Light+ / Dark+ / Night Owl / Hacker Terminal), `/settings/games` 테마 picker, Bomberman 채팅 게임 grid 높이 fill + 폭발 자동 클리어 + 폭탄/플레이어 z-order, Snake.io 채팅 캔버스 높이 fill, Tetris 셀 inset bevel, top-nav ⚙️ 옵션 모달 브릿지 (게임 중 페이지 이동 X). 자세한 구현은 [DESIGN.md](DESIGN.md) "Sprint 4i" 섹션 참조.
+
 ## Headline Scores
 
 | Score | Grade | Verdict |

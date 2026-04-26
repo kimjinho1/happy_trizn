@@ -109,6 +109,7 @@ user_game_settings
 - 콤보 / B2B 배지 ✅
 - 게임 종료 popup overlay (큰 이모지 + 누적 우승 + 다시 하기) ✅
 - Lock delay 표시 ("잠금 NNNms") ✅
+- (Sprint 4i) 셀 inset bevel — `.tetris-filled` (메인 24px) / `.tetris-filled-mini` (opp 12px) box-shadow → 같은 색 인접 블록끼리 셀 윤곽 분리. 빈 셀 무영향.
 
 ### JS 입력 모듈 (`assets/js/hooks/tetris_input.js`) ✅
 
@@ -193,6 +194,12 @@ user_game_settings
 - :over + 인원 부족 시 "다시 하기" → reset_to_waiting (modal 사라지게).
 - Skribbl 도 동일 패턴 적용. Tetris 는 기존 :practice 자동 전환으로 안전.
 
+### UX 픽스 (Sprint 4i)
+
+- **폭발 자동 클리어**: tick/1 에서 bombs/explosions 활성 시 `:state_changed` PubSub broadcast → LiveView catch-all `refresh_state` 트리거. 사용자 입력 없어도 폭발 ttl 끝나면 화면 자동 갱신. 비활성 시 broadcast 안 함 (50ms tick spam 방지).
+- **폭탄 + 플레이어 z-order**: `bomberman_cell_content` 에서 같은 셀 player + bomb 동시 처리 → cell wrapper `relative` + 두 visual 을 absolute 로 겹쳐 player 가 z-10 으로 위. 자기 위치에 폭탄 놓아도 캐릭터 안 사라짐.
+- **채팅 height**: aside 가 `flex flex-col gap-3 min-h-0` 로 변경, `game_room_chat` 에 `flex-1 min-h-0` 패스 → 채팅이 게임 grid 높이 만큼 늘어남 (기존 280px 고정 → 동적).
+
 ### 옵션
 
 - 키: 상하좌우, 폭탄 설치 (defaults), 발차기/펀치 (defaults; 로직 미구현)
@@ -231,6 +238,7 @@ user_game_settings
 - 리더보드 best_length 정렬 + 본인 굵은 표시.
 - HUD: 좌상단 좌표 (`(r, c) / 200`).
 - 게임방 ephemeral chat (Tetris/Bomberman 과 동일).
+- (Sprint 4i) 채팅 height — aside `flex flex-col gap-3 min-h-0`, `game_room_chat` 에 `flex-1 min-h-0` 패스 → 캔버스 (640px) 만큼 채팅 늘어남.
 
 ### Tick broadcast (구현)
 
@@ -402,6 +410,7 @@ direct_messages (?) — DM
 | **4d** | Broadway Mongo 큐 (game_events) — Producer GenStage + batcher 100/1s, Mongo 다운 시 silent skip | ✅ |
 | **4f** | 지뢰찾기 (Minesweeper rename) — phx-value string→int 강제 + cursor + 화살표/Space/Enter/F + MinesweeperCell hook 우클릭 | ✅ |
 | **4g** | Presence (Phoenix.Presence) — 친구 접속중 🟢 dot. fetch_live_user hook 자동 track | ✅ |
+| **4i** | 4 테마 시스템 (Light+ / Dark+ / Night Owl / Hacker Terminal) + Bomberman 폭발 자동 클리어/z-order + Snake.io 채팅 fill + Tetris 셀 bevel + 모달 브릿지 | ✅ |
 | **4h** | Lobby/DM/Nav UX 풀세트 (헤더 통합 / 닉네임 dropdown / 페이지네이션 / 친구 섹션 시각 구분) | ✅ |
 | **4e** | 사내 서버 배포 + HTTPS (Caddy/nginx) | ⏳ |
 
@@ -420,4 +429,4 @@ direct_messages (?) — DM
 - **658 tests, 0 failures** (Sprint 3m + 4f + 4g + 4h 머지 후 기준).
 - ExUnit 단위/통합 + LiveView 테스트.
 - 새로 추가: Bomberman + Skribbl `:over → leave/restart → :waiting 리셋`, Snake.io 19 tests, 게임방 채팅 broadcast.
-- E2E (Playwright) 미구현 (TEST_PLAN.md 참조).
+- E2E (Playwright) 미구현 ([TEST_PLAN.md](TEST_PLAN.md) 참조).
