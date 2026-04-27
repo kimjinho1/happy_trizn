@@ -103,8 +103,11 @@ if config_env() == :prod do
     |> String.split(",", trim: true)
     |> Enum.map(&String.trim/1)
 
+  url_scheme = System.get_env("URL_SCHEME", "http")
+  url_port = String.to_integer(System.get_env("URL_PORT", System.get_env("PHX_PORT_HOST", "4747")))
+
   config :happy_trizn, HappyTriznWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: host, port: url_port, scheme: url_scheme],
     check_origin: check_origin,
     http: [
       # IPv6 + 모든 인터페이스 bind. loopback only 면 {0,0,0,0,0,0,0,1}.
