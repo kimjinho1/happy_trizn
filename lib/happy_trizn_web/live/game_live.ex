@@ -65,6 +65,11 @@ defmodule HappyTriznWeb.GameLive do
             :timer.send_interval(interval, self(), :game_tick)
           end
 
+          # Sprint 4k — 진행 초기화 버튼 표시 여부. login + serializable 게임만.
+          # 게스트 / Pac-Man 등 비-serializable 게임은 어차피 snapshot 없음 →
+          # 초기화 버튼 의미 없으니 숨김.
+          show_reset = !is_nil(user) && GameSnapshots.serializable?(slug)
+
           {:ok,
            socket
            |> assign(:slug, slug)
@@ -76,7 +81,8 @@ defmodule HappyTriznWeb.GameLive do
            |> assign(:bindings, bindings)
            |> assign(:key_settings, settings)
            |> assign(:settings_open, false)
-           |> assign(:result, nil)}
+           |> assign(:result, nil)
+           |> assign(:show_reset, show_reset)}
         end
     end
   end
@@ -374,6 +380,17 @@ defmodule HappyTriznWeb.GameLive do
         >
           ⚙️ 옵션
         </button>
+        <%= if @show_reset do %>
+          <button
+            phx-click="restart"
+            data-confirm="진행 초기화? 저장된 진행 데이터가 삭제됩니다."
+            class="btn btn-ghost btn-sm"
+            title="진행 데이터 삭제 + 새 게임 시작"
+            type="button"
+          >
+            🗑️ 초기화
+          </button>
+        <% end %>
       </header>
 
       <%= if @result do %>

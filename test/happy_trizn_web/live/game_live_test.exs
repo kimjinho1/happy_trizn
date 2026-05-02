@@ -20,9 +20,60 @@ defmodule HappyTriznWeb.GameLiveTest do
     end
   end
 
+  # ============================================================================
+  # Sprint 4k — 진행 초기화 버튼 + snapshot 자동 저장 / 복원
+  # ============================================================================
+  describe "/play/2048 — snapshot autosave (Sprint 4k)" do
+    setup %{conn: conn} do
+      {:ok, user} =
+        HappyTrizn.Accounts.register_user(%{
+          email: "snap2048_#{System.unique_integer([:positive])}@trizn.kr",
+          nickname: "snap2048_#{System.unique_integer([:positive])}",
+          password: "hello12345"
+        })
+
+      {:ok, conn: log_in_user(conn, user), user: user}
+    end
+
+    test "login 사용자 + serializable 게임 → 헤더에 '초기화' 버튼 표시", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/2048")
+      assert html =~ "🗑️ 초기화"
+    end
+
+    test "input 후 snapshot 저장 → 새로 mount 시 같은 board 복원", %{conn: conn, user: user} do
+      {:ok, view, _} = live(conn, ~p"/play/2048")
+      view |> element("button[phx-value-dir='left']") |> render_click()
+
+      stored = HappyTrizn.GameSnapshots.get(user.id, "2048")
+      assert is_map(stored)
+      assert stored.score >= 0
+
+      # 새 LV mount — 같은 user → snapshot 복원, board 같은 score.
+      {:ok, _view2, html2} = live(conn, ~p"/play/2048")
+      assert html2 =~ "점수: <strong>#{stored.score}</strong>"
+    end
+
+    test "초기화 버튼 클릭 → snapshot 삭제 + fresh state", %{conn: conn, user: user} do
+      {:ok, view, _} = live(conn, ~p"/play/2048")
+      view |> element("button[phx-value-dir='left']") |> render_click()
+      assert HappyTrizn.GameSnapshots.get(user.id, "2048") != nil
+
+      # 헤더의 "초기화" 버튼 = phx-click="restart" + data-confirm.
+      view |> element("button[data-confirm*='초기화']") |> render_click()
+
+      assert HappyTrizn.GameSnapshots.get(user.id, "2048") == nil
+      assert render(view) =~ "점수: <strong>0</strong>"
+    end
+  end
+
   describe "/play/2048" do
     setup %{conn: conn} do
       {:ok, conn: log_in_user(conn, nil, "p2048_#{System.unique_integer([:positive])}")}
+    end
+
+    test "게스트 → '초기화' 버튼 표시 X", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/play/2048")
+      refute html =~ "🗑️ 초기화"
     end
 
     test "mount + 초기 board 렌더 (default 4×4)", %{conn: conn} do
