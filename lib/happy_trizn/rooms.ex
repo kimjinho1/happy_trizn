@@ -57,6 +57,16 @@ defmodule HappyTrizn.Rooms do
   defp maybe_filter_game(query, nil), do: query
   defp maybe_filter_game(query, game), do: where(query, [r], r.game_type == ^game)
 
+  @doc """
+  open / playing 상태 방 전부 (cleanup sweep 용 — 진행 중인 방까지 포함해서 GameSession
+  존재 여부 검사 가능).
+  """
+  def list_alive do
+    Room
+    |> where([r], r.status in ["open", "playing"])
+    |> Repo.all()
+  end
+
   # =========================================================================
   # Join / Kick / Close
   # =========================================================================
