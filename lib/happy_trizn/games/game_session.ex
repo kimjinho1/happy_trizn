@@ -30,6 +30,12 @@ defmodule HappyTrizn.Games.GameSession do
   # 0 으로 설정하면 grace 없이 즉시 leave.
   @default_grace_ms 5000
 
+  # Sprint 4n — broadcast event_log ring buffer 크기. 50ms tick 게임 기준
+  # 50 events ≈ 2.5 초 buffer. reattach 시 disconnect 시점 seq 부터 missed events
+  # 자동 replay. 5 초 grace 안에 reconnect 하면 대부분 케이스 커버.
+  # 너무 크면 메모리 ↑, 너무 작으면 빠른 tick 게임에서 buffer overflow.
+  @event_log_cap 50
+
   # ============================================================================
   # Public API
   # ============================================================================
@@ -127,7 +133,15 @@ defmodule HappyTrizn.Games.GameSession do
           # monitors: %{ref => player_id} — DOWN 신호로 어떤 player 가 끊겼는지 lookup.
           # grace_timers: %{player_id => timer_ref} — grace 만료 후 leave 호출 위한 timer.
           monitors: %{},
-          grace_timers: %{}
+          grace_timers: %{},
+          # Sprint 4n — broadcast event_log + reattach replay.
+          # current_seq: monotonic counter, 매 broadcast 마다 +1.
+          # event_log: :queue.new() — FIFO of {seq, msg}, cap @event_log_cap.
+          # disconnected_at_seq: %{player_id => seq} — disconnect 시점 보관 →
+          #   reattach 시 그 이후 events 만 새 LV pid 에 직접 send.
+          current_seq: 0,
+          event_log: :queue.new(),
+          disconnected_at_seq: %{}
         }
 
         {:ok, state}
@@ -139,14 +153,21 @@ defmodule HappyTrizn.Games.GameSession do
     if Map.has_key?(state.players, player_id) do
       # Reattach: 이미 슬롯 있음 → 모듈에는 알리지 않고 monitor 갱신 + grace 취소.
       # meta 는 새로 들어온 값으로 덮어쓰기 (nickname/avatar 변경 가능).
+      # Sprint 4n — disconnect 시점 seq 부터 missed events 새 caller_pid 에 직접
+      # send (broadcast 보다 먼저 — replay 가 reattach 알림보다 시간 순).
+      since_seq = Map.get(state.disconnected_at_seq, player_id, state.current_seq)
+
+      if is_pid(caller_pid), do: replay_missed_events(state, since_seq, caller_pid)
+
       state =
         state
         |> demonitor_for_player(player_id)
         |> cancel_grace_for_player(player_id)
         |> monitor_caller(player_id, caller_pid)
         |> update_player_meta(player_id, meta)
+        |> Map.update!(:disconnected_at_seq, &Map.delete(&1, player_id))
+        |> broadcast_and_log([{:player_reattached, player_id}])
 
-      broadcast_messages(state.room_id, [{:player_reattached, player_id}])
       {:reply, :ok, state}
     else
       case state.module.handle_player_join(player_id, meta, state.game_state) do
@@ -156,8 +177,8 @@ defmodule HappyTrizn.Games.GameSession do
           new_state =
             %{state | game_state: new_game_state, players: new_players}
             |> monitor_caller(player_id, caller_pid)
+            |> broadcast_and_log(broadcast)
 
-          broadcast_messages(state.room_id, broadcast)
           {:reply, :ok, new_state}
 
         {:reject, reason} ->
@@ -170,13 +191,22 @@ defmodule HappyTrizn.Games.GameSession do
     {:reply, state.game_state, state}
   end
 
+  # Sprint 4n — mount 시 LV 가 호출 → state + 현재 seq 같이 받음. 이후 reconnect 시
+  # 옛 client_seq 기억해서 server-side reattach replay 와 중복되지 않게 비교 가능.
+  # (현재는 server-only replay 라 LV 안 씀, future-proof.)
+  def handle_call(:get_state_with_seq, _from, state) do
+    {:reply, {state.game_state, state.current_seq}, state}
+  end
+
   @impl true
   def handle_cast({:input, player_id, input}, state) do
     {:ok, new_game_state, broadcast} =
       state.module.handle_input(player_id, input, state.game_state)
 
-    broadcast_messages(state.room_id, broadcast)
-    new_state = %{state | game_state: new_game_state}
+    new_state =
+      %{state | game_state: new_game_state}
+      |> broadcast_and_log(broadcast)
+
     check_and_finish(new_state)
   end
 
@@ -190,8 +220,8 @@ defmodule HappyTrizn.Games.GameSession do
       %{state | game_state: new_game_state, players: new_players}
       |> demonitor_for_player(player_id)
       |> cancel_grace_for_player(player_id)
-
-    broadcast_messages(state.room_id, broadcast)
+      |> Map.update!(:disconnected_at_seq, &Map.delete(&1, player_id))
+      |> broadcast_and_log(broadcast)
 
     cond do
       # 마지막 player 떠남 → GenServer 종료 + room close.
@@ -213,8 +243,11 @@ defmodule HappyTrizn.Games.GameSession do
   def handle_info(:tick, state) do
     if function_exported?(state.module, :tick, 1) do
       {:ok, new_game_state, broadcast} = state.module.tick(state.game_state)
-      broadcast_messages(state.room_id, broadcast)
-      new_state = %{state | game_state: new_game_state}
+
+      new_state =
+        %{state | game_state: new_game_state}
+        |> broadcast_and_log(broadcast)
+
       check_and_finish(new_state)
     else
       {:noreply, state}
@@ -344,7 +377,14 @@ defmodule HappyTrizn.Games.GameSession do
 
       true ->
         ms = grace_period_ms(state)
-        broadcast_messages(state.room_id, [{:player_disconnected, player_id}])
+        # disconnect 시점 seq 보관 → reattach 시 그 이후 events 만 replay.
+        # 이미 보관돼 있으면 (중복 disconnect) 덮어쓰지 않음 — 첫 끊김 시점 유지.
+        new_disc =
+          Map.put_new(state.disconnected_at_seq, player_id, state.current_seq)
+
+        state =
+          %{state | disconnected_at_seq: new_disc}
+          |> broadcast_and_log([{:player_disconnected, player_id}])
 
         if ms == 0 do
           send(self(), {:grace_expired, player_id})
@@ -356,11 +396,46 @@ defmodule HappyTrizn.Games.GameSession do
     end
   end
 
-  defp broadcast_messages(_room_id, []), do: :ok
+  # Sprint 4n — broadcast + event_log push. seq 자동 증가, 외부 PubSub 메시지 형식
+  # ({:game_event, msg}) 그대로 — LV / 게임 모듈 변경 0. seq 는 server-only.
+  defp broadcast_and_log(state, []), do: state
 
-  defp broadcast_messages(room_id, msgs) do
-    Enum.each(msgs, &Phoenix.PubSub.broadcast(@pubsub, "game:" <> room_id, {:game_event, &1}))
+  defp broadcast_and_log(state, msgs) when is_list(msgs) do
+    Enum.reduce(msgs, state, fn msg, acc ->
+      next_seq = acc.current_seq + 1
+      Phoenix.PubSub.broadcast(@pubsub, "game:" <> acc.room_id, {:game_event, msg})
+
+      new_log = push_event_log(acc.event_log, {next_seq, msg})
+      %{acc | current_seq: next_seq, event_log: new_log}
+    end)
   end
+
+  defp push_event_log(queue, entry) do
+    queue = :queue.in(entry, queue)
+
+    if :queue.len(queue) > @event_log_cap do
+      {_, trimmed} = :queue.out(queue)
+      trimmed
+    else
+      queue
+    end
+  end
+
+  # disconnect 시점 seq 부터 missed events 추출. 새 LV pid 에 직접 send →
+  # LV의 handle_info({:game_event, msg}) 가 평소처럼 처리.
+  defp replay_missed_events(state, since_seq, target_pid) when is_pid(target_pid) do
+    state.event_log
+    |> :queue.to_list()
+    |> Enum.each(fn {seq, msg} ->
+      if seq > since_seq do
+        send(target_pid, {:game_event, msg})
+      end
+    end)
+
+    :ok
+  end
+
+  defp replay_missed_events(_, _, _), do: :ok
 
   # game_over? 검사 — 라운드 결과 한 번만 저장 + broadcast.
   # GenServer 는 stop 안 함 — 사용자가 "다시 하기" 누르면 restart action 으로 재진입.
@@ -376,8 +451,8 @@ defmodule HappyTrizn.Games.GameSession do
           # Tetris module 외 게임에도 동일 적용 (방 단위 winner counts).
           summary = HappyTrizn.MatchResults.winners_summary(state.room_id || "")
           enriched = Map.put(results, :winners_summary, summary)
-          broadcast_messages(state.room_id, [{:game_over, enriched}])
-          {:noreply, %{state | match_recorded: true}}
+          new_state = broadcast_and_log(state, [{:game_over, enriched}])
+          {:noreply, %{new_state | match_recorded: true}}
         end
 
       :no ->
