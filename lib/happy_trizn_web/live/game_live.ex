@@ -10,6 +10,7 @@ defmodule HappyTriznWeb.GameLive do
 
   use HappyTriznWeb, :live_view
 
+  alias HappyTrizn.GameSnapshots
   alias HappyTrizn.Games.Registry, as: GameRegistry
   alias HappyTrizn.UserGameSettings
 
@@ -31,12 +32,30 @@ defmodule HappyTriznWeb.GameLive do
           {:ok, socket |> put_flash(:error, "이 게임은 멀티 — 방을 만들어 주세요") |> redirect(to: ~p"/lobby")}
         else
           module = GameRegistry.get_module(slug)
-          settings = UserGameSettings.get_for(socket.assigns[:current_user], slug)
+          user = socket.assigns[:current_user]
+          settings = UserGameSettings.get_for(user, slug)
           options = settings.options
           bindings = settings.bindings
-          {:ok, game_state} = module.init(options)
-          # 싱글 게임은 player_id = nickname.
-          {:ok, game_state, _} = module.handle_player_join(nickname, %{}, game_state)
+
+          # Sprint 4k — 진행 중 snapshot 있으면 복원. 게스트 (user nil) 는 skip.
+          # serializable 한 게임만 (Sudoku/2048/Minesweeper).
+          restored =
+            if user && GameSnapshots.serializable?(slug) do
+              GameSnapshots.get(user.id, slug)
+            else
+              nil
+            end
+
+          game_state =
+            case restored do
+              nil ->
+                {:ok, fresh} = module.init(options)
+                {:ok, fresh, _} = module.handle_player_join(nickname, %{}, fresh)
+                fresh
+
+              state ->
+                state
+            end
 
           # tick_interval_ms 가 있는 게임 (Pac-Man 등) — LiveView 안에서 직접 timer.
           # Multi 게임은 GameSession 이 처리. 싱글은 GameLive 가 tick 발행.
@@ -86,18 +105,20 @@ defmodule HappyTriznWeb.GameLive do
     %{module: module, game_state: state, nickname: nickname} = socket.assigns
     {:ok, new_state, _broadcast} = module.handle_input(nickname, payload, state)
 
-    socket = assign(socket, game_state: new_state)
+    socket =
+      socket
+      |> assign(game_state: new_state)
+      |> persist_or_finish(new_state)
 
-    case module.game_over?(new_state) do
-      {:yes, results} -> {:noreply, assign(socket, result: results)}
-      :no -> {:noreply, socket}
-    end
+    {:noreply, socket}
   end
 
   def handle_event("restart", _, socket) do
     %{module: module, nickname: nickname, options: options} = socket.assigns
     {:ok, fresh} = module.init(options)
     {:ok, fresh, _} = module.handle_player_join(nickname, %{}, fresh)
+    # 새 게임 시작 — 진행 중 snapshot 폐기.
+    delete_snapshot(socket)
     {:noreply, assign(socket, game_state: fresh, result: nil)}
   end
 
@@ -201,14 +222,55 @@ defmodule HappyTriznWeb.GameLive do
       payload ->
         %{module: module, game_state: state, nickname: nickname} = socket.assigns
         {:ok, new_state, _} = module.handle_input(nickname, payload, state)
-        socket = assign(socket, game_state: new_state)
 
-        case module.game_over?(new_state) do
-          {:yes, results} -> {:noreply, assign(socket, result: results)}
-          :no -> {:noreply, socket}
-        end
+        socket =
+          socket
+          |> assign(game_state: new_state)
+          |> persist_or_finish(new_state)
+
+        {:noreply, socket}
     end
   end
+
+  # ============================================================================
+  # Sprint 4k — snapshot persist / delete on game_over
+  # ============================================================================
+
+  # input / keydown 후 호출. game_over 면 snapshot 삭제 + result assign.
+  # 진행 중이면 snapshot upsert (login 사용자 + serializable 게임만).
+  defp persist_or_finish(socket, new_state) do
+    case socket.assigns.module.game_over?(new_state) do
+      {:yes, results} ->
+        delete_snapshot(socket)
+        assign(socket, result: results)
+
+      :no ->
+        save_snapshot(socket, new_state)
+        socket
+    end
+  end
+
+  defp save_snapshot(%{assigns: %{current_user: %{id: uid}, slug: slug}}, state)
+       when is_binary(uid) do
+    if GameSnapshots.serializable?(slug) do
+      _ = GameSnapshots.upsert(uid, slug, state)
+    end
+
+    :ok
+  end
+
+  defp save_snapshot(_, _), do: :ok
+
+  defp delete_snapshot(%{assigns: %{current_user: %{id: uid}, slug: slug}})
+       when is_binary(uid) do
+    if GameSnapshots.serializable?(slug) do
+      GameSnapshots.delete(uid, slug)
+    end
+
+    :ok
+  end
+
+  defp delete_snapshot(_), do: :ok
 
   # ============================================================================
   # 키보드 → input action map (싱글 게임)
