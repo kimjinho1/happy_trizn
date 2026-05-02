@@ -252,4 +252,30 @@ defmodule HappyTrizn.RoomsTest do
       refute Room.verify_password(%Room{password_hash: hash, password_salt: salt}, "wrong")
     end
   end
+
+  describe "list_open_with_counts/1 (Sprint 4o)" do
+    test "GameSession 없는 방 → count 0", %{host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "wc_#{System.unique_integer([:positive])}"})
+
+      result = Rooms.list_open_with_counts(limit: 100)
+      assert {^room, 0} = Enum.find(result, fn {r, _} -> r.id == room.id end)
+    end
+
+    test "GameSession 살아있고 player N 명 → count N", %{host: host} do
+      {:ok, room} = Rooms.create(host, %{game_type: "tetris", name: "wcn_#{System.unique_integer([:positive])}"})
+
+      {:ok, pid} =
+        HappyTrizn.Games.GameSession.start_link(
+          name: HappyTrizn.Games.GameSession.via_room(room.id),
+          room_id: room.id,
+          game_type: "tetris"
+        )
+
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = HappyTrizn.Games.GameSession.player_join(pid, "p1", %{nickname: "x"}, caller)
+
+      result = Rooms.list_open_with_counts(limit: 100)
+      assert {_room, 1} = Enum.find(result, fn {r, _} -> r.id == room.id end)
+    end
+  end
 end
