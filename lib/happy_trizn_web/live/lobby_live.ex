@@ -292,6 +292,10 @@ defmodule HappyTriznWeb.LobbyLive do
   def handle_info({:room_created, _room}, socket), do: {:noreply, load_rooms(socket)}
   def handle_info({:room_closed, _room}, socket), do: {:noreply, load_rooms(socket)}
 
+  # Sprint 4o — GameSession 의 player join/leave 알림 → 방 카드 N/M badge 갱신.
+  def handle_info({:room_player_count_changed, _room_id, _count}, socket),
+    do: {:noreply, load_rooms(socket)}
+
   # Sprint 4g — presence diff. 누가 접속/이탈하면 online list 갱신.
   def handle_info(%{event: "presence_diff"}, socket) do
     {:noreply, assign(socket, :online_user_ids, HappyTriznWeb.Presence.online_user_ids())}
@@ -328,14 +332,16 @@ defmodule HappyTriznWeb.LobbyLive do
   end
 
   defp load_rooms(socket) do
-    rooms = Rooms.list_open(limit: 50)
+    # Sprint 4o — list_open_with_counts: [{room, current_player_count}].
+    # render 에서 max_players 와 같이 "N/M" badge 로 표시.
+    rooms_with_counts = Rooms.list_open_with_counts(limit: 50)
     page = Map.get(socket.assigns, :rooms_page, 1)
     page_size = 4
-    total_pages = max(1, ceil(length(rooms) / page_size))
+    total_pages = max(1, ceil(length(rooms_with_counts) / page_size))
     page = page |> max(1) |> min(total_pages)
 
     socket
-    |> assign(:rooms, rooms)
+    |> assign(:rooms, rooms_with_counts)
     |> assign(:rooms_page, page)
     |> assign(:rooms_page_size, page_size)
     |> assign(:rooms_total_pages, total_pages)
@@ -348,6 +354,13 @@ defmodule HappyTriznWeb.LobbyLive do
       _ -> slug
     end
   end
+
+  # Sprint 4o — player count 색상.
+  # 0/M = 빨강 (호스트 mount 안 함, orphan 후보), N/M = 노랑 (1+ 자리 남음),
+  # full = 회색.
+  defp player_count_badge_class(0, _max), do: "badge-error"
+  defp player_count_badge_class(n, max) when n >= max, do: "badge-ghost"
+  defp player_count_badge_class(_n, _max), do: "badge-warning"
 
   # 게임별 emoji — single + multi 공용.
   defp single_game_emoji("2048"), do: "🔢"
@@ -442,13 +455,19 @@ defmodule HappyTriznWeb.LobbyLive do
                 <% page_rooms =
                   Enum.slice(@rooms, (@rooms_page - 1) * @rooms_page_size, @rooms_page_size) %>
                 <div class="space-y-2">
-                  <%= for room <- page_rooms do %>
+                  <%= for {room, current_count} <- page_rooms do %>
                     <div class="flex items-center justify-between gap-2 p-3 bg-base-100 rounded">
                       <div class="flex items-center gap-2 min-w-0 flex-1">
                         <span class="badge badge-md shrink-0">
                           {single_game_emoji(room.game_type)} {game_display_name(room.game_type)}
                         </span>
                         <span class="font-semibold text-base truncate">{room.name}</span>
+                        <span
+                          class={"badge badge-sm shrink-0 " <> player_count_badge_class(current_count, room.max_players)}
+                          title="현재 / 최대 인원"
+                        >
+                          👥 {current_count}/{room.max_players}
+                        </span>
                         <%= if room.password_hash do %>
                           <span class="text-base shrink-0" title="비밀번호 방">🔒</span>
                         <% end %>

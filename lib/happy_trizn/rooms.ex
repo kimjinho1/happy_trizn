@@ -67,6 +67,18 @@ defmodule HappyTrizn.Rooms do
     |> Repo.all()
   end
 
+  @doc """
+  list_open + 각 방의 GameSession 현재 player count 첨부 (lobby UI 용, Sprint 4o).
+  return: [{room, count}] — count = 0 이면 아직 호스트 mount 안 한 빈 방.
+  """
+  def list_open_with_counts(opts \\ []) do
+    list_open(opts)
+    |> Enum.map(fn room ->
+      count = HappyTrizn.Games.GameSession.player_count_for_room(room.id)
+      {room, count}
+    end)
+  end
+
   # =========================================================================
   # Join / Kick / Close
   # =========================================================================
