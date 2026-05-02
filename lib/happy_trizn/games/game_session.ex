@@ -97,6 +97,21 @@ defmodule HappyTrizn.Games.GameSession do
 
   def get_state(pid), do: GenServer.call(pid, :get_state)
 
+  @doc """
+  현재 방의 player count (멀티게임 lobby UI 용). pid nil 또는 dead 면 0.
+  """
+  def player_count(nil), do: 0
+
+  def player_count(pid) when is_pid(pid) do
+    if Process.alive?(pid), do: GenServer.call(pid, :player_count), else: 0
+  end
+
+  @doc """
+  특정 방의 현재 player count. 방 없으면 0.
+  """
+  def player_count_for_room(room_id) when is_binary(room_id),
+    do: room_id |> whereis_room() |> player_count()
+
   def subscribe_room(room_id),
     do: Phoenix.PubSub.subscribe(@pubsub, "game:" <> room_id)
 
@@ -178,6 +193,7 @@ defmodule HappyTrizn.Games.GameSession do
             %{state | game_state: new_game_state, players: new_players}
             |> monitor_caller(player_id, caller_pid)
             |> broadcast_and_log(broadcast)
+            |> notify_lobby_player_count()
 
           {:reply, :ok, new_state}
 
@@ -189,6 +205,10 @@ defmodule HappyTrizn.Games.GameSession do
 
   def handle_call(:get_state, _from, state) do
     {:reply, state.game_state, state}
+  end
+
+  def handle_call(:player_count, _from, state) do
+    {:reply, map_size(state.players), state}
   end
 
   # Sprint 4n — mount 시 LV 가 호출 → state + 현재 seq 같이 받음. 이후 reconnect 시
@@ -222,6 +242,7 @@ defmodule HappyTrizn.Games.GameSession do
       |> cancel_grace_for_player(player_id)
       |> Map.update!(:disconnected_at_seq, &Map.delete(&1, player_id))
       |> broadcast_and_log(broadcast)
+      |> notify_lobby_player_count()
 
     cond do
       # 마지막 player 떠남 → GenServer 종료 + room close.
@@ -436,6 +457,20 @@ defmodule HappyTrizn.Games.GameSession do
   end
 
   defp replay_missed_events(_, _, _), do: :ok
+
+  # Sprint 4o — lobby topic 으로 player count 변경 알림 → LobbyLive 가 받아서 UI 갱신.
+  # 멀티 게임만 (room_id 있을 때). 실패해도 게임 흐름 영향 X.
+  defp notify_lobby_player_count(state) do
+    if state.room_id do
+      Phoenix.PubSub.broadcast(
+        @pubsub,
+        "rooms:lobby",
+        {:room_player_count_changed, state.room_id, map_size(state.players)}
+      )
+    end
+
+    state
+  end
 
   # game_over? 검사 — 라운드 결과 한 번만 저장 + broadcast.
   # GenServer 는 stop 안 함 — 사용자가 "다시 하기" 누르면 restart action 으로 재진입.

@@ -24,10 +24,12 @@ defmodule HappyTrizn.Rooms.Cleanup do
   alias HappyTrizn.Games.GameSession
   alias HappyTrizn.Rooms
 
-  # 5분 주기.
-  @default_sweep_interval_ms 5 * 60 * 1000
-  # 방 생성 후 호스트 mount 시간 — 5분 안에 입장 안 하면 orphan.
-  @default_grace_seconds 5 * 60
+  # 1분 주기 (Sprint 4o — 빈 방 빠르게 정리).
+  @default_sweep_interval_ms 60 * 1000
+  # 방 생성 후 호스트 mount 시간 — 60초 안에 입장 안 하면 orphan.
+  # 사용자 요청: 0명 즉시 폭발. handle_player_leave 가 마지막 leave 시 GenServer
+  # stop 으로 처리. 호스트 mount 안 한 빈 방만 cleanup grace 필요.
+  @default_grace_seconds 60
 
   # ============================================================================
   # Public API

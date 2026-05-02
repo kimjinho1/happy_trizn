@@ -538,6 +538,82 @@ defmodule HappyTrizn.Games.GameSessionTest do
     end
   end
 
+  # ============================================================================
+  # Sprint 4o — player_count API + lobby PubSub
+  # ============================================================================
+  describe "player_count + lobby notification" do
+    setup do
+      room_id = unique_room_id()
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room_id),
+          room_id: room_id,
+          game_type: "2048"
+        )
+
+      :sys.replace_state(pid, fn s ->
+        %{s | meta: Map.put(s.meta, :grace_period_ms, 100)}
+      end)
+
+      {:ok, room_id: room_id, pid: pid}
+    end
+
+    test "player_count/1 — pid 살아있을 때 현재 인원 반환", %{pid: pid} do
+      assert GameSession.player_count(pid) == 0
+
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+      assert GameSession.player_count(pid) == 1
+
+      caller2 = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p2", %{}, caller2)
+      assert GameSession.player_count(pid) == 2
+
+      GameSession.player_leave(pid, "p1", :quit)
+      _ = :sys.get_state(pid)
+      assert GameSession.player_count(pid) == 1
+    end
+
+    test "player_count/1 — nil pid → 0", %{} do
+      assert GameSession.player_count(nil) == 0
+    end
+
+    test "player_count_for_room/1 — 방 없으면 0", %{} do
+      assert GameSession.player_count_for_room("ghost-room-id") == 0
+    end
+
+    test "player_count_for_room/1 — 살아있는 방 정상 count", %{room_id: room_id, pid: pid} do
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+      assert GameSession.player_count_for_room(room_id) == 1
+    end
+
+    test "player_join → lobby topic 에 :room_player_count_changed broadcast",
+         %{pid: pid, room_id: room_id} do
+      Phoenix.PubSub.subscribe(HappyTrizn.PubSub, "rooms:lobby")
+
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      assert_receive {:room_player_count_changed, ^room_id, 1}, 500
+    end
+
+    test "player_leave → lobby topic broadcast (count 갱신)",
+         %{pid: pid, room_id: room_id} do
+      Process.flag(:trap_exit, true)
+      caller_a = spawn(fn -> Process.sleep(:infinity) end)
+      caller_b = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller_a)
+      :ok = GameSession.player_join(pid, "p2", %{}, caller_b)
+
+      Phoenix.PubSub.subscribe(HappyTrizn.PubSub, "rooms:lobby")
+
+      GameSession.player_leave(pid, "p1", :quit)
+      assert_receive {:room_player_count_changed, ^room_id, 1}, 500
+    end
+  end
+
   describe "terminate cleanup (room close)" do
     test "GameSession 종료 시 Rooms.close_by_id 호출 → 방 status closed" do
       Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)
