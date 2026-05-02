@@ -1049,6 +1049,11 @@ defmodule HappyTrizn.Games.Tetris do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — 실제 플레이 시간 추적. countdown / waiting / over 는 false.
+  # :practice 도 실제로 piece 떨어뜨림 → 플레이 시간으로 카운트.
+  def playing?(%{status: status}) when status in [:playing, :practice], do: true
+  def playing?(_), do: false
+
   # ============================================================================
   # Public player view
   # ============================================================================

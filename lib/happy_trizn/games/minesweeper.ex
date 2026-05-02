@@ -158,6 +158,10 @@ defmodule HappyTrizn.Games.Minesweeper do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — over nil 이면 진행 중. :win / :lose 면 끝.
+  def playing?(%{over: nil}), do: true
+  def playing?(_), do: false
+
   # ============================================================================
   # Game logic
   # ============================================================================

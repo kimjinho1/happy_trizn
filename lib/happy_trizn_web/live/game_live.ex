@@ -12,6 +12,7 @@ defmodule HappyTriznWeb.GameLive do
 
   alias HappyTrizn.GameSnapshots
   alias HappyTrizn.Games.Registry, as: GameRegistry
+  alias HappyTrizn.PlayTime
   alias HappyTrizn.UserGameSettings
 
   @impl true
@@ -82,7 +83,11 @@ defmodule HappyTriznWeb.GameLive do
            |> assign(:key_settings, settings)
            |> assign(:settings_open, false)
            |> assign(:result, nil)
-           |> assign(:show_reset, show_reset)}
+           |> assign(:show_reset, show_reset)
+           # Sprint 5b — 플레이 시간 추적. module.playing?/1 == true 시 시작 시간
+           # 기록, false 또는 terminate / restart 시 차이만큼 PlayTime.record.
+           |> assign(:play_started_at, nil)
+           |> sync_play_tracking_lv()}
         end
     end
   end
@@ -93,7 +98,7 @@ defmodule HappyTriznWeb.GameLive do
 
     if function_exported?(module, :tick, 1) do
       {:ok, new_state, _bc} = module.tick(state)
-      socket = assign(socket, game_state: new_state)
+      socket = socket |> assign(game_state: new_state) |> sync_play_tracking_lv()
 
       case module.game_over?(new_state) do
         {:yes, results} -> {:noreply, assign(socket, result: results)}
@@ -105,6 +110,13 @@ defmodule HappyTriznWeb.GameLive do
   end
 
   def handle_info(_, socket), do: {:noreply, socket}
+
+  # Sprint 5b — LV 종료 시 진행 중 시간 record (F5 / 창닫음 / navigate).
+  @impl true
+  def terminate(_reason, socket) do
+    _ = stop_play_tracking_lv(socket)
+    :ok
+  end
 
   @impl true
   def handle_event("input", payload, socket) do
@@ -121,11 +133,13 @@ defmodule HappyTriznWeb.GameLive do
 
   def handle_event("restart", _, socket) do
     %{module: module, nickname: nickname, options: options} = socket.assigns
+    # Sprint 5b — restart 전 진행 중 시간 record.
+    socket = stop_play_tracking_lv(socket)
     {:ok, fresh} = module.init(options)
     {:ok, fresh, _} = module.handle_player_join(nickname, %{}, fresh)
     # 새 게임 시작 — 진행 중 snapshot 폐기.
     delete_snapshot(socket)
-    {:noreply, assign(socket, game_state: fresh, result: nil)}
+    {:noreply, socket |> assign(game_state: fresh, result: nil) |> sync_play_tracking_lv()}
   end
 
   # ============================================================================
@@ -244,16 +258,73 @@ defmodule HappyTriznWeb.GameLive do
 
   # input / keydown 후 호출. game_over 면 snapshot 삭제 + result assign.
   # 진행 중이면 snapshot upsert (login 사용자 + serializable 게임만).
+  # Sprint 5b — sync_play_tracking_lv 도 호출 (game_over 시 시간 record).
   defp persist_or_finish(socket, new_state) do
-    case socket.assigns.module.game_over?(new_state) do
-      {:yes, results} ->
-        delete_snapshot(socket)
-        assign(socket, result: results)
+    socket =
+      case socket.assigns.module.game_over?(new_state) do
+        {:yes, results} ->
+          delete_snapshot(socket)
+          assign(socket, result: results)
 
-      :no ->
-        save_snapshot(socket, new_state)
-        socket
+        :no ->
+          save_snapshot(socket, new_state)
+          socket
+      end
+
+    sync_play_tracking_lv(socket)
+  end
+
+  # ============================================================================
+  # Sprint 5b — 플레이 시간 추적 (싱글)
+  # ============================================================================
+
+  # 매 mutation 후 호출. module.playing?/1 == true → 시작 시간 nil 이면 now 로
+  # 기록 (한 번만). false → 기록 중이면 차이만큼 PlayTime.record + nil 로 reset.
+  defp sync_play_tracking_lv(socket) do
+    module = socket.assigns.module
+
+    if function_exported?(module, :playing?, 1) do
+      now_playing = module.playing?(socket.assigns.game_state)
+      started = socket.assigns.play_started_at
+
+      cond do
+        now_playing and is_nil(started) ->
+          assign(socket, play_started_at: DateTime.utc_now())
+
+        not now_playing and not is_nil(started) ->
+          record_play_time_lv(socket, started, DateTime.utc_now())
+          assign(socket, play_started_at: nil)
+
+        true ->
+          socket
+      end
+    else
+      socket
     end
+  end
+
+  # 명시적 stop — restart / terminate 시.
+  defp stop_play_tracking_lv(socket) do
+    case socket.assigns[:play_started_at] do
+      nil ->
+        socket
+
+      started ->
+        record_play_time_lv(socket, started, DateTime.utc_now())
+        assign(socket, play_started_at: nil)
+    end
+  end
+
+  defp record_play_time_lv(socket, started_at, ended_at) do
+    user_id =
+      case socket.assigns[:current_user] do
+        %{id: uid} when is_binary(uid) -> uid
+        _ -> nil
+      end
+
+    PlayTime.record(user_id, socket.assigns.slug, started_at, ended_at, nil)
+  rescue
+    _ -> :ok
   end
 
   defp save_snapshot(%{assigns: %{current_user: %{id: uid}, slug: slug}}, state)

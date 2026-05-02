@@ -361,6 +361,10 @@ defmodule HappyTrizn.Games.Skribbl do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — 그리는 / 라운드 진행 중 만 카운트. waiting / over X.
+  def playing?(%{status: status}) when status in [:choosing, :drawing, :round_end], do: true
+  def playing?(_), do: false
+
   # ============================================================================
   # Round transitions
   # ============================================================================

@@ -345,6 +345,10 @@ defmodule HappyTrizn.Games.Bomberman do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — 실제 플레이 시간 추적. status :playing 만.
+  def playing?(%{status: :playing}), do: true
+  def playing?(_), do: false
+
   # ============================================================================
   # Game start
   # ============================================================================
