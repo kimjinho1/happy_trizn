@@ -26,6 +26,9 @@ defmodule HappyTrizn.Application do
         {Registry, keys: :unique, name: HappyTrizn.Games.SessionRegistry},
         # GameSession DynamicSupervisor — 방마다 spawn / 죽으면 정리.
         {DynamicSupervisor, name: HappyTrizn.Games.SessionSupervisor, strategy: :one_for_one},
+        # Sprint 4l — orphan room sweeper (DB open / GameSession nil → 강제 close).
+        # boot 즉시 1회 + 5분 주기. test 환경에선 enabled: false 로 무력화.
+        {HappyTrizn.Rooms.Cleanup, rooms_cleanup_opts()},
         # MongoDB — url 환경변수 있을 때만 시작 (호스트 직접 test 시 mongo 없을 수 있음)
         if(mongo_url,
           do:
@@ -60,5 +63,9 @@ defmodule HappyTrizn.Application do
   defp game_events_enabled? do
     Application.get_env(:happy_trizn, :game_events, [])
     |> Keyword.get(:enabled, true)
+  end
+
+  defp rooms_cleanup_opts do
+    Application.get_env(:happy_trizn, :rooms_cleanup, [])
   end
 end

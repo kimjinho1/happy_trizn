@@ -250,6 +250,123 @@ defmodule HappyTrizn.Games.GameSessionTest do
     end
   end
 
+  # ============================================================================
+  # Sprint 4j — 세션 회복 (Process.monitor + grace period + reattach)
+  # ============================================================================
+  describe "session resilience: monitor + grace + reattach" do
+    setup do
+      # 2048 = 싱글, grace_period_ms 미설정 → @default_grace_ms (5000) fallback.
+      # 빠른 테스트 위해 grace 짧게 override 한 fake 게임 모듈 등록 안 하고
+      # :sys.replace_state 로 meta.grace_period_ms 직접 주입.
+      room_id = unique_room_id()
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room_id),
+          room_id: room_id,
+          game_type: "2048"
+        )
+
+      # 빠른 테스트용 grace 100ms.
+      :sys.replace_state(pid, fn s ->
+        %{s | meta: Map.put(s.meta, :grace_period_ms, 100)}
+      end)
+
+      {:ok, room_id: room_id, pid: pid}
+    end
+
+    test "player_join 시 caller pid Process.monitor 등록", %{pid: pid} do
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      state = :sys.get_state(pid)
+      assert map_size(state.monitors) == 1
+      assert state.monitors |> Map.values() == ["p1"]
+    end
+
+    test "caller process exit → :player_disconnected broadcast + grace timer 시작",
+         %{pid: pid, room_id: room_id} do
+      GameSession.subscribe_room(room_id)
+
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      Process.exit(caller, :kill)
+
+      assert_receive {:game_event, {:player_disconnected, "p1"}}, 500
+
+      state = :sys.get_state(pid)
+      assert Map.has_key?(state.grace_timers, "p1")
+      # 아직 player slot 살아있음 — grace 만료 전.
+      assert Map.has_key?(state.players, "p1")
+    end
+
+    test "grace 만료 전 reattach (player_join 재호출) → leave 발생 X, monitor 갱신",
+         %{pid: pid, room_id: room_id} do
+      GameSession.subscribe_room(room_id)
+
+      caller1 = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{nickname: "old"}, caller1)
+
+      Process.exit(caller1, :kill)
+      assert_receive {:game_event, {:player_disconnected, "p1"}}, 500
+
+      # 50ms 안에 reattach (grace 100ms).
+      Process.sleep(30)
+      caller2 = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{nickname: "new"}, caller2)
+
+      assert_receive {:game_event, {:player_reattached, "p1"}}, 500
+
+      # grace timer 없어졌어야.
+      state = :sys.get_state(pid)
+      refute Map.has_key?(state.grace_timers, "p1")
+      assert Map.get(state.players, "p1") == %{nickname: "new"}
+      # 새 monitor 1개.
+      assert map_size(state.monitors) == 1
+
+      # grace 만료 시점 지나도 leave 안 발생.
+      refute_receive {:game_event, {:player_left, "p1"}}, 200
+    end
+
+    test "grace 만료 후 → player_leave(:disconnect) 자동 호출",
+         %{pid: pid, room_id: room_id} do
+      Process.flag(:trap_exit, true)
+      GameSession.subscribe_room(room_id)
+
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      Process.exit(caller, :kill)
+      assert_receive {:game_event, {:player_disconnected, "p1"}}, 500
+
+      # 마지막 player 였으니 grace 만료 후 GenServer stop.
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1000
+    end
+
+    test "voluntary player_leave(:quit) → 즉시 evict, monitor + grace cleanup",
+         %{pid: pid} do
+      Process.flag(:trap_exit, true)
+
+      caller_a = spawn(fn -> Process.sleep(:infinity) end)
+      caller_b = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller_a)
+      :ok = GameSession.player_join(pid, "p2", %{}, caller_b)
+
+      # p1 이 voluntary leave.
+      GameSession.player_leave(pid, "p1", :quit)
+      _ = :sys.get_state(pid)
+
+      state = :sys.get_state(pid)
+      refute Map.has_key?(state.players, "p1")
+      # monitor 1개만 남음 (p2).
+      assert map_size(state.monitors) == 1
+      assert state.monitors |> Map.values() == ["p2"]
+      refute Map.has_key?(state.grace_timers, "p1")
+    end
+  end
+
   describe "terminate cleanup (room close)" do
     test "GameSession 종료 시 Rooms.close_by_id 호출 → 방 status closed" do
       Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)

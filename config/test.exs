@@ -59,3 +59,7 @@ config :happy_trizn, :mongo, url: nil, pool_size: 1
 # GameEvents Broadway pipeline — test 환경에서는 Application 자동 부팅 skip.
 # 개별 테스트가 필요 시 `start_supervised!` 로 직접 띄움.
 config :happy_trizn, :game_events, enabled: false
+
+# Rooms.Cleanup — test 환경에서는 자동 sweep 비활성. cleanup 테스트는
+# `start_supervised!({HappyTrizn.Rooms.Cleanup, enabled: false})` 후 sweep_now/0 호출.
+config :happy_trizn, :rooms_cleanup, enabled: false

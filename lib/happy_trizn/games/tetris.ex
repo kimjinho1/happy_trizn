@@ -47,7 +47,9 @@ defmodule HappyTrizn.Games.Tetris do
       max_players: 8,
       min_players: 2,
       description: "Jstris 클론 — 최대 8명 동시 플레이",
-      tick_interval_ms: @tick_ms
+      tick_interval_ms: @tick_ms,
+      # F5/끊김 시 5초 grace — 페어 끊기 / N-player 룰 보존.
+      grace_period_ms: 5000
     }
   end
 

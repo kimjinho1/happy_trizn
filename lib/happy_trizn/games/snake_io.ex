@@ -74,7 +74,9 @@ defmodule HappyTrizn.Games.SnakeIo do
       max_players: @max_players,
       min_players: 1,
       description: "100×100 캐주얼 자유 입퇴장",
-      tick_interval_ms: @tick_ms
+      tick_interval_ms: @tick_ms,
+      # 자유 입퇴장 게임 — 짧은 grace 로 끊긴 뱀 잠깐 보존 후 evict.
+      grace_period_ms: 3000
     }
   end
 
