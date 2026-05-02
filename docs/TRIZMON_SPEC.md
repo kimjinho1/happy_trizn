@@ -228,11 +228,12 @@ damage = floor(
 - accuracy = move 의 accuracy * 명중률 단계 / 회피율 단계
 - 빗나감 표시
 
-### 1v1 vs 6v6
+### 배틀 모드 (3vs3 / 6vs6 선택)
 
-- **PvE 일반 트레이너**: 6 vs 6, 둘 다 자기 파티
-- **PvP**: 6 vs 6 default, 단일 모드 추후
-- **모험 야생 만남**: 1 vs 1 (야생 1마리 vs 사용자 파티 첫 마리)
+- **PvE / PvP**: 방 생성 시 `battle_format: "3v3" | "6v6"` 선택. 3v3 = 빠른 매치, 6v6 = 풀배틀.
+- **PvE 일반 트레이너 (모험 모드 NPC)**: 트레이너 마다 정해진 format (NPC 데이터에 명시).
+- **모험 야생 만남**: 1 vs 1 (야생 1마리 vs 사용자 파티 첫 마리). format 무관.
+- 1vs1 모드 = X (포켓몬 컨벤션 유지, 너무 단조).
 
 ## 8. 레벨 / 경험치 / 진화
 
@@ -256,14 +257,16 @@ damage = floor(
 
 `/play/trizmon` (싱글) — 진입 시 사용자 본인 progress.
 
-### 맵 시스템
+### 맵 시스템 (HTML5 Canvas tile-based grid) ✅
 
 - **방식**: tile-based 2D grid 맵. 각 도시 / 길 / 동굴 = 1 맵 = 30x20 정도 grid
-- **렌더**: HTML Canvas — Pacman 패턴 재사용. tile sprite 32x32
-- **이동**: 화살표 / WASD 1 칸 씩, smooth 보간
-- **만남**: 풀밭 / 동굴 tile 위 = 매 step 8% 확률 야생 인카운터
-- **NPC**: tile 위 정해진 위치 — 말 걸면 대화 / 트레이너 배틀 / 힌트
-- **포커스 / 대화**: LiveView 안에 dialog overlay
+- **렌더**: HTML5 Canvas — Pacman 패턴 재사용. tile sprite 32x32 → 맵 = 960x640 px.
+- **확장성**: 향후 sprite animation (4-frame walk cycle), parallax background, lighting / weather shader, spritesheet 통합 모두 가능.
+- **이동**: 화살표 / WASD 1 칸씩 grid step. 시각적으로 smooth 보간 (CSS transition or canvas tween, ~150ms).
+- **만남**: 풀밭 / 동굴 tile 위 = 매 step 8% 확률 야생 인카운터.
+- **NPC**: tile 위 정해진 위치 — 말 걸면 대화 / 트레이너 배틀 / 힌트.
+- **포커스 / 대화**: LiveView 안에 dialog overlay (HTML, canvas 위 layer).
+- **데이터 흐름**: LiveView 가 tile data + entity (player / NPC / 인카운터 트리거) JSON 으로 push → JS canvas 가 render. 사용자 입력 = LiveView event → server move + 충돌 체크 → 새 state push.
 
 ### 진행 곡선
 
@@ -310,13 +313,18 @@ CPU AI:
 
 ## 11. PvP 대결 모드
 
-`/game/trizmon/<room_id>` (멀티) — 기존 멀티 게임 패턴.
+`/game/trizmon-pvp/<room_id>` (멀티) — 기존 멀티 게임 패턴 + **친구 끼리만**.
 
-- 호스트 + 게스트 1명 = 1v1 (6vs6 파티)
-- 양쪽 진입 후 파티 6 마리 자동 send (기존 모험 파티)
-- 둘 다 파티 0 마리면 reject
-- match_results 누적 (이미 있음 — 통합)
-- 랭크 시스템 (Sprint 5c-late): ELO 1000 시작, 승/패에 따라
+- **친구 매칭만**: 방 생성 시 `friend_only: true` 강제. 친구 list 에 있는 사람만 입장 가능. URL 직접 접근해도 거부.
+- 매치 진입:
+  1. lobby 친구 list 에서 "Trizmon 도전" 버튼 클릭 (기존 게임 초대 패턴 재사용)
+  2. DM 자동 발송 — "Trizmon PvP 도전 (3v3 / 6v6)" + URL
+  3. 친구 클릭 → 방 입장 → 둘 다 파티 send
+- 호스트 + 게스트 1명 = 1대1 트레이너 배틀 (3vs3 또는 6vs6)
+- 양쪽 진입 후 파티 자동 send (모험 모드 in_party_slot = 1..N 마리)
+- 둘 다 파티 0 마리면 reject (모험 진행 X 사용자 = 시작 못 함)
+- match_results 누적 (이미 있음)
+- 랭크 시스템 (Sprint 5c-late): ELO 1000 시작, 승/패에 따라. 친구 끼리만 매칭이라 ELO 가 적은 사람과만 의미있음 — 후기 정책 결정 (예: 회사 전체 leaderboard, 개인 ELO 는 친구 vs 게임 만 반영)
 
 ## 12. 도감
 
@@ -338,10 +346,12 @@ Sprint 5c-late.
 
 ### 모델 / 스타일
 
-- **모델**: Gemini Imagen 또는 DALL-E 또는 SDXL — Sprint 시작 시 비교 후 결정
-- **스타일 통일**: 동일 prompt prefix — "pixel art, retro RPG monster, 32x32, transparent background, vibrant colors, simple silhouette, pokemon-inspired but original design"
-- **per-species prompt**: type / 컨셉 키워드 추가. 예: `Pyromon — fire dragon hatchling, orange, two horns, small wings`
-- **검수**: 사람 (사용자) 가 1 차 검수, 안 좋으면 재생성
+- **모델 = Gemini Imagen** (Vertex AI) ✅ 사용자 결정.
+- **인증**: GCP Service Account JSON. 개발자 본인 GCP 프로젝트 필요. 비용 ≈ $0.04/이미지 × 100 종 = ~$4 (1회 batch).
+- **스타일 통일**: 동일 prompt prefix — "pixel art, retro RPG monster, 64x64, transparent background, vibrant colors, simple silhouette, original design inspired by classic monster RPG games"
+- **per-species prompt**: type / 컨셉 키워드 추가. 예: `Pyromon (불꽃이) — fire dragon hatchling, orange, two horns, small wings`
+- **검수**: admin 페이지 (`/admin/trizmon/images`) 에서 1차 승인. 안 좋으면 재생성 트리거.
+- **batch script**: `priv/scripts/generate_trizmon_images.sh` — species seed 의 prompt 자동 생성 + Imagen API 호출 + PNG 저장.
 
 ### 저장
 
@@ -446,15 +456,17 @@ lib/happy_trizn_web/live/
 
 ## 19. 시작 체크리스트 (Sprint 5c-1)
 
-- [ ] 본 spec review + 합의
-- [ ] 자체 IP 명 확정 ("Trizmon" OK?)
-- [ ] AI 이미지 모델 결정 (Gemini Imagen / DALL-E / SDXL 비교)
+- [x] 본 spec review + 합의 ✅
+- [x] 자체 IP 명 = "Trizmon" ✅
+- [x] AI 이미지 모델 = Gemini Imagen ✅
 - [ ] 마이그레이션 6개 작성 (species / moves / species_moves / instances / saves / battles)
-- [ ] type_chart.ex (18×18 const map)
-- [ ] stats.ex (HP / 기타 stat 계산 공식)
-- [ ] exp_curves.ex (4 곡선)
-- [ ] 1 종 (시작 몬스터 1마리), 1 기술 (몸통 박치기) 으로 smoke test
-- [ ] 데미지 계산 함수 unit test
+- [ ] `lib/happy_trizn/trizmon/type_chart.ex` (18×18 const map)
+- [ ] `lib/happy_trizn/trizmon/stats.ex` (HP / 기타 stat 계산 공식 + nature)
+- [ ] `lib/happy_trizn/trizmon/exp_curves.ex` (4 곡선)
+- [ ] `lib/happy_trizn/trizmon/battle/damage.ex` (데미지 공식)
+- [ ] 1 종 (시작 몬스터 "불꽃이"), 1 기술 ("몸통 박치기") seed 로 smoke test
+- [ ] type_chart + stats + damage unit test
+- [ ] CLAUDE.md 갱신 (없어진 상태) — Trizmon 작업 가이드 추가 (별도 PR 추천)
 
 ## 20. 확장 가능성 (장기)
 
@@ -480,11 +492,51 @@ lib/happy_trizn_web/live/
 
 이 spec 합의 후 **Sprint 5c-1 (인프라)** 부터 코드 작업 진행.
 
-## 22. 결정 필요 항목
+## 22. 결정 사항 (사용자 합의 완료)
 
-1. 자체 IP 명 "Trizmon" OK? 또는 다른 제안?
-2. AI 이미지 모델 — 사용자가 갖고 있는 access (Gemini? DALL-E?) 어느 거?
-3. 모험 맵 = canvas grid (Pacman 패턴) vs 텍스트 기반 ASCII vs SVG tile?
-4. 영문 vs 한글 우선? — 명/기술/도감 텍스트
-5. 배틀 = 6vs6 default 인지 1vs1 default 인지? (포켓몬 = 6vs6 풀배틀 + 1vs1 옵션)
-6. 친구 / 길드 시스템 통합 — 길드 = 회사 부서별 PvP league?
+1. **자체 IP 명 = "Trizmon"** ✅
+2. **AI 이미지 모델 = Gemini Imagen** ✅ (Sprint 5c-1.5 에서 batch 생성)
+3. **모험 맵 = HTML5 Canvas tile-based grid** ✅ (Pacman 패턴 재사용. 게임 렌더링 표준 + 향후 sprite animation / parallax / shader 확장 자유로움. SVG/ASCII 보다 보기 좋음 + 개발 확장성 우수)
+4. **언어 우선 = 한글** ✅ (species name / move name / 도감 텍스트 / NPC 대사 모두 한글 first. 영문 i18n 은 future Sprint)
+5. **배틀 모드 = 3vs3 / 6vs6 선택 가능** ✅ (방 만들 때 옵션 선택. PvE 도 동일. 1vs1 X — 포켓몬 컨벤션 유지)
+6. **친구 끼리만 PvP** ✅ (lobby 의 PvP 매칭 = friends_list 에 있는 사람만 가능. 친구 추천 / 초대 통한 진입 only. 길드 시스템 X — 단순화)
+
+## 23. 결정 사항 후속 — spec 본문 영향 정리
+
+### 배틀 모드 (3vs3 / 6vs6 선택)
+
+- 방 생성 시 `battle_format: "3v3" | "6v6"` 옵션 (PvP)
+- PvE 진입 시 같은 picker
+- 모험 모드 야생 만남 = 1v1 그대로 (사용자 파티 첫 마리 vs 야생)
+- in_party_slot 컬럼 = 1..6 그대로 유지. 3v3 모드는 첫 3 마리만 사용
+
+### 친구 PvP (친구만 매칭)
+
+- 매치 흐름:
+  1. lobby 친구 list 에서 PvP 도전 button (게임 초대 패턴 재사용)
+  2. DM 자동 발송 — "Trizmon PvP 도전!" + URL `/game/trizmon-pvp/<room_id>?format=6v6`
+  3. 친구 클릭 → 방 입장 → 둘 다 파티 send → 배틀
+- 방 생성 시 `friend_only: true` 강제 (Trizmon PvP)
+- 친구 아닌 사용자가 URL 알아도 입장 거부
+
+### Canvas 맵
+
+- `assets/js/games/trizmon-adventure/canvas.js` (Pacman 패턴 참고)
+- tile sprite 32x32 → 큰 맵 = 30x20 = 960x640 px canvas
+- LiveView 가 tile data + entity (player / NPC / 야생 인카운터 트리거) JSON push → JS canvas 가 render
+- 사용자 입력 = 화살표 / WASD → LiveView event → server move + 충돌 체크 → 새 state push
+
+### 한글 우선 표시
+
+- species/move name = 한글 first (DB `name_ko` 필수, `name_en` optional)
+- 도감 텍스트 = 한글 first
+- NPC 대사 = 한글 first
+- 향후 Sprint 5c-late or future Sprint 5d = 영문 i18n + locale switcher
+
+### Gemini Imagen 파이프라인 상세
+
+- Provider: Google Cloud Vertex AI Imagen API
+- 인증: GCP Service Account JSON (개발자 본인이 GCP 프로젝트 생성, $0.04/이미지 4 변형 = 100 종 × 0.04 ≈ $4)
+- 호출: `bash priv/scripts/generate_trizmon_images.sh` — species seed 의 prompt 자동 생성 + Imagen API 호출 + PNG 저장
+- 검수: 생성 후 사용자가 admin 페이지 (`/admin/trizmon/images`) 에서 종별 1차 승인 — 안 좋으면 재생성 트리거
+- 결과 저장: `assets/static/images/trizmon/<species_slug>.png`
