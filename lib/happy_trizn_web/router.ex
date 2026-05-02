@@ -63,6 +63,9 @@ defmodule HappyTriznWeb.Router do
       # 마이페이지 — 닉네임 수정 + 프로필 사진 업로드 (등록 사용자 전용).
       live "/me", ProfileLive
 
+      # Sprint 5b — 본인 플레이 시간 통계 (login user 전용).
+      live "/me/playtime", PlayTimeLive
+
       # DM (Direct Messages) — 친구 사이 1:1 채팅.
       live "/dm", DmLive
       live "/dm/:peer_id", DmLive
@@ -82,6 +85,9 @@ defmodule HappyTriznWeb.Router do
     get "/users", AdminController, :users
     post "/users/:id/ban", AdminController, :ban
     post "/users/:id/unban", AdminController, :unban
+
+    # Sprint 5b — admin 플레이 시간 통계 (사용자별 + 게임별)
+    live "/playtime", AdminPlayTimeLive
   end
 
   # Other scopes may use custom stacks.

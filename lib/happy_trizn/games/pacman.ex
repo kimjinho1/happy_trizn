@@ -474,6 +474,10 @@ defmodule HappyTrizn.Games.PacMan do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — :playing / :dying / :won 다 진행 중. :over 만 끝.
+  def playing?(%{status: status}) when status in [:playing, :dying, :won], do: true
+  def playing?(_), do: false
+
   # ============================================================================
   # Maze parsing
   # ============================================================================

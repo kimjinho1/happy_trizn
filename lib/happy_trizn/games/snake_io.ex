@@ -225,6 +225,11 @@ defmodule HappyTrizn.Games.SnakeIo do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — 자유 입퇴장 게임. status :playing 으로 시작 (대기 X), game_over X
+  # → player 한 명이라도 살아있으면 카운트.
+  def playing?(%{status: :playing, players: ps}) when is_map(ps) and map_size(ps) > 0, do: true
+  def playing?(_), do: false
+
   # ============================================================================
   # Helpers
   # ============================================================================

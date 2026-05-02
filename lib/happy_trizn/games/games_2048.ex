@@ -88,6 +88,10 @@ defmodule HappyTrizn.Games.Games2048 do
   @impl true
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — over 가 false 이면 진행 중. 2048 은 init 직후 즉시 playing.
+  def playing?(%{over: true}), do: false
+  def playing?(_), do: true
+
   # ============================================================================
   # Game logic
   # ============================================================================

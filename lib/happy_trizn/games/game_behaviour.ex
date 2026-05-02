@@ -71,6 +71,17 @@ defmodule HappyTrizn.Games.GameBehaviour do
               optional(:grace_period_ms) => non_neg_integer()
             }
 
+  @doc """
+  실제 플레이 중인지 (Sprint 5b — 플레이 시간 추적용).
+
+  GameSession (멀티) / GameLive (싱글) 가 매 mutation 후 호출. true → false
+  transition 시 그 구간 만큼 PlayTime.record. waiting / countdown / over /
+  빈 방 대기 시간은 false 반환해야 카운트 X.
+
+  default false 로 작동 (구현 안 하면 시간 0).
+  """
+  @callback playing?(state :: map()) :: boolean()
+
   # 옵셔널 callback 들
-  @optional_callbacks tick: 1, terminate: 2
+  @optional_callbacks tick: 1, terminate: 2, playing?: 1
 end

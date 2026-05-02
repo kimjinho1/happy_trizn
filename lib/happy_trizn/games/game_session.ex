@@ -156,7 +156,12 @@ defmodule HappyTrizn.Games.GameSession do
           #   reattach 시 그 이후 events 만 새 LV pid 에 직접 send.
           current_seq: 0,
           event_log: :queue.new(),
-          disconnected_at_seq: %{}
+          disconnected_at_seq: %{},
+          # Sprint 5b — 실제 플레이 시간 추적.
+          # %{player_id => DateTime}. module.playing?/1 == true 시 player_id 마다 시작
+          # 시간 기록. false / leave / terminate 시 차이만큼 PlayTime.record.
+          # module.playing?/1 미구현이면 추적 X.
+          player_play_starts: %{}
         }
 
         {:ok, state}
@@ -194,6 +199,7 @@ defmodule HappyTrizn.Games.GameSession do
             |> monitor_caller(player_id, caller_pid)
             |> broadcast_and_log(broadcast)
             |> notify_lobby_player_count()
+            |> sync_play_tracking()
 
           {:reply, :ok, new_state}
 
@@ -226,6 +232,7 @@ defmodule HappyTrizn.Games.GameSession do
     new_state =
       %{state | game_state: new_game_state}
       |> broadcast_and_log(broadcast)
+      |> sync_play_tracking()
 
     check_and_finish(new_state)
   end
@@ -243,6 +250,10 @@ defmodule HappyTrizn.Games.GameSession do
       |> Map.update!(:disconnected_at_seq, &Map.delete(&1, player_id))
       |> broadcast_and_log(broadcast)
       |> notify_lobby_player_count()
+      # Sprint 5b — 떠난 player 만 시간 기록 (남은 player 는 게임 계속).
+      |> stop_play_tracking_for(player_id)
+      # 게임 status 가 :over 등으로 바뀌었으면 잔존 player 도 정리.
+      |> sync_play_tracking()
 
     cond do
       # 마지막 player 떠남 → GenServer 종료 + room close.
@@ -268,6 +279,7 @@ defmodule HappyTrizn.Games.GameSession do
       new_state =
         %{state | game_state: new_game_state}
         |> broadcast_and_log(broadcast)
+        |> sync_play_tracking()
 
       check_and_finish(new_state)
     else
@@ -308,6 +320,9 @@ defmodule HappyTrizn.Games.GameSession do
     if function_exported?(state.module, :terminate, 2) do
       state.module.terminate(reason, state.game_state)
     end
+
+    # Sprint 5b — 잔존 player 들의 플레이 시간 record (crash / stop 모두 cleanup).
+    _ = flush_all_play_starts(state)
 
     # GameSession 종료 = 방도 닫기. 0명 leave / game_over / 비정상 종료 모두 cleanup.
     # 멀티 게임 only (room_id 있을 때).
@@ -457,6 +472,73 @@ defmodule HappyTrizn.Games.GameSession do
   end
 
   defp replay_missed_events(_, _, _), do: :ok
+
+  # ============================================================================
+  # 플레이 시간 추적 (Sprint 5b)
+  # ============================================================================
+
+  # 매 mutation 후 호출. module.playing?/1 이 true 이면 active player 모두 시작
+  # 시간 기록 (이미 있으면 유지). false 이면 모든 추적 중인 player 의 차이만큼
+  # PlayTime.record + clear.
+  defp sync_play_tracking(state) do
+    if function_exported?(state.module, :playing?, 1) do
+      do_sync_play(state, state.module.playing?(state.game_state))
+    else
+      state
+    end
+  end
+
+  defp do_sync_play(state, true) do
+    now = DateTime.utc_now()
+
+    new_starts =
+      Enum.reduce(state.players, state.player_play_starts, fn {pid, _meta}, acc ->
+        Map.put_new(acc, pid, now)
+      end)
+
+    %{state | player_play_starts: new_starts}
+  end
+
+  defp do_sync_play(state, false) do
+    flush_all_play_starts(state)
+  end
+
+  # 한 player 만 stop tracking — leave / disconnect 시.
+  defp stop_play_tracking_for(state, player_id) do
+    case Map.pop(state.player_play_starts, player_id) do
+      {nil, _} ->
+        state
+
+      {started_at, rest} ->
+        record_play_time(state, player_id, started_at, DateTime.utc_now())
+        %{state | player_play_starts: rest}
+    end
+  end
+
+  # 모든 추적 중인 player record + clear (게임 over / GenServer terminate).
+  defp flush_all_play_starts(state) do
+    now = DateTime.utc_now()
+
+    Enum.each(state.player_play_starts, fn {pid, started_at} ->
+      record_play_time(state, pid, started_at, now)
+    end)
+
+    %{state | player_play_starts: %{}}
+  end
+
+  defp record_play_time(state, player_id, started_at, ended_at) do
+    user_id =
+      case Map.get(state.players, player_id) do
+        %{user_id: uid} when is_binary(uid) -> uid
+        _ -> nil
+      end
+
+    HappyTrizn.PlayTime.record(user_id, state.game_type, started_at, ended_at, state.room_id)
+  rescue
+    e ->
+      Logger.warning("[game_session] play_time record failed: #{inspect(e)}")
+      :ok
+  end
 
   # Sprint 4o — lobby topic 으로 player count 변경 알림 → LobbyLive 가 받아서 UI 갱신.
   # 멀티 게임만 (room_id 있을 때). 실패해도 게임 흐름 영향 X.

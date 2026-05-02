@@ -73,6 +73,9 @@
         <% end %>
         <%= if assigns[:current_nickname] do %>
           <a href="/history" class="btn btn-ghost btn-md px-2" title="내 기록">🏆 기록</a>
+          <%= if assigns[:current_user] do %>
+            <a href="/me/playtime" class="btn btn-ghost btn-md px-2" title="플레이 시간">⏱️ 시간</a>
+          <% end %>
           <a
             href="/settings/games"
             class="btn btn-ghost btn-md px-2"

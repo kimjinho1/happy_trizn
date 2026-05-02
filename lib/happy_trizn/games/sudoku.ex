@@ -122,6 +122,10 @@ defmodule HappyTrizn.Games.Sudoku do
   @impl GameBehaviour
   def terminate(_, _), do: :ok
 
+  # Sprint 5b — over == :win 이면 끝. 그 외 풀이 중.
+  def playing?(%{over: :win}), do: false
+  def playing?(_), do: true
+
   # ============================================================================
   # Cell set + win check
   # ============================================================================
