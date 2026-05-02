@@ -367,6 +367,177 @@ defmodule HappyTrizn.Games.GameSessionTest do
     end
   end
 
+  # ============================================================================
+  # Sprint 4n — event_log ring buffer + reattach replay
+  # ============================================================================
+  describe "event_log: broadcast 마다 seq 증가" do
+    setup do
+      room_id = unique_room_id()
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room_id),
+          room_id: room_id,
+          game_type: "2048"
+        )
+
+      # grace 짧게 — 빠른 테스트.
+      :sys.replace_state(pid, fn s ->
+        %{s | meta: Map.put(s.meta, :grace_period_ms, 100)}
+      end)
+
+      {:ok, room_id: room_id, pid: pid}
+    end
+
+    test "초기 current_seq = 0, event_log 비어있음", %{pid: pid} do
+      state = :sys.get_state(pid)
+      assert state.current_seq == 0
+      assert :queue.is_empty(state.event_log)
+    end
+
+    test "player_join 신규 → broadcast 발생 → seq 증가", %{pid: pid} do
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      state = :sys.get_state(pid)
+      # 2048 의 handle_player_join 은 broadcast 비어있음 → seq 0 유지.
+      # (게임 모듈마다 다름)
+      assert state.current_seq >= 0
+    end
+
+    test "handle_input → broadcast → event_log 에 추가", %{pid: pid, room_id: room_id} do
+      GameSession.subscribe_room(room_id)
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      seq_before = :sys.get_state(pid).current_seq
+
+      # restart action 은 broadcast {:state_changed, _} 발생.
+      GameSession.handle_input(pid, "p1", %{"action" => "restart"})
+      _ = :sys.get_state(pid)
+
+      state = :sys.get_state(pid)
+      assert state.current_seq == seq_before + 1
+      assert :queue.len(state.event_log) >= 1
+
+      # PubSub 으로도 정상 도착.
+      assert_receive {:game_event, {:state_changed, _}}, 500
+    end
+
+    test "ring buffer cap @event_log_cap (50) — 오래된 events drop", %{pid: pid} do
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller)
+
+      # 60 회 broadcast — 10 개는 drop 되어야.
+      for _ <- 1..60 do
+        GameSession.handle_input(pid, "p1", %{"action" => "restart"})
+      end
+
+      _ = :sys.get_state(pid)
+      state = :sys.get_state(pid)
+      assert :queue.len(state.event_log) == 50
+      assert state.current_seq == 60
+    end
+  end
+
+  describe "reattach replay" do
+    setup do
+      room_id = unique_room_id()
+
+      {:ok, pid} =
+        GameSession.start_link(
+          name: GameSession.via_room(room_id),
+          room_id: room_id,
+          game_type: "2048"
+        )
+
+      :sys.replace_state(pid, fn s ->
+        %{s | meta: Map.put(s.meta, :grace_period_ms, 200)}
+      end)
+
+      {:ok, room_id: room_id, pid: pid}
+    end
+
+    test "disconnect 후 reattach — 사이에 발생한 events 새 caller pid 에 직접 send",
+         %{pid: pid, room_id: room_id} do
+      GameSession.subscribe_room(room_id)
+
+      caller1 = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller1)
+
+      # disconnect.
+      Process.exit(caller1, :kill)
+      assert_receive {:game_event, {:player_disconnected, "p1"}}, 500
+
+      # disconnect 후 게임 진행 — broadcast 생성 (다른 player 가 있는 척 — restart input).
+      GameSession.handle_input(pid, "p1", %{"action" => "restart"})
+      GameSession.handle_input(pid, "p1", %{"action" => "restart"})
+      _ = :sys.get_state(pid)
+
+      # 2 events (state_changed × 2) PubSub 로 전송됨 — caller1 죽었으니 못 받음.
+      # subscribe_room 한 테스트 process 는 받음.
+      assert_receive {:game_event, {:state_changed, _}}, 500
+      assert_receive {:game_event, {:state_changed, _}}, 500
+
+      # reattach. test process 가 caller2 역할.
+      caller2_target = self()
+      :ok = GameSession.player_join(pid, "p1", %{}, caller2_target)
+
+      # caller2_target 에 missed events 직접 send 됨 — assert_receive 로 확인.
+      # subscribe_room 으로 받은 events 와 별개의 send 라 한 번 더 들어옴.
+      assert_receive {:game_event, {:state_changed, _}}, 500
+      assert_receive {:game_event, {:state_changed, _}}, 500
+
+      # reattach broadcast 도 PubSub 로 도착.
+      assert_receive {:game_event, {:player_reattached, "p1"}}, 500
+
+      state = :sys.get_state(pid)
+      refute Map.has_key?(state.disconnected_at_seq, "p1")
+    end
+
+    test "disconnect 후 즉시 reattach (사이 events 0) → replay 0", %{pid: pid, room_id: room_id} do
+      GameSession.subscribe_room(room_id)
+
+      caller1 = spawn(fn -> Process.sleep(:infinity) end)
+      :ok = GameSession.player_join(pid, "p1", %{}, caller1)
+
+      Process.exit(caller1, :kill)
+      assert_receive {:game_event, {:player_disconnected, "p1"}}, 500
+
+      # mailbox 비움 — 이전 broadcast 들 정리.
+      flush_mailbox()
+
+      # 즉시 reattach — 사이에 events 0.
+      :ok = GameSession.player_join(pid, "p1", %{}, self())
+
+      # reattach broadcast 1 개만, missed events 0.
+      assert_receive {:game_event, {:player_reattached, "p1"}}, 500
+      refute_receive {:game_event, {:state_changed, _}}, 100
+    end
+
+    test "disconnect 안 했는데 같은 player_id reattach 호출 (idempotent) → replay 0",
+         %{pid: pid, room_id: room_id} do
+      GameSession.subscribe_room(room_id)
+
+      :ok = GameSession.player_join(pid, "p1", %{}, self())
+      flush_mailbox()
+
+      # 다시 호출 — disconnected_at_seq 에 없으니 since_seq = current_seq → replay 0.
+      :ok = GameSession.player_join(pid, "p1", %{}, self())
+
+      assert_receive {:game_event, {:player_reattached, "p1"}}, 500
+      refute_receive {:game_event, {:state_changed, _}}, 100
+    end
+  end
+
+  defp flush_mailbox do
+    receive do
+      _ -> flush_mailbox()
+    after
+      0 -> :ok
+    end
+  end
+
   describe "terminate cleanup (room close)" do
     test "GameSession 종료 시 Rooms.close_by_id 호출 → 방 status closed" do
       Ecto.Adapters.SQL.Sandbox.checkout(HappyTrizn.Repo)

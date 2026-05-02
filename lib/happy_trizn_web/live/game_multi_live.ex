@@ -73,6 +73,7 @@ defmodule HappyTriznWeb.GameMultiLive do
                  |> assign(:result, nil)
                  |> assign(:joined, false)
                  |> assign(:game_messages, [])
+                 |> assign(:disconnecting_players, MapSet.new())
                  |> assign(:page_title, meta.name)}
               end
 
@@ -121,6 +122,7 @@ defmodule HappyTriznWeb.GameMultiLive do
               |> assign(:result, nil)
               |> assign(:joined, true)
               |> assign(:game_messages, [])
+              |> assign(:disconnecting_players, MapSet.new())
               |> assign(:page_title, meta.name)
 
             # Skribbl 늦게 join 한 사람 — 현재까지 strokes 다시 그려야.
@@ -525,8 +527,29 @@ defmodule HappyTriznWeb.GameMultiLive do
     {:noreply, refresh_state(socket)}
   end
 
-  def handle_info({:game_event, {:player_left, _}}, socket) do
-    {:noreply, refresh_state(socket)}
+  def handle_info({:game_event, {:player_left, pid}}, socket) do
+    socket =
+      socket
+      |> assign(:disconnecting_players, MapSet.delete(socket.assigns.disconnecting_players, pid))
+      |> refresh_state()
+
+    {:noreply, socket}
+  end
+
+  # Sprint 4m — 끊긴 player UI 표시. grace 안에 reattach 시 제거.
+  # GameSession 이 broadcast 함 (Sprint 4j 구현).
+  def handle_info({:game_event, {:player_disconnected, pid}}, socket) do
+    {:noreply,
+     assign(socket, :disconnecting_players, MapSet.put(socket.assigns.disconnecting_players, pid))}
+  end
+
+  def handle_info({:game_event, {:player_reattached, pid}}, socket) do
+    socket =
+      socket
+      |> assign(:disconnecting_players, MapSet.delete(socket.assigns.disconnecting_players, pid))
+      |> refresh_state()
+
+    {:noreply, socket}
   end
 
   def handle_info({:game_event, {:drawer_left, _}}, socket) do
@@ -557,6 +580,24 @@ defmodule HappyTriznWeb.GameMultiLive do
   end
 
   def handle_info(_, socket), do: {:noreply, socket}
+
+  # Sprint 4m — disconnecting_players MapSet → nickname comma 문자열.
+  # 게임마다 player struct 다름 — nickname 키 atom/string fallback. 못 찾으면 player_id
+  # 짧게 (앞 6자) 노출.
+  defp disconnecting_nicknames(game_state, mset) do
+    players = Map.get(game_state, :players, %{})
+
+    mset
+    |> MapSet.to_list()
+    |> Enum.map(fn pid ->
+      case Map.get(players, pid) do
+        %{nickname: n} when is_binary(n) -> n
+        %{"nickname" => n} when is_binary(n) -> n
+        _ -> String.slice(pid, 0, 6)
+      end
+    end)
+    |> Enum.join(", ")
+  end
 
   defp sfx_for_game_over(%{winner: w}, me) when is_binary(w) and w == me, do: "tetris"
   defp sfx_for_game_over(_, _), do: "top_out"
@@ -652,7 +693,14 @@ defmodule HappyTriznWeb.GameMultiLive do
           ⚙️ 옵션
         </button>
       </header>
-      
+
+      <!-- Sprint 4m — 끊긴 player UI 표시. grace 안에 reattach 시 사라짐. -->
+      <%= if MapSet.size(@disconnecting_players) > 0 do %>
+        <div class="alert alert-warning text-sm py-2 mb-2" role="status">
+          <span>🔴 재연결 중: <strong>{disconnecting_nicknames(@game_state, @disconnecting_players)}</strong></span>
+        </div>
+      <% end %>
+
     <!-- 공용 result panel 은 Tetris 전용 — Skribbl/Bomberman 은 자체 game_over_modal 사용 -->
       <%= if @result && @result != %{} && @slug == "tetris" do %>
         <.game_over_panel result={@result} player_id={@player_id} />

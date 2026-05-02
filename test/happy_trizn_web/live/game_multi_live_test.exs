@@ -874,4 +874,97 @@ defmodule HappyTriznWeb.GameMultiLiveTest do
       assert map_size(state.players) == 1
     end
   end
+
+  # ============================================================================
+  # Sprint 4m — UI "🔴 재연결 중" 표시 (player_disconnected / player_reattached)
+  # ============================================================================
+  describe "disconnect indicator (Sprint 4m)" do
+    setup %{conn: conn} do
+      host = user_fixture(nickname: "host_dc_#{System.unique_integer([:positive])}")
+      room = create_tetris_room(host)
+      {:ok, conn: log_in_user(conn, host), room: room}
+    end
+
+    test "초기엔 '재연결 중' alert 안 보임", %{conn: conn, room: room} do
+      {:ok, _view, html} = live(conn, ~p"/game/tetris/#{room.id}")
+      refute html =~ "재연결 중"
+    end
+
+    test "{:player_disconnected, pid} broadcast → alert 노출", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_disconnected, "ghost-player-id"}}
+      )
+
+      html = render(view)
+      assert html =~ "재연결 중"
+      # game_state.players 에 없는 id → fallback (앞 6자) 표시.
+      assert html =~ "ghost-"
+    end
+
+    test "{:player_reattached, pid} broadcast → alert 사라짐", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_disconnected, "p_dc"}}
+      )
+
+      assert render(view) =~ "재연결 중"
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_reattached, "p_dc"}}
+      )
+
+      refute render(view) =~ "재연결 중"
+    end
+
+    test "{:player_left, pid} 도 MapSet 에서 제거 (grace 만료 케이스)",
+         %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_disconnected, "p_quit"}}
+      )
+
+      assert render(view) =~ "재연결 중"
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_left, "p_quit"}}
+      )
+
+      refute render(view) =~ "재연결 중"
+    end
+
+    test "여러 player 동시 disconnect → 모두 nickname 표시", %{conn: conn, room: room} do
+      {:ok, view, _} = live(conn, ~p"/game/tetris/#{room.id}")
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_disconnected, "abc123xx"}}
+      )
+
+      Phoenix.PubSub.broadcast(
+        HappyTrizn.PubSub,
+        "game:" <> room.id,
+        {:game_event, {:player_disconnected, "def456yy"}}
+      )
+
+      html = render(view)
+      assert html =~ "재연결 중"
+      assert html =~ "abc123"
+      assert html =~ "def456"
+    end
+  end
 end
