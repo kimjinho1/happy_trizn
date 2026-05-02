@@ -91,7 +91,9 @@ defmodule HappyTrizn.Games.Skribbl do
       max_players: @max_players,
       min_players: 2,
       description: "그림 그리고 단어 맞추기 (한국어)",
-      tick_interval_ms: @tick_ms
+      tick_interval_ms: @tick_ms,
+      # 그리는 사람 끊김 시 라운드 보호 위해 길게 — 8초.
+      grace_period_ms: 8000
     }
   end
 

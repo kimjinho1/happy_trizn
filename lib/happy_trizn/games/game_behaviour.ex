@@ -66,7 +66,9 @@ defmodule HappyTrizn.Games.GameBehaviour do
               required(:mode) => :multi | :single,
               required(:max_players) => integer(),
               optional(:min_players) => integer(),
-              optional(:description) => String.t()
+              optional(:description) => String.t(),
+              optional(:tick_interval_ms) => non_neg_integer(),
+              optional(:grace_period_ms) => non_neg_integer()
             }
 
   # 옵셔널 callback 들

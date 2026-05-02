@@ -588,12 +588,16 @@ defmodule HappyTriznWeb.GameMultiLive do
 
   @impl true
   def terminate(_reason, socket) do
-    # joined: true 인 경우만 leave — HTTP 첫 mount 는 join 안 했으니 leave 도 안 함.
+    # joined: true 인 경우만 disconnect 신호 — HTTP 첫 mount 는 join 안 했음.
+    # player_leave (즉시 evict) 가 아니라 player_disconnect (grace 시작) 호출.
+    # F5/창닫음 = grace 안에 새 LiveView 가 player_join 하면 reattach.
+    # 안 돌아오면 grace 만료 후 evict. caller pid Process.monitor 도 같은 경로로
+    # DOWN → grace 진입하므로 이 호출은 빠른 fast-path 일 뿐 (race-safe).
     if socket.assigns[:joined] && socket.assigns[:session_pid] do
       pid = socket.assigns.session_pid
 
       if Process.alive?(pid) do
-        GameSession.player_leave(pid, socket.assigns.player_id, :disconnect)
+        GameSession.player_disconnect(pid, socket.assigns.player_id)
       end
     end
 

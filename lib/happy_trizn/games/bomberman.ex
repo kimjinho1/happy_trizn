@@ -61,7 +61,10 @@ defmodule HappyTrizn.Games.Bomberman do
       max_players: @max_players,
       min_players: 2,
       description: "4인 격자 폭탄",
-      tick_interval_ms: @tick_ms
+      tick_interval_ms: @tick_ms,
+      # F5/네트워크 끊김 시 5초 안에 reattach 안 하면 evict.
+      # 폭탄 옆에서 끊겨도 5초 안 돌아오면 사망 처리 (다른 player 공정성).
+      grace_period_ms: 5000
     }
   end
 
