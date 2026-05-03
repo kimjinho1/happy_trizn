@@ -49,7 +49,35 @@ defmodule HappyTrizn.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: HappyTrizn.Supervisor]
-    Supervisor.start_link(children, opts)
+    result = Supervisor.start_link(children, opts)
+
+    # Sprint 5c-2d — Trizmon seed 자동 run (idempotent). prod / dev env 만.
+    # test env 는 config/test.exs 의 trizmon_seed enabled: false 로 disable.
+    if trizmon_seed_enabled?() do
+      Task.start(fn ->
+        # Application 부팅 직후. Repo / GameRegistry 다 시작된 후.
+        Process.sleep(500)
+        try_seed()
+      end)
+    end
+
+    result
+  end
+
+  defp trizmon_seed_enabled? do
+    Application.get_env(:happy_trizn, :trizmon_seed, [])
+    |> Keyword.get(:enabled, true)
+  end
+
+  defp try_seed do
+    require Logger
+
+    try do
+      HappyTrizn.Trizmon.Seed.run!()
+    rescue
+      e ->
+        Logger.warning("[trizmon.seed] auto-run failed: #{inspect(e)}")
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

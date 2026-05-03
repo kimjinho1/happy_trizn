@@ -63,3 +63,7 @@ config :happy_trizn, :game_events, enabled: false
 # Rooms.Cleanup — test 환경에서는 자동 sweep 비활성. cleanup 테스트는
 # `start_supervised!({HappyTrizn.Rooms.Cleanup, enabled: false})` 후 sweep_now/0 호출.
 config :happy_trizn, :rooms_cleanup, enabled: false
+
+# Sprint 5c-2d — Trizmon seed 자동 run 비활성. test 가 필요하면 명시적
+# HappyTrizn.Trizmon.Seed.run!() 호출.
+config :happy_trizn, :trizmon_seed, enabled: false

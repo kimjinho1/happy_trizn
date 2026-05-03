@@ -24,7 +24,8 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
       true ->
         my_instance = Party.ensure_starter!(user)
         my_mon = Party.to_battle_mon(my_instance)
-        cpu_mon = build_cpu_mirror(my_mon)
+        # Sprint 5c-2d — CPU random species (미러 X). 사용자 level 동일.
+        cpu_mon = Party.random_cpu_mon(my_mon.level)
 
         engine = Engine.new(my_mon, cpu_mon)
 
@@ -61,7 +62,7 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
     user = socket.assigns.user
     my_instance = Party.ensure_starter!(user)
     my_mon = Party.to_battle_mon(my_instance)
-    cpu_mon = build_cpu_mirror(my_mon)
+    cpu_mon = Party.random_cpu_mon(my_mon.level)
     engine = Engine.new(my_mon, cpu_mon)
     {:noreply, assign(socket, :engine, engine)}
   end
@@ -76,11 +77,6 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
       end
 
     {:noreply, assign(socket, :difficulty, diff)}
-  end
-
-  # CPU 는 같은 종 미러 — 5c-2d 부터 다양한 종 random pick.
-  defp build_cpu_mirror(my_mon) do
-    %{my_mon | name: "야생 #{my_mon.name}", instance_id: nil}
   end
 
   @impl true

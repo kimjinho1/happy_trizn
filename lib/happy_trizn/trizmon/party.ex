@@ -177,4 +177,73 @@ defmodule HappyTrizn.Trizmon.Party do
 
     HappyTrizn.Trizmon.Battle.Mon.from_instance(instance, instance.species, moves)
   end
+
+  @doc """
+  랜덤 CPU opponent (Sprint 5c-2d) — 사용자 level 근방의 random species.
+  DB instance 저장 X (in-memory). 학습 가능한 기술 중 level 이하 4개 random pick.
+
+  return: %BattleMon{}
+  """
+  def random_cpu_mon(level) when is_integer(level) do
+    species = Repo.all(Species) |> Enum.random()
+
+    # 학습 가능한 기술 (level <= 사용자 level) 중 4개 random.
+    import Ecto.Query
+
+    move_ids =
+      Repo.all(
+        from sm in "trizmon_species_moves",
+          where:
+            sm.species_id == ^species.id and sm.learn_method == "level" and
+              (is_nil(sm.learn_level) or sm.learn_level <= ^level),
+          select: sm.move_id
+      )
+
+    moves =
+      cond do
+        move_ids == [] ->
+          # 학습 가능 기술 없으면 fallback — 몸통박치기.
+          case Repo.get_by(Move, slug: "tackle-001") do
+            nil -> []
+            m -> [m]
+          end
+
+        true ->
+          Repo.all(from m in Move, where: m.id in ^move_ids)
+          |> Enum.shuffle()
+          |> Enum.take(4)
+      end
+
+    ivs = Stats.random_ivs()
+
+    cpu_instance =
+      Map.merge(ivs, %{
+        id: nil,
+        nickname: "야생 #{species.name_ko}",
+        level: level,
+        ev_hp: 0,
+        ev_atk: 0,
+        ev_def: 0,
+        ev_spa: 0,
+        ev_spd: 0,
+        ev_spe: 0,
+        nature: HappyTrizn.Trizmon.Nature.random() |> Atom.to_string(),
+        current_hp: nil,
+        status: nil,
+        status_turns: 0,
+        move1_pp: pp_for(moves, 0),
+        move2_pp: pp_for(moves, 1),
+        move3_pp: pp_for(moves, 2),
+        move4_pp: pp_for(moves, 3)
+      })
+
+    HappyTrizn.Trizmon.Battle.Mon.from_instance(cpu_instance, species, moves)
+  end
+
+  defp pp_for(moves, idx) do
+    case Enum.at(moves, idx) do
+      nil -> 0
+      m -> m.pp
+    end
+  end
 end
