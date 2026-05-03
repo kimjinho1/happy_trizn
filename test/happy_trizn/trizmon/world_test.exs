@@ -100,6 +100,42 @@ defmodule HappyTrizn.Trizmon.WorldTest do
     end
   end
 
+  describe "NPC (Sprint 5c-3c)" do
+    test "npc_at — 정확한 좌표" do
+      assert %{id: "town_elder", type: :greeter} = World.npc_at("starting_town", 6, 7)
+      assert %{id: "first_trainer", type: :trainer} = World.npc_at("starting_town", 11, 7)
+    end
+
+    test "npc_at — NPC 없는 좌표 → nil" do
+      assert World.npc_at("starting_town", 0, 0) == nil
+      assert World.npc_at("ghost_map", 6, 7) == nil
+    end
+
+    test "npc_by_id — id 로 lookup" do
+      assert %{name: "마을 어른"} = World.npc_by_id("town_elder")
+      assert %{name: "트레이너 민수"} = World.npc_by_id("first_trainer")
+      assert World.npc_by_id("nonexistent") == nil
+    end
+
+    test "adjacent_npc — 4 방향 검사 (town_elder at (6,7))" do
+      assert {6, 7, %{id: "town_elder"}} = World.adjacent_npc("starting_town", 5, 7)
+      assert {6, 7, %{id: "town_elder"}} = World.adjacent_npc("starting_town", 7, 7)
+      assert {6, 7, %{id: "town_elder"}} = World.adjacent_npc("starting_town", 6, 6)
+      assert {6, 7, %{id: "town_elder"}} = World.adjacent_npc("starting_town", 6, 8)
+    end
+
+    test "adjacent_npc — 멀리 → nil" do
+      assert World.adjacent_npc("starting_town", 0, 0) == nil
+    end
+
+    test "트레이너 party 정의됨" do
+      trainer = World.npc_by_id("first_trainer")
+      assert is_list(trainer.party)
+      assert length(trainer.party) >= 1
+      assert is_binary(hd(trainer.party))
+    end
+  end
+
   describe "render_payload/1" do
     test "tile atom → string list 변환" do
       map = World.get_map("starting_town")

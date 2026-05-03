@@ -34,7 +34,20 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
          |> assign(:map, map)
          |> assign(:player_dir, "down")
          |> assign(:last_msg, nil)
+         |> assign(:dialog_npc, nil)
+         |> assign_adjacent_npc()
          |> assign(:page_title, "Trizmon — 모험: #{map.name}")}
+    end
+  end
+
+  defp assign_adjacent_npc(socket) do
+    case World.adjacent_npc(
+           socket.assigns.save.current_map,
+           socket.assigns.save.player_x,
+           socket.assigns.save.player_y
+         ) do
+      nil -> assign(socket, :nearby_npc, nil)
+      {x, y, npc} -> assign(socket, :nearby_npc, %{x: x, y: y, npc: npc})
     end
   end
 
@@ -55,7 +68,8 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
              socket
              |> assign(:save, new_save)
              |> assign(:player_dir, Atom.to_string(dir))
-             |> assign(:last_msg, nil)}
+             |> assign(:last_msg, nil)
+             |> assign_adjacent_npc()}
 
           species_slug ->
             {:noreply,
@@ -70,7 +84,8 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
         {:noreply,
          socket
          |> assign(:player_dir, Atom.to_string(dir))
-         |> assign(:last_msg, "막혔다.")}
+         |> assign(:last_msg, "막혔다.")
+         |> assign_adjacent_npc()}
     end
   end
 
@@ -78,6 +93,30 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
     case key_to_dir(key) do
       nil -> {:noreply, socket}
       dir -> handle_event("move", %{"dir" => dir}, socket)
+    end
+  end
+
+  def handle_event("talk", _, socket) do
+    case socket.assigns[:nearby_npc] do
+      nil -> {:noreply, socket}
+      %{npc: npc} -> {:noreply, assign(socket, :dialog_npc, npc)}
+    end
+  end
+
+  def handle_event("close_dialog", _, socket) do
+    {:noreply, assign(socket, :dialog_npc, nil)}
+  end
+
+  def handle_event("fight_trainer", _, socket) do
+    case socket.assigns[:dialog_npc] do
+      %{type: :trainer, id: id} ->
+        {:noreply,
+         socket
+         |> assign(:dialog_npc, nil)
+         |> redirect(to: ~p"/trizmon/battle?trainer=#{id}")}
+
+      _ ->
+        {:noreply, socket}
     end
   end
 
@@ -90,7 +129,9 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
      |> assign(:save, save)
      |> assign(:map, map)
      |> assign(:player_dir, "down")
-     |> assign(:last_msg, "리셋 완료.")}
+     |> assign(:last_msg, "리셋 완료.")
+     |> assign(:dialog_npc, nil)
+     |> assign_adjacent_npc()}
   end
 
   defp parse_dir("up"), do: :up
@@ -143,6 +184,36 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
 
       <%= if @last_msg do %>
         <div class="alert alert-info text-sm py-2 mb-2">{@last_msg}</div>
+      <% end %>
+
+      <%= if @nearby_npc do %>
+        <div class="alert alert-warning text-sm py-2 mb-2 flex items-center justify-between">
+          <span>📢 근처 NPC: <strong>{@nearby_npc.npc.name}</strong></span>
+          <button phx-click="talk" class="btn btn-sm btn-primary">💬 말 걸기</button>
+        </div>
+      <% end %>
+
+      <%= if @dialog_npc do %>
+        <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/50" phx-click-away="close_dialog">
+          <div class="bg-base-100 rounded-lg shadow-xl max-w-md w-full p-6 m-3" phx-click-away="close_dialog">
+            <header class="flex items-center justify-between mb-3">
+              <h2 class="text-xl font-bold">{@dialog_npc.name}</h2>
+              <button phx-click="close_dialog" class="btn btn-sm btn-ghost">✕</button>
+            </header>
+            <p class="text-sm mb-4">
+              <%= case @dialog_npc.type do %>
+                <% :greeter -> %>{@dialog_npc.dialog}
+                <% :trainer -> %>{@dialog_npc.greeting}
+              <% end %>
+            </p>
+            <div class="flex gap-2 justify-end">
+              <%= if @dialog_npc.type == :trainer do %>
+                <button phx-click="fight_trainer" class="btn btn-sm btn-primary">⚔️ 도전!</button>
+              <% end %>
+              <button phx-click="close_dialog" class="btn btn-sm btn-ghost">닫기</button>
+            </div>
+          </div>
+        </div>
       <% end %>
 
       <!-- canvas + payload -->

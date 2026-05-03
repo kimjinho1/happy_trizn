@@ -16,7 +16,30 @@ defmodule HappyTrizn.Trizmon.World do
 
   Map = %{id, name, width, height, tiles: [[atom, ...]], spawn: {x, y},
           encounter_pool: [species_slug, ...]}.
+
+  NPC: (map_id, {x, y}) → spec.
+    type: :greeter | :trainer
+    greeter: dialog
+    trainer: greeting + party (species_slug list) + win_text + lose_text
   """
+
+  @npcs %{
+    {"starting_town", {6, 7}} => %{
+      id: "town_elder",
+      name: "마을 어른",
+      type: :greeter,
+      dialog: "어서 와! 시작 마을이야. 풀숲을 조심해 — 야생 트리즈몬이 자주 나와."
+    },
+    {"starting_town", {11, 7}} => %{
+      id: "first_trainer",
+      name: "트레이너 민수",
+      type: :trainer,
+      greeting: "어이! 너 트리즈몬 트레이너 같은데 한 판 어때?",
+      party: ["normalmon-001", "voltmon-001"],
+      win_text: "너 강하네! 다음에 또 보자.",
+      lose_text: "이런... 좀 더 수련해야겠어."
+    }
+  }
 
   @maps %{
     "starting_town" => %{
@@ -119,6 +142,37 @@ defmodule HappyTrizn.Trizmon.World do
       true -> Enum.random(pool)
     end
   end
+
+  @doc "특정 (map_id, x, y) 의 NPC. 없으면 nil."
+  def npc_at(map_id, x, y) when is_binary(map_id) do
+    Map.get(@npcs, {map_id, {x, y}})
+  end
+
+  def npc_at(_, _, _), do: nil
+
+  @doc "id → npc spec (트레이너 battle 진입 시 lookup)."
+  def npc_by_id(id) when is_binary(id) do
+    @npcs
+    |> Map.values()
+    |> Enum.find(fn npc -> npc.id == id end)
+  end
+
+  def npc_by_id(_), do: nil
+
+  @doc """
+  플레이어 인접 4 방향 NPC 찾기. {x, y, npc} 또는 nil.
+  """
+  def adjacent_npc(map_id, x, y) when is_binary(map_id) do
+    [{x, y - 1}, {x, y + 1}, {x - 1, y}, {x + 1, y}]
+    |> Enum.find_value(fn {nx, ny} ->
+      case npc_at(map_id, nx, ny) do
+        nil -> nil
+        npc -> {nx, ny, npc}
+      end
+    end)
+  end
+
+  def adjacent_npc(_, _, _), do: nil
 
   @doc """
   client 전송용 payload — tiles + spawn + encounter_pool 등.

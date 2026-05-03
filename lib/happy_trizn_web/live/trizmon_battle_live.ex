@@ -17,35 +17,53 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
   def mount(params, _session, socket) do
     user = socket.assigns[:current_user]
     wild_slug = Map.get(params, "wild")
-    format = if wild_slug, do: :"1v1", else: parse_format(Map.get(params, "format"))
+    trainer_id = Map.get(params, "trainer")
+    trainer = if trainer_id, do: HappyTrizn.Trizmon.World.npc_by_id(trainer_id), else: nil
+
+    format =
+      cond do
+        wild_slug -> :"1v1"
+        trainer -> length(trainer.party) |> trainer_format()
+        true -> parse_format(Map.get(params, "format"))
+      end
 
     cond do
       is_nil(user) ->
         {:ok, socket |> put_flash(:error, "Trizmon 은 로그인 사용자만. @trizn.kr 가입 필요.") |> redirect(to: ~p"/lobby")}
 
+      trainer_id && is_nil(trainer) ->
+        {:ok, socket |> put_flash(:error, "트레이너 없음.") |> redirect(to: ~p"/trizmon/adventure")}
+
       true ->
         engine =
-          if wild_slug do
-            build_wild_engine(user, wild_slug)
-          else
-            build_engine(user, format)
+          cond do
+            wild_slug -> build_wild_engine(user, wild_slug)
+            trainer -> build_trainer_engine(user, trainer, format)
+            true -> build_engine(user, format)
           end
 
         title =
-          if wild_slug,
-            do: "Trizmon — 야생 배틀!",
-            else: "Trizmon — #{format_label(format)} 배틀"
+          cond do
+            wild_slug -> "Trizmon — 야생 배틀!"
+            trainer -> "Trizmon — #{trainer.name}"
+            true -> "Trizmon — #{format_label(format)} 배틀"
+          end
 
         {:ok,
          socket
          |> assign(:user, user)
          |> assign(:format, format)
          |> assign(:wild_slug, wild_slug)
+         |> assign(:trainer, trainer)
          |> assign(:engine, engine)
          |> assign(:difficulty, :easy)
          |> assign(:page_title, title)}
     end
   end
+
+  defp trainer_format(n) when n <= 1, do: :"1v1"
+  defp trainer_format(n) when n <= 3, do: :"3v3"
+  defp trainer_format(_), do: :"6v6"
 
   defp parse_format("3v3"), do: :"3v3"
   defp parse_format("6v6"), do: :"6v6"
@@ -76,6 +94,21 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
     Engine.new_team(my_team, [cpu], :"1v1")
   end
 
+  # Sprint 5c-3c — 트레이너 배틀. 트레이너 party 의 species_slug 들 을 사용자 첫
+  # 마리 level 로 in-memory CPU mons 생성.
+  defp build_trainer_engine(user, trainer, format) do
+    size = format_size(format)
+    my_team = Party.battle_team(user, size)
+    my_first = hd(my_team)
+
+    cpu_team =
+      Enum.map(trainer.party, fn slug ->
+        Party.cpu_mon_for_species(slug, my_first.level)
+      end)
+
+    Engine.new_team(my_team, cpu_team, format)
+  end
+
   @impl true
   def handle_event("use_move", %{"idx" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
@@ -98,10 +131,15 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
 
   def handle_event("restart", _, socket) do
     engine =
-      if socket.assigns.wild_slug do
-        build_wild_engine(socket.assigns.user, socket.assigns.wild_slug)
-      else
-        build_engine(socket.assigns.user, socket.assigns.format)
+      cond do
+        socket.assigns.wild_slug ->
+          build_wild_engine(socket.assigns.user, socket.assigns.wild_slug)
+
+        socket.assigns.trainer ->
+          build_trainer_engine(socket.assigns.user, socket.assigns.trainer, socket.assigns.format)
+
+        true ->
+          build_engine(socket.assigns.user, socket.assigns.format)
       end
 
     {:noreply, assign(socket, :engine, engine)}
@@ -142,24 +180,24 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
       <Layouts.flash_group flash={@flash} />
       <header class="mb-4">
         <h1 class="text-2xl font-bold">
-          <%= if @wild_slug do %>
-            🌿 야생 배틀!
-          <% else %>
-            🐉 Trizmon — {format_label(@format)} 배틀
+          <%= cond do %>
+            <% @wild_slug -> %>🌿 야생 배틀!
+            <% @trainer -> %>⚔️ {@trainer.name} 의 도전
+            <% true -> %>🐉 Trizmon — {format_label(@format)} 배틀
           <% end %>
         </h1>
         <p class="text-xs text-base-content/60">
-          <%= if @wild_slug do %>
-            모험 모드 풀숲에서 야생 트리즈몬과 마주쳤다. (잡기 = 5c-3d, 현재 전투/도망)
-          <% else %>
-            파티 부족분은 random in-memory fill (5c-3 모험 모드 후 야생 잡기로 대체).
+          <%= cond do %>
+            <% @wild_slug -> %>모험 모드 풀숲에서 야생 트리즈몬과 마주쳤다. (잡기 = 5c-3d)
+            <% @trainer -> %>{@trainer.greeting}
+            <% true -> %>파티 부족분은 random in-memory fill.
           <% end %>
         </p>
       </header>
 
-      <!-- format + 난이도 picker — 야생 배틀 시 format 숨김 -->
+      <!-- format + 난이도 picker — wild / trainer 시 format 숨김 (강제) -->
       <section class="mb-3 flex flex-wrap gap-3">
-        <%= if !@wild_slug do %>
+        <%= if !@wild_slug && !@trainer do %>
           <div class="join">
             <%= for {f, label} <- [{"3v3", "3v3"}, {"6v6", "6v6"}] do %>
               <button
@@ -225,16 +263,25 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
       <!-- 종료 / 진행 -->
       <%= if @engine.status == :ended do %>
         <div class={"alert mb-3 " <> winner_alert_class(@engine.winner)}>
-          <span>
+          <div>
             <%= case @engine.winner do %>
               <% :a -> %>🎉 승리!
               <% :b -> %>💀 패배!
               <% _ -> %>무승부
             <% end %>
-          </span>
+            <%= if @trainer do %>
+              <p class="text-sm mt-1">
+                <%= if @engine.winner == :a do %>
+                  <em>"{@trainer.win_text}"</em>
+                <% else %>
+                  <em>"{@trainer.lose_text}"</em>
+                <% end %>
+              </p>
+            <% end %>
+          </div>
           <div class="flex gap-2">
             <button phx-click="restart" class="btn btn-sm btn-primary">다시 도전</button>
-            <%= if @wild_slug do %>
+            <%= if @wild_slug || @trainer do %>
               <.link navigate={~p"/trizmon/adventure"} class="btn btn-sm">
                 🗺️ 모험 복귀
               </.link>
