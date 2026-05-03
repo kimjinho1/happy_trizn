@@ -71,12 +71,15 @@ defmodule HappyTriznWeb.TrizmonEntryLive do
             </div>
           </.link>
 
-          <div class="card bg-base-300 shadow opacity-60">
+          <.link
+            navigate={~p"/trizmon/adventure"}
+            class="card bg-secondary text-secondary-content shadow hover:scale-[1.02] transition"
+          >
             <div class="card-body p-4">
               <h3 class="font-bold text-lg">🗺️ 모험 모드</h3>
-              <p class="text-xs">Sprint 5c-3 — region 1 + 야생 인카운터</p>
+              <p class="text-xs opacity-90">시작 마을 + 이동. 인카운터 = 5c-3b</p>
             </div>
-          </div>
+          </.link>
 
           <div class="card bg-base-300 shadow opacity-60">
             <div class="card-body p-4">

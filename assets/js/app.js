@@ -34,6 +34,7 @@ import {SnakeCanvas} from "./hooks/snake_canvas"
 import {GameKeyCapture} from "./hooks/game_key_capture"
 import {PacmanCanvas} from "./hooks/pacman_canvas"
 import {MinesweeperCell} from "./hooks/minesweeper_cell"
+import {TrizmonAdventureCanvas} from "./hooks/trizmon_adventure_canvas"
 // DM 알림 — side-effect: window phx:dm:notify listener 등록.
 import "./dm_notify"
 
@@ -98,6 +99,8 @@ const Hooks = {
   PacmanCanvas,
   // 지뢰찾기 셀 — 우클릭 contextmenu → flag pushEvent.
   MinesweeperCell,
+  // Trizmon 모험 모드 — tile-based 2D canvas.
+  TrizmonAdventureCanvas,
 
   // 게임 페이지 안 에서 top-nav ⚙️ 옵션 클릭 시 modal 열기.
   // root.html.heex 의 옵션 버튼이 'phx:open-settings' window 이벤트 dispatch →

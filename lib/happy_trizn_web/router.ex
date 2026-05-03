@@ -66,9 +66,11 @@ defmodule HappyTriznWeb.Router do
       # Sprint 5b — 본인 플레이 시간 통계 (login user 전용).
       live "/me/playtime", PlayTimeLive
 
-      # Sprint 5c-2c — Trizmon entry + 1v1 PvE 배틀 (smoke). 도감/모험/PvP 후속.
+      # Sprint 5c-2c — Trizmon entry + 1v1 PvE 배틀 (smoke). 도감/PvP 후속.
       live "/trizmon", TrizmonEntryLive
       live "/trizmon/battle", TrizmonBattleLive
+      # Sprint 5c-3 — 모험 모드 (canvas tile map + 이동)
+      live "/trizmon/adventure", TrizmonAdventureLive
 
       # DM (Direct Messages) — 친구 사이 1:1 채팅.
       live "/dm", DmLive
