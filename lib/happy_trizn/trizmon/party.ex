@@ -179,6 +179,17 @@ defmodule HappyTrizn.Trizmon.Party do
   end
 
   @doc """
+  특정 species_slug 의 in-memory CPU mon (Sprint 5c-3b — 야생 인카운터 / 트레이너 배틀).
+  지정 species 가 없으면 random fallback.
+  """
+  def cpu_mon_for_species(slug, level) when is_binary(slug) and is_integer(level) do
+    case Repo.get_by(Species, slug: slug) do
+      nil -> random_cpu_mon(level)
+      species -> build_cpu_from_species(species, level)
+    end
+  end
+
+  @doc """
   랜덤 CPU opponent (Sprint 5c-2d) — 사용자 level 근방의 random species.
   DB instance 저장 X (in-memory). 학습 가능한 기술 중 level 이하 4개 random pick.
 
@@ -186,8 +197,12 @@ defmodule HappyTrizn.Trizmon.Party do
   """
   def random_cpu_mon(level) when is_integer(level) do
     species = Repo.all(Species) |> Enum.random()
+    build_cpu_from_species(species, level)
+  end
 
-    # 학습 가능한 기술 (level <= 사용자 level) 중 4개 random.
+  # species + level → in-memory BattleMon (지정 / random pick 공용).
+  defp build_cpu_from_species(species, level) do
+    # 학습 가능한 기술 (level <= 지정 level) 중 4개 random.
     import Ecto.Query
 
     move_ids =

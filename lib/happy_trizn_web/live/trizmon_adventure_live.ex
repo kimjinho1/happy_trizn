@@ -48,11 +48,23 @@ defmodule HappyTriznWeb.TrizmonAdventureLive do
       {:ok, nx, ny} ->
         new_save = Saves.update_position!(save, nx, ny)
 
-        {:noreply,
-         socket
-         |> assign(:save, new_save)
-         |> assign(:player_dir, Atom.to_string(dir))
-         |> assign(:last_msg, nil)}
+        # Sprint 5c-3b — 야생 인카운터 roll. tall_grass + 8% 확률.
+        case World.roll_encounter(map, nx, ny) do
+          nil ->
+            {:noreply,
+             socket
+             |> assign(:save, new_save)
+             |> assign(:player_dir, Atom.to_string(dir))
+             |> assign(:last_msg, nil)}
+
+          species_slug ->
+            {:noreply,
+             socket
+             |> assign(:save, new_save)
+             |> assign(:player_dir, Atom.to_string(dir))
+             |> put_flash(:info, "야생 트리즈몬이 나타났다!")
+             |> redirect(to: ~p"/trizmon/battle?wild=#{species_slug}")}
+        end
 
       :blocked ->
         {:noreply,
