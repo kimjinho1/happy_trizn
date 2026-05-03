@@ -88,12 +88,15 @@ defmodule HappyTriznWeb.TrizmonEntryLive do
             </div>
           </div>
 
-          <div class="card bg-base-300 shadow opacity-60">
+          <.link
+            navigate={~p"/trizmon/pokedex"}
+            class="card bg-accent text-accent-content shadow hover:scale-[1.02] transition"
+          >
             <div class="card-body p-4">
               <h3 class="font-bold text-lg">📖 도감</h3>
-              <p class="text-xs">Sprint 5c-6 — 본/잡은 종 표시</p>
+              <p class="text-xs opacity-90">본/잡은 종 list</p>
             </div>
-          </div>
+          </.link>
         </div>
       </section>
 

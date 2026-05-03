@@ -71,6 +71,8 @@ defmodule HappyTriznWeb.Router do
       live "/trizmon/battle", TrizmonBattleLive
       # Sprint 5c-3 — 모험 모드 (canvas tile map + 이동)
       live "/trizmon/adventure", TrizmonAdventureLive
+      # Sprint 5c-3d — 도감 (본/잡은 종)
+      live "/trizmon/pokedex", TrizmonPokedexLive
 
       # DM (Direct Messages) — 친구 사이 1:1 채팅.
       live "/dm", DmLive

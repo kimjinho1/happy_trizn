@@ -10,8 +10,8 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
 
   use HappyTriznWeb, :live_view
 
+  alias HappyTrizn.Trizmon.{Catch, Party, Pokedex}
   alias HappyTrizn.Trizmon.Battle.Engine
-  alias HappyTrizn.Trizmon.Party
 
   @impl true
   def mount(params, _session, socket) do
@@ -86,11 +86,12 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
     Engine.new_team(my_team, cpu_team, format)
   end
 
-  # Sprint 5c-3b — 야생 인카운터 1v1 배틀.
+  # Sprint 5c-3b — 야생 인카운터 1v1 배틀. 5c-3d — pokedex seen 자동.
   defp build_wild_engine(user, species_slug) do
     my_team = Party.battle_team(user, 1)
     my_first = hd(my_team)
     cpu = Party.cpu_mon_for_species(species_slug, my_first.level)
+    if cpu.species_id, do: Pokedex.mark_seen!(user.id, cpu.species_id)
     Engine.new_team(my_team, [cpu], :"1v1")
   end
 
@@ -148,6 +149,34 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
   def handle_event("flee", _, socket) do
     # 야생 도망 — adventure 로 복귀.
     {:noreply, redirect(socket, to: ~p"/trizmon/adventure")}
+  end
+
+  def handle_event("throw_ball", _, socket) do
+    if socket.assigns.wild_slug && socket.assigns.engine.status != :ended do
+      wild_mon = socket.assigns.engine.b
+
+      case Catch.attempt(socket.assigns.user, wild_mon) do
+        {:caught, instance, slot} ->
+          slot_msg = if slot, do: "파티 슬롯 #{slot}", else: "보관함"
+
+          {:noreply,
+           socket
+           |> put_flash(:info, "잡았다! #{wild_mon.name} → #{slot_msg}")
+           |> redirect(to: ~p"/trizmon/adventure")}
+
+        :missed ->
+          # 야생 mon turn 진행 (사용자 행동 = 잡기 시도, CPU 행동 = AI 공격).
+          # 단순화 — engine submit 안 하고 log 에 추가.
+          new_log = socket.assigns.engine.log ++ ["몬스터볼! 빗나갔다."]
+          new_engine = %{socket.assigns.engine | log: new_log}
+          {:noreply, assign(socket, :engine, new_engine)}
+
+        :already_fainted ->
+          {:noreply, put_flash(socket, :error, "쓰러진 야생 트리즈몬은 잡을 수 없다.")}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("set_format", %{"format" => f}, socket) do
@@ -226,9 +255,17 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
         <%= if @wild_slug do %>
           <button
             type="button"
+            phx-click="throw_ball"
+            class="btn btn-xs btn-warning ml-auto"
+            disabled={@engine.status == :ended}
+          >
+            🔴 잡기
+          </button>
+          <button
+            type="button"
             phx-click="flee"
             data-confirm="도망친다 (배틀 종료, 모험 복귀)"
-            class="btn btn-xs btn-ghost ml-auto"
+            class="btn btn-xs btn-ghost"
           >
             🏃 도망
           </button>
