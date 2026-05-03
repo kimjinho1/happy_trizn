@@ -246,4 +246,35 @@ defmodule HappyTrizn.Trizmon.Party do
       m -> m.pp
     end
   end
+
+  @doc """
+  Random team — count 마리 (3 또는 6). 각 마리 = random_cpu_mon (in-memory).
+  """
+  def random_team(count, level) when count in 1..6 do
+    Enum.map(1..count, fn _ -> random_cpu_mon(level) end)
+  end
+
+  @doc """
+  사용자 BattleMon party — DB instance 부족하면 random in-memory 로 채워서 size 마리.
+  현재 모험 모드 미구현 (5c-3) → starter 1마리 + 부족분 random fill (smoke).
+  본격: 5c-3 야생 잡기 / 5c-7 trade 로 instance 채워질 때까지.
+  """
+  def battle_team(user, size) when size in 1..6 do
+    instances = list_party(user.id)
+
+    user_mons =
+      cond do
+        instances == [] ->
+          [to_battle_mon(ensure_starter!(user))]
+
+        true ->
+          Enum.map(instances, &to_battle_mon/1)
+      end
+
+    fill_count = max(size - length(user_mons), 0)
+    base_level = (List.first(user_mons) || %{level: 5}).level
+    random_fill = Enum.map(1..fill_count//1, fn _ -> random_cpu_mon(base_level) end)
+
+    user_mons ++ random_fill
+  end
 end

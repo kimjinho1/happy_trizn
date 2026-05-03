@@ -238,6 +238,70 @@ defmodule HappyTrizn.Trizmon.Battle.EngineTest do
     end
   end
 
+  # ============================================================================
+  # Sprint 5c-2b — Team battle (3v3 / 6v6)
+  # ============================================================================
+  describe "Engine.new_team/3 + KO 자동 교체" do
+    test "team_a/b 초기 active = 첫 마리" do
+      team_a = [mk_mon(species: [name_ko: "A1"]), mk_mon(species: [name_ko: "A2"])]
+      team_b = [mk_mon(species: [name_ko: "B1"]), mk_mon(species: [name_ko: "B2"])]
+
+      state = Engine.new_team(team_a, team_b, :"3v3")
+
+      assert state.format == :"3v3"
+      assert state.a.name == "A1"
+      assert state.b.name == "B1"
+      assert state.active_a == 0
+      assert state.active_b == 0
+      assert length(state.team_a) == 2
+    end
+
+    test "active KO → 다음 살아있는 mon 자동 교체" do
+      strong = mk_mon(species: [name_ko: "Hammer", base_atk: 200])
+      weak1 = mk_mon(species: [name_ko: "B1"], instance: [current_hp: 1])
+      weak2 = mk_mon(species: [name_ko: "B2"])
+
+      state = Engine.new_team([strong], [weak1, weak2], :"3v3")
+      action = {:move, 0, %{priority: 0}}
+
+      state =
+        state
+        |> Engine.submit_action(:a, action)
+        |> Engine.submit_action(:b, action)
+
+      # B1 KO + B2 자동 교체.
+      assert state.b.name == "B2"
+      assert state.active_b == 1
+      assert state.status == :await_actions
+    end
+
+    test "team 전멸 → ended + winner 결정" do
+      strong = mk_mon(species: [name_ko: "Killer", base_atk: 999])
+      victim = mk_mon(species: [name_ko: "Victim"], instance: [current_hp: 1])
+
+      state = Engine.new_team([strong], [victim], :"3v3")
+      action = {:move, 0, %{priority: 0}}
+
+      state =
+        state
+        |> Engine.submit_action(:a, action)
+        |> Engine.submit_action(:b, action)
+
+      assert state.status == :ended
+      assert state.winner == :a
+    end
+
+    test "1v1 호환 (new/2 → 1마리 team)" do
+      a = mk_mon(species: [name_ko: "Solo A"])
+      b = mk_mon(species: [name_ko: "Solo B"])
+      state = Engine.new(a, b)
+
+      assert state.format == :"1v1"
+      assert length(state.team_a) == 1
+      assert length(state.team_b) == 1
+    end
+  end
+
   describe "Engine.submit_player_and_resolve/3 — CPU AI 자동" do
     test "CPU 가 random move 선택" do
       a = mk_mon(species: [name_ko: "Player"])

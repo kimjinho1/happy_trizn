@@ -22,15 +22,32 @@ defmodule HappyTrizn.Trizmon.Battle.Engine do
 
   alias HappyTrizn.Trizmon.Battle.{AI, Damage, Mon, Status, Turn}
 
-  @doc "초기 state."
+  @doc "1v1 초기 state (single mon vs single mon)."
   def new(mon_a, mon_b) do
+    new_team([mon_a], [mon_b], :"1v1")
+  end
+
+  @doc """
+  Team 배틀 초기 state. team_a/b = [%Mon{}, ...]. format = :"3v3" | :"6v6" | :"1v1".
+  active_a/b = 0 (team 의 첫 마리). KO 시 next 자동.
+  """
+  def new_team(team_a, team_b, format \\ :"6v6")
+      when is_list(team_a) and is_list(team_b) and team_a != [] and team_b != [] do
+    a = hd(team_a)
+    b = hd(team_b)
+
     %{
-      a: mon_a,
-      b: mon_b,
+      a: a,
+      b: b,
+      team_a: team_a,
+      team_b: team_b,
+      active_a: 0,
+      active_b: 0,
+      format: format,
       turn_no: 1,
       pending_a: nil,
       pending_b: nil,
-      log: ["#{mon_a.name} vs #{mon_b.name} — 배틀 시작!"],
+      log: ["#{a.name} vs #{b.name} — 배틀 시작!"],
       status: :await_actions,
       winner: nil
     }
@@ -78,78 +95,106 @@ defmodule HappyTrizn.Trizmon.Battle.Engine do
         execute_action(st, side, l)
       end)
 
-    # 양쪽 KO 체크 — 종료 검사.
+    # active mon 의 변경사항을 team 에 flush (현재 active idx 자리 update).
+    state = flush_active_to_team(state)
+
+    # 둘 다 행동 후 status end-of-turn 처리 — 살아있는 active 만.
+    {state, log} =
+      cond do
+        state.a.fainted? or state.b.fainted? ->
+          {state, log}
+
+        true ->
+          {a, log_a} = Status.end_of_turn(state.a)
+          {b, log_b} = Status.end_of_turn(state.b)
+          new_state = %{state | a: a, b: b}
+          new_state = flush_active_to_team(new_state)
+          {new_state, log ++ log_a ++ log_b}
+      end
+
+    # KO 처리 + 자동 교체 + 종료 검사.
+    {state, log} = handle_faints(state, log)
+
+    %{
+      state
+      | turn_no: state.turn_no + 1,
+        pending_a: nil,
+        pending_b: nil,
+        log: log
+    }
+  end
+
+  # KO 시: 같은 side 의 next 살아있는 mon 자동 교체. 모두 fainted 면 종료.
+  defp handle_faints(state, log) do
+    {state, log} = swap_if_fainted(state, :a, log)
+    {state, log} = swap_if_fainted(state, :b, log)
+
     cond do
-      state.a.fainted? and state.b.fainted? ->
-        # 동시 KO — draw (선공이 이긴 것 으로 정책 — 5c-late 결정)
-        %{
-          state
-          | status: :ended,
-            winner: nil,
-            log: log ++ ["둘 다 쓰러졌다! 무승부"],
-            pending_a: nil,
-            pending_b: nil
-        }
+      team_all_fainted?(state.team_a) and team_all_fainted?(state.team_b) ->
+        {%{state | status: :ended, winner: nil}, log ++ ["양쪽 다 전멸! 무승부"]}
 
-      state.a.fainted? ->
-        %{
-          state
-          | status: :ended,
-            winner: :b,
-            log: log ++ ["#{state.a.name} 쓰러졌다! 패배"],
-            pending_a: nil,
-            pending_b: nil
-        }
+      team_all_fainted?(state.team_a) ->
+        {%{state | status: :ended, winner: :b}, log ++ ["나의 팀 전멸 — 패배"]}
 
-      state.b.fainted? ->
-        %{
-          state
-          | status: :ended,
-            winner: :a,
-            log: log ++ ["#{state.b.name} 쓰러졌다! 승리"],
-            pending_a: nil,
-            pending_b: nil
-        }
+      team_all_fainted?(state.team_b) ->
+        {%{state | status: :ended, winner: :a}, log ++ ["상대 팀 전멸 — 승리!"]}
 
       true ->
-        # 턴 종료 status proc.
-        {a, log_a} = Status.end_of_turn(state.a)
-        {b, log_b} = Status.end_of_turn(state.b)
-
-        new_state = %{
-          state
-          | a: a,
-            b: b,
-            turn_no: state.turn_no + 1,
-            pending_a: nil,
-            pending_b: nil,
-            log: log ++ log_a ++ log_b,
-            status: check_end_after_status(a, b)
-        }
-
-        new_state =
-          case new_state.status do
-            :ended ->
-              winner =
-                cond do
-                  a.fainted? and b.fainted? -> nil
-                  a.fainted? -> :b
-                  b.fainted? -> :a
-                  true -> nil
-                end
-
-              %{new_state | winner: winner}
-
-            _ ->
-              %{new_state | status: :await_actions}
-          end
-
-        new_state
+        {%{state | status: :await_actions}, log}
     end
   end
 
-  defp check_end_after_status(a, b) do
-    if a.fainted? or b.fainted?, do: :ended, else: :await_actions
+  defp swap_if_fainted(state, side, log) do
+    {active, team, idx_key} =
+      case side do
+        :a -> {state.a, state.team_a, :active_a}
+        :b -> {state.b, state.team_b, :active_b}
+      end
+
+    if active.fainted? do
+      case next_alive_idx(team, Map.get(state, idx_key)) do
+        nil ->
+          # 그 side 전멸 — 종료 단계에서 처리.
+          {state, log ++ ["#{active.name} 쓰러졌다! 더 이상 보낼 트리즈몬이 없다"]}
+
+        new_idx ->
+          new_active = Enum.at(team, new_idx)
+          state = put_active(state, side, new_active, new_idx)
+          {state, log ++ ["#{active.name} 쓰러졌다!", "가라, #{new_active.name}!"]}
+      end
+    else
+      {state, log}
+    end
+  end
+
+  defp next_alive_idx(team, current_idx) do
+    team
+    |> Enum.with_index()
+    |> Enum.find(fn {mon, idx} -> idx != current_idx and not mon.fainted? end)
+    |> case do
+      nil -> nil
+      {_mon, idx} -> idx
+    end
+  end
+
+  defp team_all_fainted?(team), do: Enum.all?(team, & &1.fainted?)
+
+  defp put_active(state, :a, mon, idx) do
+    new_team = List.replace_at(state.team_a, idx, mon)
+    %{state | a: mon, active_a: idx, team_a: new_team}
+  end
+
+  defp put_active(state, :b, mon, idx) do
+    new_team = List.replace_at(state.team_b, idx, mon)
+    %{state | b: mon, active_b: idx, team_b: new_team}
+  end
+
+  defp flush_active_to_team(state) do
+    %{
+      state
+      | team_a: List.replace_at(state.team_a, state.active_a, state.a),
+        team_b: List.replace_at(state.team_b, state.active_b, state.b)
+    }
   end
 
   # 한 side 행동 실행.

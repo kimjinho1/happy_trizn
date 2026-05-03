@@ -14,28 +14,46 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
   alias HappyTrizn.Trizmon.Party
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     user = socket.assigns[:current_user]
+    format = parse_format(Map.get(params, "format"))
 
     cond do
       is_nil(user) ->
         {:ok, socket |> put_flash(:error, "Trizmon 은 로그인 사용자만. @trizn.kr 가입 필요.") |> redirect(to: ~p"/lobby")}
 
       true ->
-        my_instance = Party.ensure_starter!(user)
-        my_mon = Party.to_battle_mon(my_instance)
-        # Sprint 5c-2d — CPU random species (미러 X). 사용자 level 동일.
-        cpu_mon = Party.random_cpu_mon(my_mon.level)
-
-        engine = Engine.new(my_mon, cpu_mon)
+        engine = build_engine(user, format)
 
         {:ok,
          socket
          |> assign(:user, user)
+         |> assign(:format, format)
          |> assign(:engine, engine)
          |> assign(:difficulty, :easy)
-         |> assign(:page_title, "Trizmon — 1v1 배틀")}
+         |> assign(:page_title, "Trizmon — #{format_label(format)} 배틀")}
     end
+  end
+
+  defp parse_format("3v3"), do: :"3v3"
+  defp parse_format("6v6"), do: :"6v6"
+  defp parse_format(_), do: :"3v3"
+
+  defp format_label(:"1v1"), do: "1v1"
+  defp format_label(:"3v3"), do: "3v3"
+  defp format_label(:"6v6"), do: "6v6"
+  defp format_label(_), do: "?"
+
+  defp format_size(:"1v1"), do: 1
+  defp format_size(:"3v3"), do: 3
+  defp format_size(:"6v6"), do: 6
+  defp format_size(_), do: 1
+
+  defp build_engine(user, format) do
+    size = format_size(format)
+    my_team = Party.battle_team(user, size)
+    cpu_team = Party.random_team(size, hd(my_team).level)
+    Engine.new_team(my_team, cpu_team, format)
   end
 
   @impl true
@@ -59,12 +77,19 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
   end
 
   def handle_event("restart", _, socket) do
-    user = socket.assigns.user
-    my_instance = Party.ensure_starter!(user)
-    my_mon = Party.to_battle_mon(my_instance)
-    cpu_mon = Party.random_cpu_mon(my_mon.level)
-    engine = Engine.new(my_mon, cpu_mon)
+    engine = build_engine(socket.assigns.user, socket.assigns.format)
     {:noreply, assign(socket, :engine, engine)}
+  end
+
+  def handle_event("set_format", %{"format" => f}, socket) do
+    format = parse_format(f)
+    engine = build_engine(socket.assigns.user, format)
+
+    {:noreply,
+     socket
+     |> assign(:format, format)
+     |> assign(:engine, engine)
+     |> assign(:page_title, "Trizmon — #{format_label(format)} 배틀")}
   end
 
   def handle_event("set_difficulty", %{"difficulty" => d}, socket) do
@@ -85,16 +110,28 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
     <div class="max-w-3xl mx-auto p-3 sm:p-6">
       <Layouts.flash_group flash={@flash} />
       <header class="mb-4">
-        <h1 class="text-2xl font-bold">🐉 Trizmon — 1v1 배틀 (smoke)</h1>
+        <h1 class="text-2xl font-bold">🐉 Trizmon — {format_label(@format)} 배틀</h1>
         <p class="text-xs text-base-content/60">
-          5c-2c smoke. 미러 매치. 6vs6 / 다양 종 / 이미지 = 후속 Sprint.
+          파티 부족분은 random in-memory fill (5c-3 모험 모드 후 야생 잡기로 대체).
         </p>
       </header>
 
-      <!-- 난이도 picker -->
-      <section class="mb-3">
+      <!-- format + 난이도 picker -->
+      <section class="mb-3 flex flex-wrap gap-3">
         <div class="join">
-          <%= for {d, label} <- [{"easy", "easy (random)"}, {"normal", "normal (best dmg)"}, {"hard", "hard (=normal, 5c-late)"}] do %>
+          <%= for {f, label} <- [{"3v3", "3v3"}, {"6v6", "6v6"}] do %>
+            <button
+              type="button"
+              phx-click="set_format"
+              phx-value-format={f}
+              class={"btn btn-xs join-item " <> if(to_string(@format) == f, do: "btn-primary", else: "btn-ghost")}
+            >
+              {label}
+            </button>
+          <% end %>
+        </div>
+        <div class="join">
+          <%= for {d, label} <- [{"easy", "easy"}, {"normal", "normal"}, {"hard", "hard"}] do %>
             <button
               type="button"
               phx-click="set_difficulty"
@@ -104,6 +141,16 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
               {label}
             </button>
           <% end %>
+        </div>
+      </section>
+
+      <!-- team status — 남은 마리 -->
+      <section class="mb-3 flex justify-between text-xs">
+        <div>
+          상대: <.team_dots team={@engine.team_b} active={@engine.active_b} />
+        </div>
+        <div>
+          내: <.team_dots team={@engine.team_a} active={@engine.active_a} />
         </div>
       </section>
 
@@ -155,6 +202,26 @@ defmodule HappyTriznWeb.TrizmonBattleLive do
         </section>
       <% end %>
     </div>
+    """
+  end
+
+  attr :team, :list, required: true
+  attr :active, :integer, required: true
+
+  defp team_dots(assigns) do
+    ~H"""
+    <span class="inline-flex items-center gap-1">
+      <%= for {mon, idx} <- Enum.with_index(@team) do %>
+        <%= cond do %>
+          <% idx == @active -> %>
+            <span class="badge badge-primary badge-xs" title={mon.name}>●</span>
+          <% mon.fainted? -> %>
+            <span class="badge badge-ghost badge-xs opacity-30" title={mon.name <> " (KO)"}>×</span>
+          <% true -> %>
+            <span class="badge badge-success badge-xs" title={mon.name}>○</span>
+        <% end %>
+      <% end %>
+    </span>
     """
   end
 
