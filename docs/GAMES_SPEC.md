@@ -11,6 +11,7 @@
 - [Snake.io ✅](#snakeio--구현-완료)
 - [Pac-Man ✅](#pac-man--구현-완료)
 - [2048 + Minesweeper ✅ (싱글, 옵션 보강 완료)](#2048--minesweeper--옵션-로직-보강-완료-sprint-3h)
+- **[Trizmon ⏳ (Sprint 5c — 장기 flagship, 별도 spec)](TRIZMON_SPEC.md)** — 자체 IP 몬스터 RPG. 모험 / PvE / PvP 3 모드. 18 타입 / 진화 / 도감 / AI 생성 이미지
 - [DB 스키마](#db-스키마)
 - [구현 진행 상황](#구현-진행-상황)
 
